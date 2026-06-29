@@ -1,0 +1,54 @@
+{
+  "sources": [
+    {
+      "name": "SGDK",
+      "version": "v2.11",
+      "license": "MIT",
+      "upstream": "https://github.com/Stephane-D/SGDK",
+      "fetchedBy": "scripts/fetch-rag-corpus.sh",
+      "includedPaths": [
+        "readme.md",
+        "license.txt",
+        "bin/rescomp.txt",
+        "bin/xgm.txt",
+        "bin/xgm2.txt",
+        "inc/genesis.h",
+        "inc/vdp.h",
+        "inc/vdp_tile.h",
+        "inc/vdp_spr.h",
+        "inc/sprite_eng.h",
+        "inc/joy.h",
+        "inc/tools.h"
+      ],
+      "localPaths": [
+        "corpus/sgdk/README.md",
+        "corpus/sgdk/license.txt",
+        "corpus/sgdk/tools/rescomp.txt",
+        "corpus/sgdk/tools/xgm.txt",
+        "corpus/sgdk/tools/xgm2.txt",
+        "corpus/sgdk/api/genesis.h.txt",
+        "corpus/sgdk/api/vdp.h.txt",
+        "corpus/sgdk/api/vdp_tile.h.txt",
+        "corpus/sgdk/api/vdp_spr.h.txt",
+        "corpus/sgdk/api/sprite_eng.h.txt",
+        "corpus/sgdk/api/joy.h.txt",
+        "corpus/sgdk/api/tools.h.txt"
+      ]
+    },
+    {
+      "name": "Drive16 Genesis VDP Core Notes",
+      "license": "Drive16-authored, release license pending human confirmation",
+      "path": "corpus/vdp/genesis-vdp-core.md",
+      "includedPaths": [
+        "corpus/vdp/genesis-vdp-core.md",
+        "corpus/drive16/sgdk-project-patterns.md"
+      ]
+    }
+  ],
+  "excludedMaterial": [
+    "Commercial ROM disassemblies",
+    "Commercial game source code",
+    "Non-commercial emulator source",
+    "ROM binaries"
+  ]
+}

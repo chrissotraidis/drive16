@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Local RAG uses pinned mcp-local-rag under artifacts
+
+Context:
+
+Phase 1 needs `mcp-local-rag` with SGDK and VDP documents indexed before the
+agent starts writing Genesis C. The current system `node` is v21.1.0, while
+`mcp-local-rag@0.15.3` requires Node 22 or newer and failed under `npx`.
+
+Decision:
+
+Pin `mcp-local-rag` to version `0.15.3` and install it into ignored
+`artifacts/phase1/mcp-local-rag/` through `scripts/mcp-local-rag.sh`. The
+wrapper runs the installed CLI with `DRIVE16_NODE` when set, otherwise the
+bundled Codex Node 24 runtime when present, otherwise a system Node 22 or newer.
+The Phase 1 corpus uses SGDK v2.11 docs and headers plus Drive16-authored VDP
+and project-pattern notes.
+
+Consequence:
+
+The RAG server path is reproducible without changing global Node or npm state.
+The indexed database and embedding model cache stay out of git under
+`artifacts/phase1/rag/`, while the source documents and fetch/index scripts are
+tracked.
+
 ## 2026-06-29 - Python stdio MCP server for the Genteel sidecar
 
 Context:

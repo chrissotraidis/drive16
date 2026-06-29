@@ -12,19 +12,19 @@ reads a screenshot, and self-corrects a deliberate compile error.
   `read_build_log`.
 - [x] Wrap Genteel as a sidecar adapter and MCP server with `run_rom`,
   `capture_frame`, `send_input`, and `read_state`.
-- [ ] Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
+- [x] Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
 - [ ] Configure `opencode serve` with OpenRouter and the Phase 1 MCP servers.
 - [ ] Drive the loop from a plain CLI prompt, such as "make the screen blue".
 - [ ] Prove the agent can self-correct a deliberate compile error.
 
 ## Current Task
 
-Genteel emulator sidecar MCP server wrapper is complete and verified against
-the hello-world ROM.
+`mcp-local-rag` is installed under ignored artifacts, and the SGDK plus VDP
+corpus indexes successfully.
 
 ## Next Up
 
-Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
+Configure `opencode serve` with OpenRouter and the Phase 1 MCP servers.
 
 ## Completed Phase 0 Gate
 

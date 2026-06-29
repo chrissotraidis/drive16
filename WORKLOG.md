@@ -1,5 +1,55 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 13 - RAG corpus and local index
+
+Plan:
+
+- Task: stand up the Phase 1 local RAG path and index SGDK plus VDP documents.
+- Files: `scripts/mcp-local-rag.sh`, `scripts/fetch-rag-corpus.sh`,
+  `scripts/validate-rag-corpus.sh`, `corpus/README.md`,
+  `corpus/sources.json`, `corpus/drive16/sgdk-project-patterns.md`,
+  `corpus/vdp/genesis-vdp-core.md`, fetched SGDK corpus files under
+  `corpus/sgdk/`, `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: syntax-check the shell scripts, fetch pinned SGDK v2.11 docs,
+  install and run `mcp-local-rag@0.15.3` with Node 22 or newer, ingest the
+  corpus into ignored LanceDB storage, and query for SGDK and VDP terms.
+
+Did:
+
+- Added a local wrapper that installs `mcp-local-rag@0.15.3` under
+  `artifacts/phase1/mcp-local-rag/` and runs it with a Node 22+ runtime.
+- Added a fetch script for pinned SGDK v2.11 documentation and API headers.
+- Added Drive16-authored VDP and SGDK project-pattern notes for the text-only
+  Phase 1 loop.
+- Added a corpus source manifest and RAG validation script.
+- Confirmed SGDK headers are stored as `.txt` corpus documents so
+  `mcp-local-rag` indexes them.
+
+Evidence:
+
+- `npm view mcp-local-rag version license bin --json` reported version
+  `0.15.3`, license `MIT`, and binary `dist/index.js`.
+- System `node --version` reported `v21.1.0`; `mcp-local-rag@0.15.3` failed
+  under `npx` because it requires Node 22 or newer.
+- Bundled Codex Node reported `v24.14.0` and successfully ran the locally
+  installed `mcp-local-rag` CLI.
+- `bash -n scripts/mcp-local-rag.sh scripts/fetch-rag-corpus.sh
+  scripts/validate-rag-corpus.sh` passed.
+- `scripts/fetch-rag-corpus.sh` fetched SGDK v2.11 docs and headers into
+  `corpus/sgdk/`.
+- `scripts/validate-rag-corpus.sh` passed with:
+  `Succeeded: 15`, `Failed: 0`, `Total chunks: 1503`, and status
+  `{"documentCount":15,"chunkCount":1503,"memoryUsage":66.1068344116211,"uptime":0.448918375,"ftsIndexEnabled":true,"searchMode":"hybrid"}`.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Configure `opencode serve` with OpenRouter and the Phase 1 MCP servers.
+
 ## 2026-06-29 - ITERATION 12 - Genteel emulator MCP wrapper
 
 Plan:
