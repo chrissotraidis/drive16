@@ -1,0 +1,45 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+
+# Logs and local state
+*.log
+.DS_Store
+.cache/
+.tmp/
+tmp/
+
+# Node, Rust, and desktop build output
+node_modules/
+dist/
+build/
+target/
+.tauri/
+
+# SGDK and ROM build output
+out/
+*.bin
+*.gen
+*.smd
+*.rom
+*.elf
+*.map
+*.lst
+*.sym
+
+# Captured validation artifacts
+artifacts/
+
+# Model weights and generated ML assets
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth
+models/
