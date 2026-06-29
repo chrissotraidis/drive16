@@ -1,5 +1,51 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 16 - Phase 1 agent-loop gate run
+
+Plan:
+
+- Task: run the real Phase 1 OpenRouter-backed agent-loop validation.
+- Files: `PROGRESS.md`, `WORKLOG.md`, and `docs/phase1-evidence.md`.
+- Verification: run `scripts/validate-phase1-agent-loop.py --run-agent` with
+  an OpenRouter model and credential outside the repo, inspect the captured
+  screenshot, confirm no pasted key was written to files, and run
+  `git diff --check`.
+
+Did:
+
+- Ran the Phase 1 validation harness with
+  `DRIVE16_PHASE1_MODEL=openrouter/anthropic/claude-sonnet-4.6`.
+- OpenCode worked from the generated plain text prompt under
+  `artifacts/phase1/agent-loop/prompt.md`.
+- The agent queried RAG, repaired the deliberate compile error, built the SGDK
+  project, ran the ROM in Genteel, captured a screenshot, and reported success.
+- Added the Phase 1 evidence packet.
+
+Evidence:
+
+- `scripts/validate-phase1-agent-loop.py --run-agent` passed with:
+  `Phase 1 agent-loop ok: /Users/chrissotraidis/Documents/GitHub/drive16/artifacts/phase1/emulator/last-frame.png`.
+- `artifacts/phase1/agent-loop/project/src/main.c` now draws
+  `Drive16 Phase 1` and `Agent loop OK` on a blue background.
+- `artifacts/phase1/sgdk-build/last-build.json` recorded `"ok": true` for
+  `artifacts/phase1/agent-loop/project/out/rom.bin`.
+- `artifacts/phase1/emulator/state.json` recorded `"ok": true` for the same
+  ROM and screenshot path.
+- Visual inspection of `artifacts/phase1/emulator/last-frame.png` shows the
+  expected blue screen with `Drive16 Phase 1` and `Agent loop OK`.
+- The OpenCode JSON log at `artifacts/phase1/agent-loop/opencode-run.jsonl`
+  contained the expected `query_documents`, `build_rom`, `read_build_log`,
+  `run_rom`, and `capture_frame` calls.
+- A workspace scan for the pasted OpenRouter key returned no files.
+
+Gate:
+
+Phase 1 gate reached. Human sign-off is required before Phase 2 begins.
+
+Next:
+
+- Request Phase 1 sign-off, then begin Phase 2 after approval.
+
 ## 2026-06-29 - ITERATION 15 - Phase 1 agent-loop validation harness
 
 Plan:

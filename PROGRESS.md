@@ -16,19 +16,30 @@ reads a screenshot, and self-corrects a deliberate compile error.
 - [x] Add project OpenCode config for the Phase 1 MCP servers.
 - [x] Verify `opencode serve` starts with the project config.
 - [x] Add a Phase 1 text-loop validation harness with a deliberate compile error.
-- [ ] Configure OpenRouter credential and model outside the repo.
-- [ ] Drive the loop from a plain CLI prompt, such as "make the screen blue".
-- [ ] Prove the agent can self-correct a deliberate compile error.
+- [x] Configure OpenRouter credential and model outside the repo.
+- [x] Drive the loop from a plain CLI prompt, such as "make the screen blue".
+- [x] Prove the agent can self-correct a deliberate compile error.
 
 ## Current Task
 
-Phase 1 text-loop validation harness is ready. It prepares a throwaway SGDK
-project with a deliberate compile error and gates on OpenRouter credentials.
+Phase 1 exit criterion is evidenced locally. The text-loop validation used a
+throwaway SGDK project with a deliberate compile error, built the fixed ROM,
+ran it in Genteel, and captured a screenshot.
 
 ## Next Up
 
-Configure OpenRouter credentials outside the repo, then run the first text-loop
-CLI validation.
+Phase gate: request human sign-off for Phase 1 before starting Phase 2.
+
+## Completed Phase 1 Gate
+
+Evidence packet: `docs/phase1-evidence.md`.
+
+- [x] OpenCode ran from a plain text prompt with the Phase 1 MCP servers.
+- [x] RAG was queried before Genesis C edits.
+- [x] The deliberate compile error was repaired by the agent loop.
+- [x] The generated SGDK project built to `out/rom.bin`.
+- [x] Genteel ran the generated ROM and captured a screenshot.
+- [x] Screenshot shows `Drive16 Phase 1` on a blue background.
 
 ## Completed Phase 0 Gate
 
