@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 2 agent skill files live under agent/skills
+
+Context:
+
+Phase 2 must teach the agent how to reference bundled assets through
+`resources.res`, wire a controllable sprite, and attach a music loop. OpenCode
+is currently driven by explicit validation prompts, while `mcp-local-rag`
+provides repo-indexed documentation.
+
+Decision:
+
+Store Drive16-owned operating recipes under `agent/skills/`, starting with
+`agent/skills/phase2-core-assets.md`. Validation harnesses can read these files
+into OpenCode prompts, and RAG still carries the searchable SGDK and Drive16
+project-pattern knowledge.
+
+Consequence:
+
+Phase 2 has a stable prompt ingredient independent of provider configuration.
+The eventual app can keep using these files as local agent context or migrate
+them into an OpenCode-native skill mechanism if one becomes the better fit.
+
 ## 2026-06-29 - Phase 2 CORE pack starts from original Drive16 assets
 
 Context:

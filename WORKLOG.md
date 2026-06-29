@@ -1,5 +1,43 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 19 - Phase 2 agent asset instructions
+
+Plan:
+
+- Task: teach the agent how to wire the Phase 2 bundled sprite and music loop.
+- Files: `agent/README.md`, `agent/skills/phase2-core-assets.md`,
+  `scripts/validate-phase2-agent-context.sh`, `scripts/README.md`,
+  `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: run the Phase 2 agent-context validator, which checks the skill
+  file for required asset/tool terms, refreshes the RAG corpus, queries for the
+  Phase 2 bundled asset symbols, and run `git diff --check`.
+
+Did:
+
+- Added `agent/skills/phase2-core-assets.md` with the CORE-only asset wiring
+  recipe for Phase 2.
+- Added `scripts/validate-phase2-agent-context.sh`.
+- Recorded the `agent/skills/` convention in `DECISIONS.md`.
+
+Evidence:
+
+- `scripts/validate-phase2-agent-context.sh` passed with:
+  `Phase 2 agent context ok: /Users/chrissotraidis/Documents/GitHub/drive16/agent/skills/phase2-core-assets.md`.
+- The validator confirmed the skill file contains `drive16_player`,
+  `drive16_loop`, `resources.res`, `XGM_startPlay`, `SPR_addSprite`,
+  `send_input`, and `capture_frame`.
+- The validator refreshed the RAG corpus and confirmed a Phase 2 query returns
+  `drive16_player`, `drive16_loop`, `SPRITE`, and `XGM`.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Add a Phase 2 validation harness for a prompt-driven asset ROM.
+
 ## 2026-06-29 - ITERATION 18 - Phase 2 CORE asset fixture
 
 Plan:

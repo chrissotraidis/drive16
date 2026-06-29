@@ -12,7 +12,7 @@ bundled sprite and a playing bundled loop, using CORE tools only.
   pack.
 - [x] Add a Phase 2 CORE asset fixture project that references the pack through
   `resources.res`.
-- [ ] Teach the agent, via RAG or skill context, to wire the bundled sprite and
+- [x] Teach the agent, via RAG or skill context, to wire the bundled sprite and
   music loop.
 - [ ] Add a Phase 2 validation harness for a prompt-driven asset ROM.
 - [ ] Drive the loop from a plain prompt for a controllable bundled sprite with
@@ -21,13 +21,12 @@ bundled sprite and a playing bundled loop, using CORE tools only.
 
 ## Current Task
 
-The Phase 2 CORE asset fixture is established and verifies the bundled sprite,
-music loop, scripted input, screenshot capture, and non-silent audio.
+The Phase 2 agent context is established through a repo skill file and RAG
+queries that expose the bundled asset symbols.
 
 ## Next Up
 
-Teach the agent, via RAG or skill context, to wire the bundled sprite and music
-loop from a prompt.
+Add a Phase 2 validation harness for a prompt-driven asset ROM.
 
 ## Completed Phase 2 Work
 
@@ -39,6 +38,10 @@ loop from a prompt.
   guidance.
 - [x] Phase 2 reference fixture added at `examples/phase2-core-assets`.
 - [x] Fixture validator added at `scripts/validate-phase2-core-assets.sh`.
+- [x] Phase 2 asset wiring skill added at
+  `agent/skills/phase2-core-assets.md`.
+- [x] Agent context validator added at
+  `scripts/validate-phase2-agent-context.sh`.
 
 ## Completed Phase 1 Gate
 

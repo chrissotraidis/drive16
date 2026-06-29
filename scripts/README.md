@@ -20,3 +20,5 @@ Toolchain and validation scripts live here.
   VGM validation ROM.
 - `validate-phase2-core-assets.sh`: builds and runs the Phase 2 CORE asset ROM,
   then checks scripted input and non-silent audio.
+- `validate-phase2-agent-context.sh`: checks the Phase 2 agent skill file and
+  confirms RAG retrieves the bundled asset symbols.
