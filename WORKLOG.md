@@ -1,5 +1,59 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 4 - Known-good homebrew validator
+
+Plan:
+
+- Task: make the Phase 0 Genteel accuracy check reproducible with a pinned open
+  homebrew ROM source.
+- Files: `scripts/validate-known-good-homebrew.sh`, `scripts/README.md`,
+  `docs/phase0-validation.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: fetch the pinned upstream SGDK sample ROM, verify SHA-256,
+  record source/license metadata, syntax-check the script, run `git diff --check`,
+  and keep the Genteel run gated until a binary is available.
+
+Did:
+
+- Added `scripts/validate-known-good-homebrew.sh`.
+- The script downloads SGDK's pinned `sample/basics/hello-world` ROM into
+  ignored `artifacts/phase0/known-good/` storage, verifies the hash, writes
+  metadata, and then calls `scripts/validate-genteel.sh`.
+- Updated the Phase 0 runbook to use the script instead of asking for an
+  unspecified homebrew ROM.
+
+Evidence:
+
+- Downloaded the pinned ROM from SGDK commit
+  `846b1a3c8551392eebbab33182b80cf4291fd2e8`.
+- SHA-256 verified:
+  `bb92580661f957cbe1286c047a91614b3716d7c174bf3dede95b9df3477ac916`.
+- `file` identified the downloaded artifact as a Sega Mega Drive / Genesis ROM
+  image with title `SAMPLE PROGRAM`.
+- SGDK `license.txt` at the pinned commit states MIT license.
+- `scripts/validate-known-good-homebrew.sh --fetch-only` passed.
+- `bash -n scripts/validate-known-good-homebrew.sh` passed.
+- `git diff --check` passed.
+
+VALIDATION REQUEST:
+
+After a Genteel binary is available, run:
+
+```sh
+scripts/validate-known-good-homebrew.sh
+```
+
+Expected result:
+
+- `artifacts/phase0/known-good-homebrew.png` exists.
+- The screenshot shows SGDK's expected "Hello world !" output.
+
+Next:
+
+- Wait for Docker and Genteel validation evidence.
+- If the known-good ROM runs correctly, mark the Genteel accuracy checklist item
+  complete in `PROGRESS.md` and record the screenshot evidence here.
+
 ## 2026-06-29 - ITERATION 3 - Phase 0 validation runbook
 
 Plan:

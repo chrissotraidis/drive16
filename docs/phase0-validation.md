@@ -8,9 +8,9 @@ Phase 1 until every evidence item below is captured and recorded in
 
 - Docker Desktop is running.
 - A Genteel binary is available.
-- Optional but required before closing Phase 0: one openly licensed, known-good
-  Genesis / Mega Drive homebrew ROM with documented expected behavior. Record
-  its source URL, license, and local path in the validation notes.
+- Network access for the known-good homebrew fetch. The checked-in validator
+  downloads a pinned upstream SGDK hello-world ROM into ignored `artifacts/`
+  storage, verifies its SHA-256 hash, and records source/license metadata.
 
 Set the Genteel path once per shell:
 
@@ -69,17 +69,18 @@ Expected evidence:
 
 ## 5. Confirm Known-Good Homebrew Accuracy
 
-Use an openly licensed homebrew ROM with documented expected behavior:
+Use the pinned MIT-licensed SGDK hello-world sample ROM:
 
 ```sh
-scripts/validate-genteel.sh /path/to/known-good-homebrew.bin artifacts/phase0/known-good-homebrew.png
+scripts/validate-known-good-homebrew.sh
 ```
 
 Expected evidence:
 
 - `artifacts/phase0/known-good-homebrew.png` exists.
-- The screenshot and behavior match the ROM's documented expected output.
-- The source URL and license for the ROM are recorded in `WORKLOG.md`.
+- `artifacts/phase0/known-good/sgdk-hello-world.txt` records the source URL,
+  source-code URL, MIT license URL, pinned commit, and SHA-256.
+- The screenshot visibly shows the expected SGDK "Hello world !" output.
 
 Do not use commercial ROMs, disassemblies, or unlicensed downloads.
 

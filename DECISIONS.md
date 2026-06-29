@@ -1,5 +1,25 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Known-good Phase 0 accuracy ROM
+
+Context:
+
+Phase 0 requires Genteel accuracy validation against a known-good homebrew ROM,
+but the repo must not include commercial ROMs or unlicensed downloads.
+
+Decision:
+
+Use SGDK's upstream `sample/basics/hello-world` release ROM from pinned commit
+`846b1a3c8551392eebbab33182b80cf4291fd2e8` as the known-good open homebrew
+accuracy check. Fetch it into ignored `artifacts/` storage, verify SHA-256, and
+record source/license metadata before running it in Genteel.
+
+Consequence:
+
+The accuracy check is reproducible without committing a ROM binary. It confirms
+basic SGDK ROM execution in Genteel, while broader emulator compatibility can be
+expanded later if Phase 0 exposes Genteel risk.
+
 ## 2026-06-29 - Phase 0 validation assets are original
 
 Context:
