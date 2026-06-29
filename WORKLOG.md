@@ -1,5 +1,49 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 8 - Live-framebuffer gate
+
+Plan:
+
+- Task: record the remaining Phase 0 live-framebuffer gap and stop for a human
+  decision before changing the emulator plan.
+- Files: `DECISIONS.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: inspect the pinned Genteel source for framebuffer, screenshot,
+  stream, and CLI support; run `git diff --check`.
+
+Did:
+
+- Audited the pinned Genteel source for live-framebuffer clues.
+- Confirmed the build exposes headless screenshot capture, input scripting,
+  audio dump, GUI rendering, and internal `vdp.framebuffer`.
+- Did not find a documented continuous framebuffer stream CLI or sidecar
+  protocol in `README.md`, `ARCHITECTURE.md`, `docs/`, or `src/`.
+- Added a proposed decision with three paths: add a frame adapter, use Genteel
+  GUI as the Phase 0 live-view proof and defer stream adapter work to Phase 1,
+  or choose a fallback emulator for live view.
+
+Evidence:
+
+- `rg` in pinned Genteel source found `src/main.rs::save_screenshot`,
+  `--screenshot`, `--dump-audio`, input script commands, `src/vdp/mod.rs`
+  `framebuffer`, and GUI conversion via `frontend::rgb565_to_rgba8`.
+- The same search found no documented streaming CLI comparable to the
+  architecture's needed live sidecar path.
+
+VALIDATION REQUEST:
+
+Please choose the live-framebuffer path before Phase 1:
+
+1. Build a tiny Genteel frame adapter over stdout/socket/shared memory.
+2. Accept Genteel GUI rendering as the Phase 0 live-view proof and defer the
+   stream adapter to Phase 1.
+3. Use a fallback emulator for live view while keeping Genteel for headless
+   verification.
+
+Next:
+
+- Implement or run the selected smallest proof.
+- If the proof succeeds, request Phase 0 sign-off.
+
 ## 2026-06-29 - ITERATION 7 - Phase 0 ROM build and asset validation
 
 Plan:

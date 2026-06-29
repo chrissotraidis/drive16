@@ -1,5 +1,34 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Proposed: resolve Genteel live-framebuffer path
+
+Context:
+
+Phase 0 requires confirmation that Genteel can stream a framebuffer for the
+future live Tauri pane. The pinned buildable Genteel revision
+`8043061f50782d6066cd39925f0f808f06d665ea` supports headless screenshots,
+input scripts, audio dump, GUI rendering, and an internal `vdp.framebuffer`.
+Source inspection did not find a documented continuous framebuffer stream CLI or
+sidecar protocol.
+
+Decision:
+
+Proposed, awaiting human confirmation: treat Genteel's current public CLI as
+validated for headless screenshots and scripted verification, but not yet
+validated for Drive16's live-view sidecar. Choose one before Phase 1:
+
+- add a small upstream or local Genteel adapter that exposes frames from
+  `vdp.framebuffer` over stdout, a socket, or shared memory;
+- use the Genteel GUI only for Phase 0 live-view proof and defer stream adapter
+  implementation to the Phase 1 emulator MCP work;
+- switch the live-view proof to a fallback emulator with a documented frame
+  streaming path, while keeping Genteel for headless verification.
+
+Consequence:
+
+Phase 0 cannot be signed off until the human confirms which path to take and the
+chosen path is evidenced. No Phase 1 work should begin before this is resolved.
+
 ## 2026-06-29 - Pin buildable Genteel revision for Phase 0
 
 Context:
