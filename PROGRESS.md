@@ -13,7 +13,7 @@ ROM in the right pane using bundled assets.
 - [x] Add app-side dependency and tool health preflight checks.
 - [x] Launch a starter blank ROM path for the app preview.
 - [x] Render the Genteel live framebuffer in the right pane.
-- [ ] Connect the left conversation pane to OpenCode HTTP/SSE.
+- [x] Connect the left conversation pane to OpenCode HTTP/SSE.
 - [ ] Add settings for model provider, OpenRouter key entry, model selector,
   and connection test.
 - [ ] Add project management and export-ROM wiring.
@@ -22,11 +22,13 @@ ROM in the right pane using bundled assets.
 
 ## Current Task
 
-The Genteel RGB565 framebuffer stream is rendered in the right pane.
+The left conversation pane is connected to OpenCode HTTP/SSE with no-reply
+message posting.
 
 ## Next Up
 
-Connect the left conversation pane to OpenCode HTTP/SSE.
+Add settings for model provider, OpenRouter key entry, model selector, and
+connection test.
 
 ## Completed Phase 3 Work
 
@@ -56,6 +58,12 @@ Connect the left conversation pane to OpenCode HTTP/SSE.
   with pause/resume animation state.
 - [x] Phase 3 framebuffer evidence recorded in
   `docs/phase3-framebuffer.md`.
+- [x] Native OpenCode bridge added for health checks, server launch, session
+  creation, and no-reply message posting.
+- [x] Left pane wired to OpenCode SSE events and composer message posting with
+  a browser-preview fallback.
+- [x] Phase 3 OpenCode bridge evidence recorded in
+  `docs/phase3-opencode-bridge.md`.
 
 ## Completed Phase 2 Gate
 

@@ -79,6 +79,32 @@ type StarterRomPreview = {
   framebufferFrames: FramebufferFrame[];
 };
 
+type OpenCodeBridgeStatus = {
+  generatedAt: string;
+  state: HealthState;
+  detail: string;
+  baseUrl: string;
+  healthUrl: string;
+  eventUrl: string;
+  version?: string;
+  launched: boolean;
+};
+
+type OpenCodeSendResult = {
+  sessionId: string;
+  messageId: string;
+  partId: string;
+  state: HealthState;
+  detail: string;
+};
+
+type OpenCodeEvent = {
+  id: number;
+  type: string;
+  detail: string;
+  time: string;
+};
+
 type DecodedFramebufferFrame = {
   frameIndex: number;
   width: number;
@@ -104,29 +130,6 @@ const starterMessages: Message[] = [
     role: "agent",
     body: "I will wire the bundled sprite and loop, build, run, then verify the frame.",
     time: "09:42",
-  },
-];
-
-const initialSteps: ToolStep[] = [
-  {
-    label: "Query docs",
-    detail: "SGDK sprite and XGM patterns",
-    state: "done",
-  },
-  {
-    label: "Write C",
-    detail: "player movement and music loop",
-    state: "done",
-  },
-  {
-    label: "Build ROM",
-    detail: "docker-sgdk through MCP",
-    state: "active",
-  },
-  {
-    label: "Run emulator",
-    detail: "Genteel sidecar frame stream",
-    state: "queued",
   },
 ];
 
@@ -181,6 +184,16 @@ const previewStarterRom: StarterRomPreview = {
   framebufferFrames: [],
 };
 
+const previewOpenCode: OpenCodeBridgeStatus = {
+  generatedAt: "preview",
+  state: "warning",
+  detail: "OpenCode bridge checks run inside Tauri or against a local preview server",
+  baseUrl: "http://127.0.0.1:4096",
+  healthUrl: "http://127.0.0.1:4096/global/health",
+  eventUrl: "http://127.0.0.1:4096/global/event",
+  launched: false,
+};
+
 function App() {
   const [messages, setMessages] = useState<Message[]>(starterMessages);
   const [draft, setDraft] = useState("");
@@ -192,11 +205,46 @@ function App() {
   const [starterRom, setStarterRom] = useState<StarterRomPreview>(previewStarterRom);
   const [starterSource, setStarterSource] = useState("checking");
   const [starterBusy, setStarterBusy] = useState(true);
+  const [openCode, setOpenCode] = useState<OpenCodeBridgeStatus>(previewOpenCode);
+  const [openCodeSource, setOpenCodeSource] = useState("checking");
+  const [openCodeSessionId, setOpenCodeSessionId] = useState<string | undefined>();
+  const [openCodeEvents, setOpenCodeEvents] = useState<OpenCodeEvent[]>([]);
+  const [openCodeBusy, setOpenCodeBusy] = useState(false);
+  const messageIdRef = useRef(starterMessages.length + 1);
+  const openCodeEventIdRef = useRef(1);
 
   useEffect(() => {
     void refreshPreflight();
     void launchStarterRom();
+    void connectOpenCode();
   }, []);
+
+  useEffect(() => {
+    if (openCode.state !== "ready" || !openCode.eventUrl) return;
+    if (typeof EventSource === "undefined") {
+      appendOpenCodeEvent("sse.unavailable", "Browser EventSource is unavailable");
+      return;
+    }
+
+    appendOpenCodeEvent("sse.connecting", "Opening OpenCode event stream");
+    const events = new EventSource(openCode.eventUrl);
+
+    events.onopen = () => {
+      appendOpenCodeEvent("sse.open", "OpenCode event stream connected");
+    };
+
+    events.onmessage = (event) => {
+      appendOpenCodeEventFromData(event.data);
+    };
+
+    events.onerror = () => {
+      appendOpenCodeEvent("sse.waiting", "OpenCode event stream is waiting to reconnect");
+    };
+
+    return () => {
+      events.close();
+    };
+  }, [openCode.eventUrl, openCode.state]);
 
   const buildLabel = useMemo(() => {
     if (buildState === "building") return "Building";
@@ -205,29 +253,257 @@ function App() {
     return "Idle";
   }, [buildState]);
 
-  function submitMessage(event: FormEvent<HTMLFormElement>) {
+  const runSteps = useMemo<ToolStep[]>(() => {
+    const openCodeConnected = openCode.state === "ready";
+    return [
+      {
+        label: "OpenCode HTTP",
+        detail: openCodeConnected
+          ? `${openCode.version ?? "server"} at ${openCode.baseUrl}`
+          : openCode.detail,
+        state: openCodeConnected ? "done" : "active",
+      },
+      {
+        label: "SSE stream",
+        detail:
+          openCodeEvents.length > 0
+            ? openCodeEvents[0].type
+            : openCodeConnected
+              ? "Waiting for server events"
+              : "Connect OpenCode first",
+        state: openCodeConnected ? "active" : "queued",
+      },
+      {
+        label: "User message",
+        detail: openCodeSessionId
+          ? `Session ${shortIdentifier(openCodeSessionId)}`
+          : "Create session on first send",
+        state: openCodeSessionId ? "done" : openCodeConnected ? "active" : "queued",
+      },
+      {
+        label: "Model reply",
+        detail: "Enabled after settings key and model selection",
+        state: "queued",
+      },
+    ];
+  }, [openCode, openCodeEvents, openCodeSessionId]);
+
+  async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = draft.trim();
     if (!trimmed) return;
 
-    const nextId = messages.length + 1;
-    setMessages([
-      ...messages,
-      {
-        id: nextId,
-        role: "user",
-        body: trimmed,
-        time: "Now",
-      },
-      {
-        id: nextId + 1,
-        role: "agent",
-        body: "Queued. I will build and verify this through the core tool loop.",
-        time: "Now",
-      },
-    ]);
+    const userMessage = makeMessage("user", trimmed);
+    setMessages((current) => [...current, userMessage]);
     setDraft("");
-    setBuildState("building");
+    setOpenCodeBusy(true);
+
+    try {
+      const result = await sendOpenCodeMessage(trimmed);
+      setOpenCodeSessionId(result.sessionId);
+      const agentMessage = makeMessage(
+        "agent",
+        `Posted to OpenCode session ${shortIdentifier(result.sessionId)}. Live model replies turn on in the settings step.`,
+      );
+      setMessages((current) => [...current, agentMessage]);
+      appendOpenCodeEvent("message.posted", result.detail);
+      setBuildState("running");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "OpenCode message send failed";
+      const agentMessage = makeMessage(
+        "agent",
+        `OpenCode bridge could not send that yet. ${detail}`,
+      );
+      setMessages((current) => [...current, agentMessage]);
+      appendOpenCodeEvent("message.failed", detail);
+      setBuildState("error");
+    } finally {
+      setOpenCodeBusy(false);
+    }
+  }
+
+  function makeMessage(role: Message["role"], body: string): Message {
+    const id = messageIdRef.current;
+    messageIdRef.current += 1;
+    return {
+      id,
+      role,
+      body,
+      time: "Now",
+    };
+  }
+
+  function appendOpenCodeEvent(type: string, detail: string) {
+    const id = openCodeEventIdRef.current;
+    openCodeEventIdRef.current += 1;
+    setOpenCodeEvents((current) =>
+      [
+        {
+          id,
+          type,
+          detail,
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        },
+        ...current,
+      ].slice(0, 8),
+    );
+  }
+
+  function appendOpenCodeEventFromData(data: string) {
+    try {
+      const parsed = JSON.parse(data) as {
+        type?: string;
+        properties?: {
+          sessionID?: string;
+          messageID?: string;
+          info?: { id?: string; role?: string };
+          part?: { type?: string; messageID?: string };
+        };
+      };
+      const type = parsed.type ?? "event";
+      const properties = parsed.properties;
+      const detail =
+        properties?.sessionID ??
+        properties?.messageID ??
+        properties?.info?.id ??
+        properties?.part?.messageID ??
+        "OpenCode event received";
+      appendOpenCodeEvent(type, detail);
+    } catch {
+      appendOpenCodeEvent("event.raw", data.slice(0, 80));
+    }
+  }
+
+  async function connectOpenCode() {
+    setOpenCodeSource("checking");
+
+    if (isTauriRuntime()) {
+      try {
+        const report = await invoke<OpenCodeBridgeStatus>("connect_opencode");
+        setOpenCode(report);
+        setOpenCodeSource("tauri");
+        appendOpenCodeEvent(
+          report.state === "ready" ? "server.ready" : "server.warning",
+          report.detail,
+        );
+        return;
+      } catch (error) {
+        setOpenCode({
+          ...previewOpenCode,
+          state: "warning",
+          detail: error instanceof Error ? error.message : "OpenCode command unavailable",
+          generatedAt: "error",
+        });
+        setOpenCodeSource("error");
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(previewOpenCode.healthUrl, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const health = (await response.json()) as { healthy?: boolean; version?: string };
+      setOpenCode({
+        ...previewOpenCode,
+        state: health.healthy ? "ready" : "warning",
+        detail: health.healthy
+          ? "OpenCode preview server is reachable"
+          : "OpenCode preview server reported unhealthy",
+        version: health.version,
+      });
+      setOpenCodeSource("preview");
+      appendOpenCodeEvent("server.ready", "OpenCode preview server is reachable");
+    } catch (error) {
+      setOpenCode({
+        ...previewOpenCode,
+        state: "warning",
+        detail:
+          error instanceof Error
+            ? error.message
+            : "OpenCode preview server is not reachable",
+      });
+      setOpenCodeSource("preview");
+    }
+  }
+
+  async function sendOpenCodeMessage(text: string): Promise<OpenCodeSendResult> {
+    if (isTauriRuntime()) {
+      return invoke<OpenCodeSendResult>("send_opencode_message", {
+        request: {
+          sessionId: openCodeSessionId,
+          text,
+        },
+      });
+    }
+
+    if (openCode.state !== "ready") {
+      throw new Error("OpenCode is not connected");
+    }
+
+    const sessionId = openCodeSessionId ?? (await createPreviewOpenCodeSession());
+    const stamp = Date.now().toString(36);
+    const messageId = `msg_drive16_${stamp}`;
+    const partId = `prt_drive16_${stamp}`;
+    const response = await fetch(`${openCode.baseUrl}/session/${sessionId}/message`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messageID: messageId,
+        noReply: true,
+        parts: [
+          {
+            id: partId,
+            type: "text",
+            text,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenCode message request failed with HTTP ${response.status}`);
+    }
+
+    return {
+      sessionId,
+      messageId,
+      partId,
+      state: "ready",
+      detail: "Message posted to OpenCode with noReply",
+    };
+  }
+
+  async function createPreviewOpenCodeSession() {
+    const response = await fetch(`${openCode.baseUrl}/session`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Drive16 app conversation",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenCode session request failed with HTTP ${response.status}`);
+    }
+
+    const session = (await response.json()) as { id?: string };
+    if (!session.id) {
+      throw new Error("OpenCode session response did not include an id");
+    }
+
+    return session.id;
   }
 
   function resetPreview() {
@@ -314,9 +590,19 @@ function App() {
               <p className="label">Conversation</p>
               <h1>Drive16 Agent</h1>
             </div>
-            <button className="icon-button" aria-label="Agent settings">
-              <Settings size={18} />
-            </button>
+            <div className="header-tools">
+              <div
+                className={`opencode-chip ${openCode.state}`}
+                data-testid="opencode-bridge-status"
+                title={openCode.detail}
+              >
+                {healthIcon(openCode.state)}
+                <span>{openCode.state === "ready" ? "OpenCode live" : "OpenCode check"}</span>
+              </div>
+              <button className="icon-button" aria-label="Agent settings">
+                <Settings size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="messages" aria-label="Message history">
@@ -335,7 +621,7 @@ function App() {
             <section className="tool-stream" aria-label="Agent steps">
               <SectionTitle icon={<TerminalSquare size={16} />} title="Run" />
               <ol>
-                {initialSteps.map((step) => (
+                {runSteps.map((step) => (
                   <li className={step.state} key={step.label}>
                     <span className="step-dot" aria-hidden="true">
                       {step.state === "done" ? (
@@ -353,6 +639,24 @@ function App() {
                   </li>
                 ))}
               </ol>
+              <div className="event-feed" data-testid="opencode-event-feed">
+                <strong>Events</strong>
+                {openCodeEvents.length > 0 ? (
+                  openCodeEvents.map((event) => (
+                    <p key={event.id}>
+                      <span>{event.time}</span>
+                      <b>{event.type}</b>
+                      <small>{event.detail}</small>
+                    </p>
+                  ))
+                ) : (
+                  <p>
+                    <span>{sourceLabel(openCodeSource, "OpenCode bridge")}</span>
+                    <b>{openCode.state === "ready" ? "ready" : "waiting"}</b>
+                    <small>{openCode.detail}</small>
+                  </p>
+                )}
+              </div>
             </section>
 
             <section className="file-tree" aria-label="Project files">
@@ -376,7 +680,7 @@ function App() {
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Ask Drive16 to change the ROM"
             />
-            <button aria-label="Send message" type="submit">
+            <button aria-label="Send message" type="submit" disabled={openCodeBusy}>
               <Send size={18} />
             </button>
           </form>
@@ -580,6 +884,11 @@ function shortPath(path: string) {
   const parts = path.split("/").filter(Boolean);
   if (parts.length <= 3) return path;
   return `${parts[0]}/${parts[1]}/.../${parts[parts.length - 1]}`;
+}
+
+function shortIdentifier(value: string) {
+  if (value.length <= 16) return value;
+  return `${value.slice(0, 8)}...${value.slice(-4)}`;
 }
 
 function healthIcon(state: HealthState) {

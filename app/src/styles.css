@@ -71,6 +71,8 @@ button {
 .panel-title-row,
 .preflight-summary,
 .starter-summary,
+.header-tools,
+.opencode-chip,
 .control-row,
 .health-list div,
 .file-tree li,
@@ -146,6 +148,40 @@ button {
 .icon-button:disabled {
   cursor: progress;
   opacity: 0.58;
+}
+
+.header-tools {
+  gap: 8px;
+  min-width: 0;
+}
+
+.opencode-chip {
+  gap: 7px;
+  max-width: 168px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--accent-2);
+  background: rgba(240, 119, 34, 0.08);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.opencode-chip.ready {
+  color: var(--green);
+  background: rgba(143, 207, 136, 0.08);
+}
+
+.opencode-chip.missing {
+  color: #ff736a;
+  background: rgba(255, 115, 106, 0.08);
+}
+
+.opencode-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-select {
@@ -294,7 +330,7 @@ h3 {
 .tool-stream,
 .file-tree {
   padding: 14px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .tool-stream {
@@ -372,6 +408,50 @@ h3 {
   color: var(--accent);
 }
 
+.event-feed {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.event-feed > strong {
+  color: var(--accent-2);
+  font-size: 12px;
+}
+
+.event-feed p {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  min-width: 0;
+  color: #e6d8ca;
+}
+
+.event-feed span,
+.event-feed b,
+.event-feed small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.event-feed span {
+  color: var(--muted);
+}
+
+.event-feed b {
+  color: var(--green);
+}
+
+.event-feed small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
 .file-tree li {
   gap: 8px;
   min-width: 0;
@@ -418,6 +498,11 @@ h3 {
 .composer button {
   width: 40px;
   padding: 0;
+}
+
+.composer button:disabled {
+  cursor: progress;
+  opacity: 0.62;
 }
 
 .toolbar-actions {

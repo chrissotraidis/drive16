@@ -1,5 +1,68 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 29 - OpenCode HTTP/SSE bridge
+
+Plan:
+
+- Task: connect the left conversation pane to OpenCode HTTP/SSE.
+- Files: `app/src-tauri/src/opencode.rs`, `app/src-tauri/src/main.rs`,
+  `app/src-tauri/Cargo.toml`, `app/src-tauri/Cargo.lock`,
+  `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase3-opencode-bridge.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: discover the current OpenCode HTTP/SSE endpoints, run focused
+  Rust tests and full app checks, validate message posting and event streaming
+  in the in-app Browser, scan for the pasted OpenRouter key, and run
+  `git diff --check`.
+
+Did:
+
+- Added a native OpenCode bridge that checks `/global/health`, launches
+  `opencode serve` when needed, creates sessions, and posts no-reply user
+  messages.
+- Registered `connect_opencode` and `send_opencode_message` as Tauri commands.
+- Wired the left pane to show OpenCode connection state, subscribe to
+  `/global/event`, render recent SSE events, and post composer messages into an
+  OpenCode session.
+- Kept live model replies behind the next settings/key unit so this slice does
+  not consume or store provider credentials.
+- Added browser-preview fallback behavior for Vite preview.
+
+Evidence:
+
+- `opencode --version` reported `1.14.33`.
+- `curl --max-time 5 http://127.0.0.1:4096/global/health` returned
+  `{"healthy":true,"version":"1.14.33"}`.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml opencode -- --nocapture`
+  passed with two focused OpenCode bridge tests.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with five
+  non-ignored tests and one ignored sidecar test.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- `pnpm --dir app build` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- Browser validation at `http://127.0.0.1:1420/` found title `Drive16`,
+  `OpenCode live`, connected SSE events, no console warnings or errors, and an
+  enabled composer.
+- Browser message send posted `OpenCode bridge final bundle smoke test`,
+  created an OpenCode session, rendered the no-reply post confirmation in the
+  left pane, retained `message.posted` in the event feed, kept the top status
+  at `Running`, and kept browser console warnings and errors empty.
+- Mobile browser viewport `390` by `844` showed `OpenCode live`, kept the
+  composer visible, and had no horizontal overflow.
+- Browser screenshots were saved to:
+  `artifacts/phase3/opencode-bridge/browser-after-send.png` and
+  `artifacts/phase3/opencode-bridge/browser-mobile.png`.
+
+Gate:
+
+None.
+
+Next:
+
+- Add settings for model provider, OpenRouter key entry, model selector, and
+  connection test.
+
 ## 2026-06-29 - ITERATION 28 - Genteel framebuffer canvas
 
 Plan:

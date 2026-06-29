@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 3 OpenCode bridge starts with no-reply messages
+
+Context:
+
+Phase 3 needs the left conversation pane to become a real OpenCode client, but
+the settings surface for provider choice, OpenRouter key entry, model selector,
+and connection testing is the next separate checklist item. Secrets must never
+be written to the repo.
+
+Decision:
+
+Start the app bridge by checking or launching `opencode serve`, probing
+`/global/health`, subscribing the frontend to `/global/event`, creating a
+session on first send, and posting composer messages with `noReply: true`.
+Use the canonical local HTTP routes directly for this bridge slice, while
+keeping the app contract aligned with OpenCode HTTP/SSE.
+
+Consequence:
+
+The left pane now proves local OpenCode transport, session creation, message
+posting, and SSE event streaming without consuming or storing a provider key.
+The visible model reply remains intentionally gated until the next settings
+unit wires runtime credentials and model selection.
+
 ## 2026-06-29 - Phase 3 framebuffer starts from sampled Genteel streams
 
 Context:
