@@ -41,8 +41,10 @@ first SGDK code generation inside the hardware limits that matter most.
 ## Agent Rules
 
 - Query this corpus before writing Genesis or SGDK code.
-- Prefer a minimal `main.c` with `VDP_`, `JOY_`, and `SYS_doVBlankProcess`
-  calls for Phase 1 text demos.
+- Prefer a minimal `main.c` with `VDP_`, `JOY_`, `SPR_`, `XGM_`, and
+  `SYS_doVBlankProcess` calls for CORE demos.
 - Do not use bundled sprite or VGM assets in Phase 1. Those belong to Phase 2.
 - Keep Phase 1 prompts text-only, such as setting the background color or
   drawing simple tiles or text.
+- In Phase 2, use the bundled `assets/core/` pack for sprite and music prompts.
+  Do not use generated sprites, generated music, ComfyUI, or MML tools.

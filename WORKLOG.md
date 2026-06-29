@@ -1,5 +1,47 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 17 - Phase 2 CORE asset pack
+
+Plan:
+
+- Task: begin Phase 2 by establishing the CORE bundled asset pack contract.
+- Files: `assets/core/`, `assets/README.md`,
+  `scripts/validate-core-assets.py`, `scripts/README.md`,
+  `corpus/drive16/sgdk-project-patterns.md`,
+  `corpus/vdp/genesis-vdp-core.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: run the core asset validator, compile it, regenerate the RAG
+  index so the Phase 2 asset notes are searchable, and run `git diff --check`.
+
+Did:
+
+- Recorded the human Phase 1 approval and moved the ledger to Phase 2.
+- Promoted the original Drive16 sprite and VGM loop into `assets/core/`.
+- Added `assets/core/manifest.json` with stable symbols `drive16_player` and
+  `drive16_loop`.
+- Added `scripts/validate-core-assets.py` to validate the PNG, VGM, and
+  manifest contract.
+- Updated the RAG project-pattern notes with Phase 2 asset wiring guidance.
+
+Evidence:
+
+- `python3 -m py_compile scripts/validate-core-assets.py` passed.
+- `scripts/validate-core-assets.py` passed with:
+  `Core assets ok: /Users/chrissotraidis/Documents/GitHub/drive16/assets/core`.
+- `scripts/validate-rag-corpus.sh` passed with:
+  `Succeeded: 15`, `Failed: 0`, `Total chunks: 1514`, and status
+  `{"documentCount":15,"chunkCount":1514,"memoryUsage":60.45647430419922,"uptime":0.437156875,"ftsIndexEnabled":true,"searchMode":"hybrid"}`.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Add and verify a Phase 2 CORE asset fixture project that references the pack
+  through `resources.res`.
+
 ## 2026-06-29 - ITERATION 16 - Phase 1 agent-loop gate run
 
 Plan:

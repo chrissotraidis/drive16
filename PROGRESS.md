@@ -1,34 +1,42 @@
 # Drive16 Progress
 
-Current phase: Phase 1, agent build loop, text only
+Current phase: Phase 2, core assets via bundled pack
 
-Exit criterion: from a text prompt, the agent writes C, builds the ROM, runs it,
-reads a screenshot, and self-corrects a deliberate compile error.
+Exit criterion: from a prompt, the agent produces a ROM with a controllable
+bundled sprite and a playing bundled loop, using CORE tools only.
 
-## Phase 1 Checklist
+## Phase 2 Checklist
 
-- [x] Human sign-off: Phase 0 approved.
-- [x] Wrap SGDK build as an MCP server with `build_rom`, `clean`, and
-  `read_build_log`.
-- [x] Wrap Genteel as a sidecar adapter and MCP server with `run_rom`,
-  `capture_frame`, `send_input`, and `read_state`.
-- [x] Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
-- [x] Add project OpenCode config for the Phase 1 MCP servers.
-- [x] Verify `opencode serve` starts with the project config.
-- [x] Add a Phase 1 text-loop validation harness with a deliberate compile error.
-- [x] Configure OpenRouter credential and model outside the repo.
-- [x] Drive the loop from a plain CLI prompt, such as "make the screen blue".
-- [x] Prove the agent can self-correct a deliberate compile error.
+- [x] Human sign-off: Phase 1 approved.
+- [x] Promote the original Drive16 sprite and loop into a CORE bundled asset
+  pack.
+- [ ] Add a Phase 2 CORE asset fixture project that references the pack through
+  `resources.res`.
+- [ ] Teach the agent, via RAG or skill context, to wire the bundled sprite and
+  music loop.
+- [ ] Add a Phase 2 validation harness for a prompt-driven asset ROM.
+- [ ] Drive the loop from a plain prompt for a controllable bundled sprite with
+  music.
+- [ ] Verify the generated ROM in Genteel with scripted input and audio output.
 
 ## Current Task
 
-Phase 1 exit criterion is evidenced locally. The text-loop validation used a
-throwaway SGDK project with a deliberate compile error, built the fixed ROM,
-ran it in Genteel, and captured a screenshot.
+Phase 2 has started. The CORE bundled asset pack is established under
+`assets/core/` with stable symbols for the agent to use.
 
 ## Next Up
 
-Phase gate: request human sign-off for Phase 1 before starting Phase 2.
+Add and verify a Phase 2 CORE asset fixture project that references the pack
+through `resources.res`.
+
+## Completed Phase 2 Work
+
+- [x] Phase 1 approval received from the human.
+- [x] Core pack added at `assets/core/` with `drive16_player` and
+  `drive16_loop`.
+- [x] Core pack validator added at `scripts/validate-core-assets.py`.
+- [x] RAG project-pattern notes updated with Phase 2 asset symbols and wiring
+  guidance.
 
 ## Completed Phase 1 Gate
 

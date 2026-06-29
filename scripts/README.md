@@ -14,5 +14,7 @@ Toolchain and validation scripts live here.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.
+- `validate-core-assets.py`: validates the Phase 2 CORE bundled sprite and VGM
+  pack.
 - `validate-phase0-assets.sh`: builds and runs the Drive16 Phase 0 sprite and
   VGM validation ROM.

@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 2 CORE pack starts from original Drive16 assets
+
+Context:
+
+Phase 2 needs a bundled asset pack that the agent can reference through
+`resources.res` without calling ComfyUI, MML, or any generated-asset pipeline.
+Phase 0 already produced and validated tiny original Drive16 assets: a 32x32
+indexed PNG sprite and a PSG-only looping VGM.
+
+Decision:
+
+Promote those original assets into `assets/core/` as the Phase 2 CORE bundled
+asset pack, with stable resource symbols `drive16_player` and `drive16_loop`.
+Keep `assets/phase0/` as the original Phase 0 evidence fixture.
+
+Consequence:
+
+Phase 2 can teach and validate the agent against a stable v1 asset contract
+without adding new asset-generation dependencies. The final asset license still
+follows the broader app-license confirmation gate before release.
+
 ## 2026-06-29 - Phase 1 agent-loop validation uses a throwaway project
 
 Context:

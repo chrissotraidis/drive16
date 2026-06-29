@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "packId": "drive16-core",
+  "description": "Original Drive16 bundled sprite and VGM loop for CORE Phase 2 builds.",
+  "license": "Original Drive16 project asset, intended to follow the final Drive16 app license.",
+  "sprites": [
+    {
+      "id": "drive16_player",
+      "path": "assets/core/player.png",
+      "width": 32,
+      "height": 32,
+      "tilesWide": 4,
+      "tilesHigh": 4,
+      "palette": "palette index 0 is transparent",
+      "rescomp": "SPRITE drive16_player \"<path-to-assets-core>/player.png\" 4 4 NONE 0"
+    }
+  ],
+  "music": [
+    {
+      "id": "drive16_loop",
+      "path": "assets/core/loop.vgm",
+      "format": "VGM 1.50, PSG-only, looping",
+      "rescomp": "XGM drive16_loop \"<path-to-assets-core>/loop.vgm\""
+    }
+  ]
+}
