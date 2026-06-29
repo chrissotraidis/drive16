@@ -15,14 +15,15 @@ reads a screenshot, and self-corrects a deliberate compile error.
 - [x] Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
 - [x] Add project OpenCode config for the Phase 1 MCP servers.
 - [x] Verify `opencode serve` starts with the project config.
+- [x] Add a Phase 1 text-loop validation harness with a deliberate compile error.
 - [ ] Configure OpenRouter credential and model outside the repo.
 - [ ] Drive the loop from a plain CLI prompt, such as "make the screen blue".
 - [ ] Prove the agent can self-correct a deliberate compile error.
 
 ## Current Task
 
-OpenCode project config resolves the three Phase 1 MCP servers and
-`opencode serve` starts locally. OpenRouter credentials are not configured.
+Phase 1 text-loop validation harness is ready. It prepares a throwaway SGDK
+project with a deliberate compile error and gates on OpenRouter credentials.
 
 ## Next Up
 

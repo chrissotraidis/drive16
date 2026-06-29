@@ -1,5 +1,69 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 15 - Phase 1 agent-loop validation harness
+
+Plan:
+
+- Task: add the exact Phase 1 CLI validation harness for the credential-gated
+  OpenCode text loop.
+- Files: `scripts/validate-phase1-agent-loop.py`,
+  `docs/phase1-agent-loop.md`, `docs/phase1-opencode.md`, `PROGRESS.md`,
+  `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: compile the Python harness, run it without credentials to
+  confirm it prepares the broken SGDK project and opens a validation request,
+  rerun the OpenCode config validator, rerun the SGDK build MCP smoke test,
+  rerun the emulator MCP smoke test, and run `git diff --check`.
+
+Did:
+
+- Added `scripts/validate-phase1-agent-loop.py`.
+- The harness prepares `artifacts/phase1/agent-loop/project` with a deliberate
+  `DRIVE16_COMPILE_ERROR_SENTINEL` compile error.
+- The harness writes the exact OpenCode prompt to
+  `artifacts/phase1/agent-loop/prompt.md`.
+- The real agent run is guarded behind `--run-agent`,
+  `DRIVE16_PHASE1_MODEL=openrouter/<provider-model>`, and an OpenRouter
+  credential outside the repo.
+- Added `docs/phase1-agent-loop.md` and linked it from
+  `docs/phase1-opencode.md`.
+
+Evidence:
+
+- `python3 -m py_compile scripts/validate-phase1-agent-loop.py
+  scripts/validate-opencode-config.py scripts/validate-sgdk-build-mcp.py
+  scripts/validate-emulator-mcp.py` passed.
+- `scripts/validate-phase1-agent-loop.py` passed in gate mode and printed:
+  `VALIDATION REQUEST: Phase 1 agent-loop validation is ready but cannot run yet.`
+  `DRIVE16_PHASE1_MODEL is not set.`
+- `scripts/validate-opencode-config.py` passed with:
+  `OpenCode config ok`
+  `VALIDATION REQUEST: configure OpenRouter with opencode providers login or OPENROUTER_API_KEY before the agent loop can be run.`
+- `scripts/validate-sgdk-build-mcp.py` passed with:
+  `SGDK build MCP ok:
+  /Users/chrissotraidis/Documents/GitHub/drive16/examples/sgdk-hello-world/out/rom.bin`.
+- `scripts/validate-emulator-mcp.py` passed with:
+  `Emulator MCP ok:
+  /Users/chrissotraidis/Documents/GitHub/drive16/artifacts/phase1/emulator/last-frame.png`.
+- `git diff --check` passed.
+
+VALIDATION REQUEST:
+
+Configure OpenRouter outside the repo, choose a Phase 1 OpenRouter model, then
+run:
+
+```sh
+export DRIVE16_PHASE1_MODEL=openrouter/<provider-model>
+export OPENROUTER_API_KEY=...
+scripts/validate-phase1-agent-loop.py --run-agent
+```
+
+Expected result: the harness reports `Phase 1 agent-loop ok:
+artifacts/phase1/emulator/last-frame.png`.
+
+Next:
+
+- Run the Phase 1 agent-loop validation after OpenRouter is configured.
+
 ## 2026-06-29 - ITERATION 14 - OpenCode MCP project config
 
 Plan:

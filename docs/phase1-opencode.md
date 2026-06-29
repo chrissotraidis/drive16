@@ -36,3 +36,23 @@ export OPENROUTER_API_KEY=...
 ```
 
 After that, run the text-loop validation from a plain CLI prompt.
+
+## Text-Loop Validation
+
+The Phase 1 agent-loop gate is scripted in
+`scripts/validate-phase1-agent-loop.py`.
+
+Prepare the throwaway project and confirm the credential gate:
+
+```sh
+scripts/validate-phase1-agent-loop.py
+```
+
+Run the real agent validation after OpenRouter is configured:
+
+```sh
+export DRIVE16_PHASE1_MODEL=openrouter/<provider-model>
+scripts/validate-phase1-agent-loop.py --run-agent
+```
+
+See `docs/phase1-agent-loop.md` for the exact checks.

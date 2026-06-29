@@ -1,5 +1,30 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 1 agent-loop validation uses a throwaway project
+
+Context:
+
+The Phase 1 exit criterion must prove a real text prompt can drive OpenCode to
+write C, build a ROM, read the result, and self-correct a deliberate compile
+error. Running that proof requires an OpenRouter credential and model choice
+outside the repo.
+
+Decision:
+
+Use `scripts/validate-phase1-agent-loop.py` as the gate harness. It prepares a
+fresh SGDK project under ignored `artifacts/phase1/agent-loop/project` with a
+known compile error, writes the exact OpenCode prompt to
+`artifacts/phase1/agent-loop/prompt.md`, and only runs the agent when
+`--run-agent` is passed with `DRIVE16_PHASE1_MODEL` set to an OpenRouter model
+and an OpenRouter credential available.
+
+Consequence:
+
+The repo now contains the precise validation artifact for the human to run
+after credentials are configured. Phase 1 is still not complete until the
+script runs with the agent, the compile error is fixed by OpenCode, the ROM
+builds, Genteel captures a frame, and the script verifies those artifacts.
+
 ## 2026-06-29 - Project OpenCode config keeps credentials external
 
 Context:
