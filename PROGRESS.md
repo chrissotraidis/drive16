@@ -10,7 +10,7 @@ ROM in the right pane using bundled assets.
 
 - [x] Human sign-off: Phase 2 approved.
 - [x] Scaffold the Tauri 2 plus React/Vite two-pane app shell.
-- [ ] Add app-side dependency and tool health preflight checks.
+- [x] Add app-side dependency and tool health preflight checks.
 - [ ] Launch a starter blank ROM path for the app preview.
 - [ ] Render the Genteel live framebuffer in the right pane.
 - [ ] Connect the left conversation pane to OpenCode HTTP/SSE.
@@ -22,11 +22,12 @@ ROM in the right pane using bundled assets.
 
 ## Current Task
 
-The first Phase 3 Tauri/React app shell is scaffolded and verified.
+The app-side dependency and tool health preflight checks are implemented and
+verified.
 
 ## Next Up
 
-Add app-side dependency and tool health preflight checks.
+Launch a starter blank ROM path for the app preview.
 
 ## Completed Phase 3 Work
 
@@ -37,6 +38,11 @@ Add app-side dependency and tool health preflight checks.
   files, blank ROM preview, transport controls, tool health, and local
   interaction state.
 - [x] Phase 3 app shell evidence recorded in `docs/phase3-app-shell.md`.
+- [x] Native Tauri preflight command added for OpenCode, Docker, SGDK script,
+  Genteel, RAG corpus, and CORE asset checks.
+- [x] Refreshable health panel wired to native preflight with a browser-preview
+  fallback.
+- [x] Phase 3 preflight evidence recorded in `docs/phase3-preflight.md`.
 
 ## Completed Phase 2 Gate
 

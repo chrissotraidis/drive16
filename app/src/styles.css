@@ -68,6 +68,8 @@ button {
 .model-select,
 .status-pill,
 .section-title,
+.panel-title-row,
+.preflight-summary,
 .control-row,
 .health-list div,
 .file-tree li,
@@ -108,11 +110,13 @@ button {
 .top-center {
   justify-content: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .top-actions {
   justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
 }
 
 .top-actions button,
@@ -139,8 +143,12 @@ button {
 }
 
 .model-select {
+  max-width: 100%;
   padding: 0 12px;
   color: var(--accent-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-pill {
@@ -174,6 +182,7 @@ button {
 .left-pane,
 .right-pane {
   min-height: 0;
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(20, 16, 13, 0.92);
@@ -266,6 +275,7 @@ h3 {
   color: #eaded1;
   font-size: 14px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .split-panel {
@@ -291,6 +301,31 @@ h3 {
   color: var(--accent-2);
 }
 
+.panel-title-row {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.panel-title-row .section-title {
+  margin-bottom: 0;
+}
+
+.refresh-health {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--accent-2);
+  background: #17110d;
+}
+
+.refresh-health:hover {
+  border-color: var(--accent);
+}
+
 .tool-stream ol,
 .file-tree ul {
   display: grid;
@@ -310,6 +345,7 @@ h3 {
 .tool-stream strong,
 .tool-stream small {
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .tool-stream strong {
@@ -402,7 +438,8 @@ h3 {
 .genesis-screen {
   position: relative;
   align-self: center;
-  width: min(100%, 960px);
+  width: min(100%, 960px, calc((100vh - 380px) * 1.3333));
+  min-width: 320px;
   aspect-ratio: 4 / 3;
   margin: 0 auto;
   overflow: hidden;
@@ -495,6 +532,40 @@ h3 {
   font-weight: 800;
 }
 
+.preflight-summary {
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  margin-bottom: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--accent-2);
+  background: rgba(240, 119, 34, 0.08);
+}
+
+.preflight-summary.ready {
+  color: var(--green);
+  background: rgba(143, 207, 136, 0.08);
+}
+
+.preflight-summary.missing {
+  color: #ff736a;
+  background: rgba(255, 115, 106, 0.08);
+}
+
+.preflight-summary span {
+  flex: 1;
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.preflight-summary small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .health-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -502,7 +573,8 @@ h3 {
 }
 
 .health-list div {
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
   padding: 8px 9px;
   border: 1px solid var(--line);
@@ -511,7 +583,8 @@ h3 {
 }
 
 .health-list span,
-.health-list strong {
+.health-list strong,
+.health-list small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -521,6 +594,21 @@ h3 {
 
 .health-list strong {
   color: var(--green);
+}
+
+.health-list small {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.health-item.warning strong {
+  color: var(--accent-2);
+}
+
+.health-item.missing strong {
+  color: #ff736a;
 }
 
 @media (max-width: 980px) {
@@ -542,10 +630,24 @@ h3 {
   .top-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .model-select {
+    flex: 1 1 220px;
+  }
+
+  .top-actions button {
+    flex: 1 1 136px;
   }
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .genesis-screen {
+    width: min(100%, 960px);
+    min-width: 0;
   }
 
   .left-pane,

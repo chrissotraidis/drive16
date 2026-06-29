@@ -1,5 +1,64 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 26 - App-side tool preflight
+
+Plan:
+
+- Task: add app-side dependency and CORE tool health preflight checks.
+- Files: `app/src-tauri/src/preflight.rs`, `app/src-tauri/src/main.rs`,
+  `app/src-tauri/Cargo.toml`, `app/src-tauri/Cargo.lock`,
+  `app/src/App.tsx`, `app/src/styles.css`, `docs/phase3-preflight.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run the focused Rust preflight test, build the React frontend,
+  check the Tauri Rust shell, build the Tauri shell without bundling, validate
+  the rendered health panel in the in-app Browser at default and mobile
+  viewports, scan for the pasted OpenRouter key, and run `git diff --check`.
+
+Did:
+
+- Added native Tauri `run_preflight`.
+- The preflight checks OpenCode, Docker, `scripts/build-sgdk.sh`, the pinned
+  Genteel sidecar binary, the Drive16 RAG corpus, and CORE bundled assets.
+- Replaced the static tool-health rows with a refreshable health panel.
+- Added a browser-preview fallback so the web preview explains that command
+  checks run inside the native Tauri app.
+- Fixed a default 1280 by 720 viewport issue where the emulator preview crowded
+  the health panel.
+- Fixed mobile width and wrapping rules for top controls, messages, and health
+  rows.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml
+  preflight_reports_expected_core_checks` passed.
+- `pnpm --dir app build` passed.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- In-app Browser validation loaded `http://127.0.0.1:1420/` with title
+  `Drive16`.
+- Browser DOM snapshot contained `Drive16 Agent`, no framework overlay was
+  detected, and console warnings/errors were empty.
+- Refreshing `data-testid="refresh-health"` showed `Needs attention` and
+  `Preview mode` in browser preview, with OpenCode and Docker as `Check` and
+  SGDK build and Genteel as `Ready`.
+- Default viewport metrics returned `scrollWidth: 1280`, `innerWidth: 1280`,
+  `scrollHeight: 720`, and `innerHeight: 720`.
+- Mobile viewport metrics returned `scrollWidth: 390`, `innerWidth: 390`,
+  `scrollHeight: 1632`, and `innerHeight: 844`.
+- In-app Browser screenshots were saved to:
+  `artifacts/phase3/preflight/browser-default.png`,
+  `artifacts/phase3/preflight/browser-mobile-top.png`, and
+  `artifacts/phase3/preflight/browser-mobile-health.png`.
+
+Gate:
+
+None.
+
+Next:
+
+- Launch a starter blank ROM path for the app preview.
+
 ## 2026-06-29 - ITERATION 25 - Phase 3 Tauri app shell
 
 Plan:

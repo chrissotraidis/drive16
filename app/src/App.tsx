@@ -1,5 +1,6 @@
 import {
   Activity,
+  AlertCircle,
   Box,
   CheckCircle2,
   Circle,
@@ -19,8 +20,9 @@ import {
   TerminalSquare,
   Wrench,
 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import type { ReactNode } from "react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
@@ -36,6 +38,20 @@ type ToolStep = {
   label: string;
   detail: string;
   state: "done" | "active" | "queued";
+};
+
+type HealthState = "ready" | "warning" | "missing";
+
+type HealthCheck = {
+  name: string;
+  state: HealthState;
+  detail: string;
+};
+
+type PreflightReport = {
+  generatedAt: string;
+  summaryState: HealthState;
+  checks: HealthCheck[];
 };
 
 const starterMessages: Message[] = [
@@ -89,12 +105,32 @@ const projectFiles = [
   "assets/core/loop.vgm",
 ];
 
-const toolHealth = [
-  { name: "OpenCode", state: "Ready" },
-  { name: "RAG", state: "Indexed" },
-  { name: "SGDK", state: "Ready" },
-  { name: "Genteel", state: "Streaming" },
-];
+const previewPreflight: PreflightReport = {
+  generatedAt: "preview",
+  summaryState: "warning",
+  checks: [
+    {
+      name: "OpenCode",
+      state: "warning",
+      detail: "Native preflight runs inside the Tauri app",
+    },
+    {
+      name: "Docker",
+      state: "warning",
+      detail: "Browser preview cannot inspect local commands",
+    },
+    {
+      name: "SGDK build",
+      state: "ready",
+      detail: "scripts/build-sgdk.sh tracked",
+    },
+    {
+      name: "Genteel",
+      state: "ready",
+      detail: "sidecar path tracked from Phase 0",
+    },
+  ],
+};
 
 function App() {
   const [messages, setMessages] = useState<Message[]>(starterMessages);
@@ -102,6 +138,12 @@ function App() {
   const [buildState, setBuildState] = useState<BuildState>("running");
   const [transport, setTransport] = useState<TransportState>("running");
   const [spriteX, setSpriteX] = useState(52);
+  const [preflight, setPreflight] = useState<PreflightReport>(previewPreflight);
+  const [preflightSource, setPreflightSource] = useState("checking");
+
+  useEffect(() => {
+    void refreshPreflight();
+  }, []);
 
   const buildLabel = useMemo(() => {
     if (buildState === "building") return "Building";
@@ -139,6 +181,38 @@ function App() {
     setTransport("running");
     setBuildState("running");
     setSpriteX(52);
+  }
+
+  async function refreshPreflight() {
+    setPreflightSource("checking");
+
+    if (!isTauriRuntime()) {
+      setPreflight(previewPreflight);
+      setPreflightSource("preview");
+      return;
+    }
+
+    try {
+      const report = await invoke<PreflightReport>("run_preflight");
+      setPreflight(report);
+      setPreflightSource("tauri");
+    } catch (error) {
+      setPreflight({
+        generatedAt: "error",
+        summaryState: "warning",
+        checks: [
+          {
+            name: "Preflight",
+            state: "warning",
+            detail:
+              error instanceof Error
+                ? error.message
+                : "Native preflight was not available",
+          },
+        ],
+      });
+      setPreflightSource("error");
+    }
   }
 
   return (
@@ -282,12 +356,32 @@ function App() {
             </section>
 
             <section className="runtime-panel" aria-label="Tool health">
-              <SectionTitle icon={<Wrench size={16} />} title="Tools" />
-              <div className="health-list">
-                {toolHealth.map((tool) => (
-                  <div key={tool.name}>
+              <div className="panel-title-row">
+                <SectionTitle icon={<Wrench size={16} />} title="Tools" />
+                <button
+                  className="refresh-health"
+                  type="button"
+                  aria-label="Refresh tool health"
+                  data-testid="refresh-health"
+                  onClick={refreshPreflight}
+                >
+                  <RefreshCcw size={14} />
+                </button>
+              </div>
+              <div
+                className={`preflight-summary ${preflight.summaryState}`}
+                data-testid="preflight-summary"
+              >
+                {healthIcon(preflight.summaryState)}
+                <span>{summaryLabel(preflight.summaryState)}</span>
+                <small>{sourceLabel(preflightSource)}</small>
+              </div>
+              <div className="health-list" data-testid="tool-health-list">
+                {preflight.checks.map((tool) => (
+                  <div className={`health-item ${tool.state}`} key={tool.name}>
                     <span>{tool.name}</span>
-                    <strong>{tool.state}</strong>
+                    <strong>{stateLabel(tool.state)}</strong>
+                    <small>{tool.detail}</small>
                   </div>
                 ))}
               </div>
@@ -297,6 +391,35 @@ function App() {
       </section>
     </main>
   );
+}
+
+function isTauriRuntime() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function summaryLabel(state: HealthState) {
+  if (state === "ready") return "All core tools ready";
+  if (state === "missing") return "Setup needed";
+  return "Needs attention";
+}
+
+function stateLabel(state: HealthState) {
+  if (state === "ready") return "Ready";
+  if (state === "missing") return "Missing";
+  return "Check";
+}
+
+function sourceLabel(source: string) {
+  if (source === "tauri") return "Native preflight";
+  if (source === "checking") return "Checking";
+  if (source === "error") return "Command unavailable";
+  return "Preview mode";
+}
+
+function healthIcon(state: HealthState) {
+  if (state === "ready") return <CheckCircle2 size={15} />;
+  if (state === "missing") return <AlertCircle size={15} />;
+  return <Activity size={15} />;
 }
 
 function TopBar({
