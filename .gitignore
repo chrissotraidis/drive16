@@ -32,6 +32,9 @@ out/
 *.map
 *.lst
 *.sym
+examples/**/src/boot/
+examples/**/res/resources.h
+examples/**/res/resources.rs
 
 # Captured validation artifacts
 artifacts/

@@ -61,7 +61,11 @@ Expected evidence:
 
 - `examples/phase0-assets/out/rom.bin` exists.
 - `artifacts/phase0/phase0-assets.png` exists.
-- The screenshot visibly shows the Phase 0 text and bundled sprite.
+- `artifacts/phase0/phase0-assets-right.png` exists and shows the sprite moved
+  right via a Genteel input script.
+- `artifacts/phase0/phase0-assets.wav` exists and the validator reports
+  non-silent audio from the bundled VGM loop.
+- The neutral screenshot visibly shows the Phase 0 text and bundled sprite.
 
 ## 4. Confirm Input And Music
 
@@ -73,7 +77,7 @@ $GENTEEL_BIN examples/phase0-assets/out/rom.bin
 
 Expected evidence:
 
-- The D-pad moves the bundled sprite.
+- The D-pad moves the bundled sprite in interactive play.
 - The PSG music loop is audible and loops cleanly.
 - Note the exact Genteel command used if the CLI differs from the line above.
 

@@ -1,5 +1,68 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 7 - Phase 0 ROM build and asset validation
+
+Plan:
+
+- Task: use the now-running Docker and built Genteel binary to validate the
+  Drive16 hello-world ROM and asset ROM.
+- Files: `examples/phase0-assets/res/resources.res`,
+  `scripts/validate-phase0-assets.sh`, `docs/phase0-validation.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: build the SGDK hello-world ROM, screenshot it in Genteel, build
+  the asset ROM, screenshot it in Genteel, drive the sprite with a Genteel input
+  script, dump audio, confirm the audio is non-silent, inspect screenshots, and
+  run script/style checks.
+
+Did:
+
+- Started Docker Desktop successfully; Docker daemon reported version 29.2.1.
+- Built `examples/sgdk-hello-world/out/rom.bin` with docker-sgdk v2.11.
+- Ran the Drive16 hello-world ROM in Genteel and captured
+  `artifacts/phase0/genteel-hello.png`.
+- Fixed the asset ROM `resources.res` paths so `rescomp` resolves repo-level
+  `assets/phase0` correctly from the `res/` directory.
+- Built `examples/phase0-assets/out/rom.bin` with docker-sgdk v2.11.
+- Ran the asset ROM in Genteel and captured
+  `artifacts/phase0/phase0-assets.png`.
+- Drove the asset ROM with a scripted Right input and captured
+  `artifacts/phase0/phase0-assets-right.png`.
+- Dumped asset ROM audio to `artifacts/phase0/phase0-assets.wav`.
+- Updated `scripts/validate-phase0-assets.sh` to reproduce the scripted input
+  and non-silent audio checks.
+
+Evidence:
+
+- docker-sgdk image digest:
+  `sha256:327ab838fbdf6bc741c6a7a11ee3c937cf1aaf1dc07a475995e89b741b6a830d`.
+- Hello-world build ended with:
+  `Built ROM: .../examples/sgdk-hello-world/out/rom.bin`.
+- Genteel hello-world run saved `artifacts/phase0/genteel-hello.png` at about
+  615 fps; visual inspection shows `Drive16 Phase 0` and `Hello from SGDK`.
+- Asset ROM build ended with:
+  `Built ROM: .../examples/phase0-assets/out/rom.bin`.
+- Genteel asset run saved `artifacts/phase0/phase0-assets.png`; visual
+  inspection shows the Phase 0 text and bundled sprite.
+- Scripted Right input run saved `artifacts/phase0/phase0-assets-right.png`;
+  visual inspection shows the sprite moved to the right edge.
+- Audio dump metadata: stereo 16-bit WAV at 53267 Hz, 161210 frames.
+- `scripts/validate-phase0-assets.sh` reported
+  `Audio dump is non-silent: max abs sample 10922`.
+
+VALIDATION REQUEST:
+
+Only the live-framebuffer path remains open for the Phase 0 gate. Confirm
+whether Genteel can expose a continuous framebuffer stream suitable for the
+future Tauri pane, or report that the pinned build only exposes screenshots and
+GUI rendering.
+
+Next:
+
+- If the live-framebuffer path is confirmed, record the exact command/API and
+  request Phase 0 sign-off.
+- If it is not available, record a proposed architecture change in
+  `DECISIONS.md` before choosing a fallback.
+
 ## 2026-06-29 - ITERATION 6 - Buildable Genteel pin and screenshot proof
 
 Plan:
