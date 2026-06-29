@@ -22,3 +22,5 @@ Toolchain and validation scripts live here.
   then checks scripted input and non-silent audio.
 - `validate-phase2-agent-context.sh`: checks the Phase 2 agent skill file and
   confirms RAG retrieves the bundled asset symbols.
+- `validate-phase2-agent-loop.py`: prepares and optionally runs the OpenCode
+  Phase 2 bundled-asset validation gate.

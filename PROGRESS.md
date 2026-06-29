@@ -14,19 +14,20 @@ bundled sprite and a playing bundled loop, using CORE tools only.
   `resources.res`.
 - [x] Teach the agent, via RAG or skill context, to wire the bundled sprite and
   music loop.
-- [ ] Add a Phase 2 validation harness for a prompt-driven asset ROM.
+- [x] Add a Phase 2 validation harness for a prompt-driven asset ROM.
 - [ ] Drive the loop from a plain prompt for a controllable bundled sprite with
   music.
 - [ ] Verify the generated ROM in Genteel with scripted input and audio output.
 
 ## Current Task
 
-The Phase 2 agent context is established through a repo skill file and RAG
-queries that expose the bundled asset symbols.
+The Phase 2 prompt-driven validation harness is ready and opens a credential
+gate before running the agent.
 
 ## Next Up
 
-Add a Phase 2 validation harness for a prompt-driven asset ROM.
+Run the Phase 2 agent-loop validation after an OpenRouter credential and model
+are configured.
 
 ## Completed Phase 2 Work
 
@@ -42,6 +43,8 @@ Add a Phase 2 validation harness for a prompt-driven asset ROM.
   `agent/skills/phase2-core-assets.md`.
 - [x] Agent context validator added at
   `scripts/validate-phase2-agent-context.sh`.
+- [x] Phase 2 prompt-driven validation harness added at
+  `scripts/validate-phase2-agent-loop.py`.
 
 ## Completed Phase 1 Gate
 

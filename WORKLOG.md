@@ -1,5 +1,59 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 20 - Phase 2 agent-loop harness
+
+Plan:
+
+- Task: add the Phase 2 prompt-driven validation harness.
+- Files: `scripts/validate-phase2-agent-loop.py`,
+  `docs/phase2-agent-loop.md`, `scripts/README.md`, `PROGRESS.md`,
+  `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: compile the Python harness, run it without credentials to
+  confirm it prepares the SGDK project and opens a validation request, rerun
+  the Phase 2 core asset fixture validator, and run `git diff --check`.
+
+Did:
+
+- Added `scripts/validate-phase2-agent-loop.py`.
+- The harness prepares `artifacts/phase2/agent-loop/project`, embeds the Phase
+  2 skill file into a plain OpenCode prompt, and gates the real run behind
+  `--run-agent`, `DRIVE16_PHASE2_MODEL`, and an OpenRouter credential.
+- The post-agent verifier checks project files, MCP state, OpenCode tool-call
+  markers, neutral and Right-input Genteel screenshots, and non-silent audio.
+- Added `docs/phase2-agent-loop.md`.
+
+Evidence:
+
+- `python3 -m py_compile scripts/validate-phase2-agent-loop.py` passed.
+- `scripts/validate-phase2-agent-loop.py` passed in gate mode and printed:
+  `VALIDATION REQUEST: Phase 2 agent-loop validation is ready but cannot run yet.`
+  `DRIVE16_PHASE2_MODEL is not set.`
+- The harness prepared:
+  `artifacts/phase2/agent-loop/project`.
+- The harness wrote the prompt to:
+  `artifacts/phase2/agent-loop/prompt.md`.
+- `scripts/validate-phase2-core-assets.sh` passed with:
+  `Audio dump is non-silent: max abs sample 10922`.
+- `git diff --check` passed.
+
+VALIDATION REQUEST:
+
+Configure OpenRouter outside the repo, choose a Phase 2 OpenRouter model, then
+run:
+
+```sh
+export DRIVE16_PHASE2_MODEL=openrouter/<provider-model>
+export OPENROUTER_API_KEY=...
+scripts/validate-phase2-agent-loop.py --run-agent
+```
+
+Expected result: the harness reports `Phase 2 agent-loop ok:
+artifacts/phase2/agent-loop/verification-right.png`.
+
+Next:
+
+- Run the Phase 2 agent-loop validation after OpenRouter is configured.
+
 ## 2026-06-29 - ITERATION 19 - Phase 2 agent asset instructions
 
 Plan:

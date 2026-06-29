@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 2 harness verifies audio outside MCP
+
+Context:
+
+The Phase 2 exit criterion includes a playing bundled music loop. The current
+emulator MCP server can run ROMs, capture frames, and script input, but it does
+not expose an audio-dump tool.
+
+Decision:
+
+Keep the agent interaction on CORE MCP tools, then let
+`scripts/validate-phase2-agent-loop.py` perform a final direct Genteel
+verification pass against the generated ROM. That pass captures neutral and
+Right-input screenshots and writes an audio dump to confirm non-silent output.
+
+Consequence:
+
+The Phase 2 agent still proves it can produce and run the ROM through MCP, and
+the harness supplies objective audio evidence until the emulator MCP grows an
+audio inspection method.
+
 ## 2026-06-29 - Phase 2 agent skill files live under agent/skills
 
 Context:
