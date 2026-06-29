@@ -70,6 +70,7 @@ In `src/main.c`:
 - Build only through `drive16-sgdk-build`.
 - If the build fails, call `read_build_log`, repair the issue, and rebuild.
 - Run the ROM through `drive16-emulator`.
-- Call `capture_frame` and inspect the screenshot result.
+- Run with audio dumping enabled, then call `capture_frame` and
+  `capture_audio` to inspect the screenshot and prove the loop is non-silent.
 - To prove controls, call `send_input` with Player 1 `right`, run the ROM again,
   and call `capture_frame` again.

@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 2 audio evidence belongs in emulator MCP
+
+Context:
+
+Phase 2 must prove the bundled VGM loop is playing while staying on CORE tools.
+The first Phase 2 harness design asked the agent to use MCP for build/run/frame
+inspection, then used a direct Genteel audio dump in the harness for music
+evidence.
+
+Decision:
+
+Expose audio evidence in `mcp-servers/emulator/server.py`. `run_rom` now accepts
+`dump_audio`, and `capture_audio` inspects the WAV dump and reports whether it
+is non-silent. The Phase 2 prompt and harness require `capture_audio`.
+
+Consequence:
+
+The actual agent loop can prove sprite, control, screenshot, and music evidence
+through CORE MCP tools. The harness can still use direct Genteel runs for
+independent screenshot-difference cross-checks, but audio is no longer outside
+the MCP contract.
+
 ## 2026-06-29 - Phase 2 harness verifies audio outside MCP
 
 Context:

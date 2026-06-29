@@ -25,8 +25,8 @@ The script verifies:
 - the project declares the bundled assets through `res/resources.res`;
 - `drive16-sgdk-build` built the generated project;
 - `drive16-emulator` ran the resulting ROM;
-- `send_input` and `capture_frame` were used during the run;
+- `send_input`, `capture_frame`, and `capture_audio` were used during the run;
 - Genteel captures neutral and Right-input screenshots that differ;
-- a Genteel audio dump is non-silent.
+- the emulator MCP audio dump is non-silent.
 
 Artifacts are written under `artifacts/phase2/agent-loop/`.

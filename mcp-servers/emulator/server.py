@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import wave
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ STATE_FILE = ARTIFACT_DIR / "state.json"
 SCREENSHOT_FILE = ARTIFACT_DIR / "last-frame.png"
 FRAME_STREAM_FILE = ARTIFACT_DIR / "last-frames.rgb565"
 INPUT_SCRIPT_FILE = ARTIFACT_DIR / "input-script.csv"
+AUDIO_DUMP_FILE = ARTIFACT_DIR / "last-audio.wav"
 
 BUTTON_ORDER = [
     ("up", "U"),
@@ -101,6 +103,11 @@ TOOLS: list[dict[str, Any]] = [
                     "minimum": 1,
                     "maximum": 600,
                 },
+                "dump_audio": {
+                    "type": "boolean",
+                    "description": "Also write a WAV audio dump for later capture_audio inspection.",
+                    "default": False,
+                },
             },
             "required": ["rom_path"],
             "additionalProperties": False,
@@ -110,6 +117,12 @@ TOOLS: list[dict[str, Any]] = [
         "name": "capture_frame",
         "title": "Capture Frame",
         "description": "Return the latest PNG frame captured by run_rom.",
+        "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "capture_audio",
+        "title": "Capture Audio",
+        "description": "Inspect the latest WAV audio dump captured by run_rom.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     {
@@ -313,9 +326,10 @@ def run_rom(args: dict[str, Any]) -> dict[str, Any]:
     use_input_script = bool_arg(args.get("use_input_script"), "use_input_script", True)
     stream_frames = bool_arg(args.get("stream_frames"), "stream_frames", True)
     stream_every = bounded_int(args.get("stream_every"), "stream_every", 30, 1, 600)
+    dump_audio = bool_arg(args.get("dump_audio"), "dump_audio", False)
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-    for path in (SCREENSHOT_FILE, FRAME_STREAM_FILE):
+    for path in (SCREENSHOT_FILE, FRAME_STREAM_FILE, AUDIO_DUMP_FILE):
         if path.exists():
             path.unlink()
 
@@ -328,7 +342,10 @@ def run_rom(args: dict[str, Any]) -> dict[str, Any]:
     command.extend(["--headless", str(frames)])
     if stream_frames:
         command.extend(["--stream-frames", str(FRAME_STREAM_FILE), "--stream-every", str(stream_every)])
-    command.extend(["--screenshot", str(SCREENSHOT_FILE), str(rom_path)])
+    command.extend(["--screenshot", str(SCREENSHOT_FILE)])
+    if dump_audio:
+        command.extend(["--dump-audio", str(AUDIO_DUMP_FILE)])
+    command.append(str(rom_path))
 
     process = subprocess.run(
         command,
@@ -359,6 +376,7 @@ def run_rom(args: dict[str, Any]) -> dict[str, Any]:
             "inputScriptPath": str(INPUT_SCRIPT_FILE) if input_script_used else None,
             "screenshotPath": str(SCREENSHOT_FILE) if SCREENSHOT_FILE.is_file() else None,
             "frameStreamPath": str(FRAME_STREAM_FILE) if FRAME_STREAM_FILE.is_file() else None,
+            "audioDumpPath": str(AUDIO_DUMP_FILE) if AUDIO_DUMP_FILE.is_file() else None,
             "streamEvery": stream_every if stream_frames else None,
         },
         log_text,
@@ -385,6 +403,48 @@ def capture_frame() -> dict[str, Any]:
             {"type": "image", "data": image_data, "mimeType": "image/png"},
         ],
     )
+
+
+def audio_summary(path: Path) -> dict[str, Any]:
+    with wave.open(str(path), "rb") as wav:
+        channels = wav.getnchannels()
+        sample_width = wav.getsampwidth()
+        frame_rate = wav.getframerate()
+        frame_count = wav.getnframes()
+        frames = wav.readframes(frame_count)
+
+    if sample_width != 2:
+        raise ToolExecutionError(f"Audio dump uses unsupported sample width: {sample_width}")
+
+    samples = [
+        int.from_bytes(frames[index : index + sample_width], "little", signed=True)
+        for index in range(0, len(frames), sample_width)
+    ]
+    max_abs = max((abs(sample) for sample in samples), default=0)
+    return {
+        "channels": channels,
+        "sampleWidthBytes": sample_width,
+        "sampleRate": frame_rate,
+        "frames": frame_count,
+        "samples": len(samples),
+        "maxAbsSample": max_abs,
+        "nonSilent": max_abs > 0,
+    }
+
+
+def capture_audio() -> dict[str, Any]:
+    if not AUDIO_DUMP_FILE.is_file():
+        payload = {"ok": False, "error": "No audio dump is available. Run run_rom with dump_audio=true first."}
+        return tool_result(payload, is_error=True)
+    summary = audio_summary(AUDIO_DUMP_FILE)
+    payload = {
+        "ok": summary["nonSilent"],
+        "audioDumpPath": str(AUDIO_DUMP_FILE),
+        "mimeType": "audio/wav",
+        "bytes": AUDIO_DUMP_FILE.stat().st_size,
+        **summary,
+    }
+    return tool_result(payload, is_error=not summary["nonSilent"])
 
 
 def send_input(args: dict[str, Any]) -> dict[str, Any]:
@@ -425,6 +485,8 @@ def call_tool(name: str, arguments: Any) -> dict[str, Any]:
         return run_rom(args)
     if name == "capture_frame":
         return capture_frame()
+    if name == "capture_audio":
+        return capture_audio()
     if name == "send_input":
         return send_input(args)
     if name == "read_state":

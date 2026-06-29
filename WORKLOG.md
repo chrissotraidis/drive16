@@ -1,5 +1,58 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 21 - Emulator MCP audio evidence
+
+Plan:
+
+- Task: expose audio evidence through the CORE emulator MCP server for Phase 2.
+- Files: `mcp-servers/emulator/server.py`,
+  `scripts/validate-emulator-audio-mcp.py`,
+  `scripts/validate-emulator-mcp.py`,
+  `mcp-servers/emulator/README.md`,
+  `agent/skills/phase2-core-assets.md`,
+  `scripts/validate-phase2-agent-context.sh`,
+  `scripts/validate-phase2-agent-loop.py`,
+  `docs/phase2-agent-loop.md`, `scripts/README.md`, `PROGRESS.md`,
+  `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: compile the touched Python validators and server, run the base
+  emulator MCP validator, run the new audio MCP validator against the Phase 2
+  asset ROM, rerun the Phase 2 agent-context validator, rerun the Phase 2
+  harness in gate mode, and run `git diff --check`.
+
+Did:
+
+- Added `dump_audio` support to the emulator MCP `run_rom` tool.
+- Added `capture_audio`, which inspects the latest WAV dump and reports
+  non-silent audio stats.
+- Added `scripts/validate-emulator-audio-mcp.py`.
+- Updated the Phase 2 skill and harness to require `capture_audio`.
+
+Evidence:
+
+- `python3 -m py_compile mcp-servers/emulator/server.py
+  scripts/validate-emulator-mcp.py scripts/validate-emulator-audio-mcp.py
+  scripts/validate-phase2-agent-loop.py` passed.
+- `scripts/validate-emulator-mcp.py` passed with:
+  `Emulator MCP ok: /Users/chrissotraidis/Documents/GitHub/drive16/artifacts/phase1/emulator/last-frame.png`.
+- `scripts/validate-emulator-audio-mcp.py` passed with:
+  `Emulator audio MCP ok: /Users/chrissotraidis/Documents/GitHub/drive16/artifacts/phase1/emulator/last-audio.wav max_abs=10922`.
+- `artifacts/phase1/emulator/state.json` recorded `"audioDumpPath"` for
+  `examples/phase2-core-assets/out/rom.bin`.
+- `scripts/validate-phase2-agent-context.sh` passed with:
+  `Phase 2 agent context ok: /Users/chrissotraidis/Documents/GitHub/drive16/agent/skills/phase2-core-assets.md`.
+- `scripts/validate-phase2-agent-loop.py` passed in gate mode and printed:
+  `VALIDATION REQUEST: Phase 2 agent-loop validation is ready but cannot run yet.`
+  `DRIVE16_PHASE2_MODEL is not set.`
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Run the Phase 2 agent-loop validation after OpenRouter is configured.
+
 ## 2026-06-29 - ITERATION 20 - Phase 2 agent-loop harness
 
 Plan:

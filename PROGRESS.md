@@ -21,8 +21,8 @@ bundled sprite and a playing bundled loop, using CORE tools only.
 
 ## Current Task
 
-The Phase 2 prompt-driven validation harness is ready and opens a credential
-gate before running the agent.
+The Phase 2 prompt-driven validation harness is ready and now expects emulator
+MCP audio evidence before running the agent gate.
 
 ## Next Up
 
@@ -45,6 +45,8 @@ are configured.
   `scripts/validate-phase2-agent-context.sh`.
 - [x] Phase 2 prompt-driven validation harness added at
   `scripts/validate-phase2-agent-loop.py`.
+- [x] Emulator MCP audio capture added so Phase 2 can prove music through CORE
+  tools.
 
 ## Completed Phase 1 Gate
 

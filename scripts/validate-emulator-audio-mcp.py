@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke-test the Drive16 emulator MCP server over stdio."""
+"""Smoke-test emulator MCP audio capture with the Phase 2 asset ROM."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVER = REPO_ROOT / "mcp-servers" / "emulator" / "server.py"
-ROM = REPO_ROOT / "examples" / "sgdk-hello-world" / "out" / "rom.bin"
+ROM = REPO_ROOT / "examples" / "phase2-core-assets" / "out" / "rom.bin"
 
 
 def send(process: subprocess.Popen[str], message: dict[str, Any]) -> None:
@@ -56,12 +56,9 @@ def tool_call(process: subprocess.Popen[str], message_id: int, name: str, argume
 
 
 def main() -> int:
+    subprocess.run(["scripts/validate-core-assets.py"], cwd=REPO_ROOT, check=True)
     if not ROM.is_file():
-        subprocess.run(
-            ["scripts/build-sgdk.sh", "examples/sgdk-hello-world"],
-            cwd=REPO_ROOT,
-            check=True,
-        )
+        subprocess.run(["scripts/build-sgdk.sh", "examples/phase2-core-assets"], cwd=REPO_ROOT, check=True)
 
     process = subprocess.Popen(
         [sys.executable, str(SERVER)],
@@ -79,7 +76,7 @@ def main() -> int:
             {
                 "protocolVersion": "2025-11-25",
                 "capabilities": {},
-                "clientInfo": {"name": "drive16-validator", "version": "0.1.0"},
+                "clientInfo": {"name": "drive16-audio-validator", "version": "0.1.0"},
             },
         )
         assert init["capabilities"]["tools"]["listChanged"] is False
@@ -103,35 +100,29 @@ def main() -> int:
             4,
             "run_rom",
             {
-                "rom_path": "examples/sgdk-hello-world/out/rom.bin",
-                "frames": 90,
-                "stream_frames": True,
-                "stream_every": 30,
+                "rom_path": "examples/phase2-core-assets/out/rom.bin",
+                "frames": 180,
+                "use_input_script": True,
+                "stream_frames": False,
+                "dump_audio": True,
             },
         )
-
-        screenshot = Path(run["screenshotPath"])
-        if screenshot.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
-            raise RuntimeError(f"Screenshot is not a PNG: {screenshot}")
-
-        stream_path = Path(run["frameStreamPath"])
-        subprocess.run(
-            ["scripts/validate-frame-stream.py", str(stream_path), "--min-frames", "3"],
-            cwd=REPO_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        if not run.get("audioDumpPath"):
+            raise RuntimeError("run_rom did not record an audio dump path.")
 
         frame = tool_call(process, 5, "capture_frame")
         if frame["mimeType"] != "image/png":
             raise RuntimeError("capture_frame did not return PNG metadata.")
 
-        state = tool_call(process, 6, "read_state")
-        if not state["ok"]:
-            raise RuntimeError("read_state did not report a successful latest run.")
+        audio = tool_call(process, 6, "capture_audio")
+        if audio["mimeType"] != "audio/wav" or audio["maxAbsSample"] <= 0:
+            raise RuntimeError(f"capture_audio did not prove non-silent WAV output: {audio}")
 
-        print(f"Emulator MCP ok: {screenshot}")
+        state = tool_call(process, 7, "read_state")
+        if not state["ok"] or not state.get("audioDumpPath"):
+            raise RuntimeError("read_state did not report a successful audio-backed run.")
+
+        print(f"Emulator audio MCP ok: {audio['audioDumpPath']} max_abs={audio['maxAbsSample']}")
         return 0
     finally:
         if process.stdin:

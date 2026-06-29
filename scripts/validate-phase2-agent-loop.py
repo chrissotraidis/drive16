@@ -27,7 +27,6 @@ GENTEEL_BUILD = REPO_ROOT / "scripts" / "build-genteel.sh"
 NEUTRAL_FRAME = ARTIFACT_ROOT / "verification-neutral.png"
 RIGHT_FRAME = ARTIFACT_ROOT / "verification-right.png"
 INPUT_SCRIPT = ARTIFACT_ROOT / "verification-hold-right.csv"
-AUDIO_DUMP = ARTIFACT_ROOT / "verification-audio.wav"
 
 MAKEFILE = """GDK ?= /sgdk
 
@@ -76,12 +75,15 @@ Required flow:
 7. Build through `drive16-sgdk-build`.
 8. If the build fails, call `read_build_log`, fix the issue, and rebuild.
 9. Run the ROM through `drive16-emulator`.
-10. Call `capture_frame` and inspect the screenshot result.
+10. Enable audio dumping for at least one run, then call `capture_frame` and
+    `capture_audio` to inspect the screenshot result and prove the music is
+    non-silent.
 11. Call `send_input` with Player 1 holding Right, run the ROM again, and call
     `capture_frame` again so movement is exercised.
 
 Success means the ROM builds, runs in Genteel, uses the bundled sprite and
-bundled music symbols, captures screenshots, and exercises D-pad movement.
+bundled music symbols, captures screenshots, proves non-silent audio through
+`capture_audio`, and exercises D-pad movement.
 
 Phase 2 skill:
 
@@ -254,6 +256,10 @@ def verify_mcp_state(rom: Path) -> None:
         raise ValidationError("Latest emulator MCP run was not for the Phase 2 validation ROM.")
     if not EMULATOR_FRAME.is_file() or EMULATOR_FRAME.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValidationError(f"Missing captured PNG frame: {EMULATOR_FRAME}")
+    audio_path = emulator_state.get("audioDumpPath")
+    if not audio_path:
+        raise ValidationError("Latest emulator MCP run did not include an audio dump.")
+    verify_audio(Path(str(audio_path)))
 
 
 def verify_agent_log() -> None:
@@ -263,6 +269,7 @@ def verify_agent_log() -> None:
         "build_rom",
         "run_rom",
         "capture_frame",
+        "capture_audio",
         "send_input",
     ]
     missing = [marker for marker in required_markers if marker not in log_text]
@@ -337,8 +344,6 @@ def verify_runtime(rom: Path) -> int:
         "180",
         "--screenshot",
         str(RIGHT_FRAME),
-        "--dump-audio",
-        str(AUDIO_DUMP),
         str(rom),
     ])
 
@@ -348,7 +353,7 @@ def verify_runtime(rom: Path) -> int:
         raise ValidationError(f"Right-input screenshot missing or invalid: {RIGHT_FRAME}")
     if NEUTRAL_FRAME.read_bytes() == RIGHT_FRAME.read_bytes():
         raise ValidationError("Right-input screenshot did not change from neutral screenshot.")
-    return verify_audio(AUDIO_DUMP)
+    return None
 
 
 def verify_artifacts(require_agent_log: bool) -> None:

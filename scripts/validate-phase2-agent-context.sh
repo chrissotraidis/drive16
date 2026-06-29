@@ -24,7 +24,8 @@ for term in \
   "XGM_startPlay" \
   "SPR_addSprite" \
   "send_input" \
-  "capture_frame"; do
+  "capture_frame" \
+  "capture_audio"; do
   require_term "$SKILL" "$term"
 done
 

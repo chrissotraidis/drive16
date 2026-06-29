@@ -11,6 +11,8 @@ Toolchain and validation scripts live here.
   verifies a raw RGB565 frame stream for the Phase 0 live-view proof.
 - `validate-frame-stream.py`: parses and validates the raw `D16F` RGB565 frame
   stream records emitted by the Phase 0 Genteel patch.
+- `validate-emulator-audio-mcp.py`: verifies the emulator MCP can dump and
+  inspect non-silent WAV audio from the Phase 2 CORE asset ROM.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.
