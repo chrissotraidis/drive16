@@ -75,11 +75,11 @@ Required flow:
 7. Build through `drive16-sgdk-build`.
 8. If the build fails, call `read_build_log`, fix the issue, and rebuild.
 9. Run the ROM through `drive16-emulator`.
-10. Enable audio dumping for at least one run, then call `capture_frame` and
-    `capture_audio` to inspect the screenshot result and prove the music is
-    non-silent.
-11. Call `send_input` with Player 1 holding Right, run the ROM again, and call
-    `capture_frame` again so movement is exercised.
+10. Call `capture_frame` after the first run to inspect the neutral screenshot.
+11. Call `send_input` with Player 1 holding Right, run the ROM again with
+    `dump_audio` enabled, then call `capture_frame` and `capture_audio` again
+    so movement and non-silent music are both proven in the final emulator
+    state.
 
 Success means the ROM builds, runs in Genteel, uses the bundled sprite and
 bundled music symbols, captures screenshots, proves non-silent audio through
@@ -258,7 +258,10 @@ def verify_mcp_state(rom: Path) -> None:
         raise ValidationError(f"Missing captured PNG frame: {EMULATOR_FRAME}")
     audio_path = emulator_state.get("audioDumpPath")
     if not audio_path:
-        raise ValidationError("Latest emulator MCP run did not include an audio dump.")
+        raise ValidationError(
+            "Latest emulator MCP run did not include an audio dump. "
+            "The final Right-input run must use dump_audio=true."
+        )
     verify_audio(Path(str(audio_path)))
 
 

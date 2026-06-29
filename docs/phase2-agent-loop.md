@@ -26,6 +26,7 @@ The script verifies:
 - `drive16-sgdk-build` built the generated project;
 - `drive16-emulator` ran the resulting ROM;
 - `send_input`, `capture_frame`, and `capture_audio` were used during the run;
+- the final Right-input emulator run included `dump_audio`;
 - Genteel captures neutral and Right-input screenshots that differ;
 - the emulator MCP audio dump is non-silent.
 

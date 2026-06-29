@@ -1,5 +1,42 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 22 - Phase 2 final-run audio prompt
+
+Plan:
+
+- Task: align the Phase 2 agent instructions with the harness check that the
+  latest emulator MCP state includes audio evidence.
+- Files: `agent/skills/phase2-core-assets.md`,
+  `scripts/validate-phase2-agent-loop.py`, `docs/phase2-agent-loop.md`, and
+  `WORKLOG.md`.
+- Verification: run the Phase 2 agent-context validator, compile and run the
+  Phase 2 agent-loop harness in gate mode, and run `git diff --check`.
+
+Did:
+
+- Tightened the Phase 2 skill and harness prompt so the final Right-input
+  `run_rom` call must use `dump_audio`.
+- Clarified the validation error when the latest emulator MCP state has no
+  audio dump.
+
+Evidence:
+
+- `scripts/validate-phase2-agent-context.sh` passed with:
+  `Phase 2 agent context ok: /Users/chrissotraidis/Documents/GitHub/drive16/agent/skills/phase2-core-assets.md`.
+- `python3 -m py_compile scripts/validate-phase2-agent-loop.py` passed.
+- `scripts/validate-phase2-agent-loop.py` passed in gate mode and printed:
+  `VALIDATION REQUEST: Phase 2 agent-loop validation is ready but cannot run yet.`
+  `DRIVE16_PHASE2_MODEL is not set.`
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Run the Phase 2 agent-loop validation after OpenRouter is configured.
+
 ## 2026-06-29 - ITERATION 21 - Emulator MCP audio evidence
 
 Plan:
