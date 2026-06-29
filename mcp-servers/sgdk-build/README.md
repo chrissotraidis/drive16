@@ -1,4 +1,26 @@
 # SGDK Build MCP Server
 
-Reserved for Phase 1. This server will expose `build_rom(project_path)`,
-`clean(project_path)`, and `read_build_log()`.
+Phase 1 stdio MCP server for the pinned SGDK Docker toolchain.
+
+Run it from the repo root:
+
+```sh
+python3 mcp-servers/sgdk-build/server.py
+```
+
+It exposes:
+
+- `build_rom(project_path, target = "all")`: builds a repo-local SGDK project
+  through `scripts/build-sgdk.sh`.
+- `clean(project_path)`: runs the SGDK `clean` target through the same pinned
+  Docker image.
+- `read_build_log()`: returns the latest captured build or clean log.
+
+Build logs are written to `artifacts/phase1/sgdk-build/last-build.log`, with
+metadata in `artifacts/phase1/sgdk-build/last-build.json`.
+
+Validate the server and hello-world build path:
+
+```sh
+scripts/validate-sgdk-build-mcp.py
+```

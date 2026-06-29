@@ -1,5 +1,47 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 11 - SGDK build MCP wrapper
+
+Plan:
+
+- Task: start Phase 1 by wrapping the proven docker-sgdk build path as the
+  SGDK build MCP server.
+- Files: `mcp-servers/sgdk-build/server.py`,
+  `scripts/validate-sgdk-build-mcp.py`, `mcp-servers/sgdk-build/README.md`,
+  `scripts/build-sgdk.sh`, `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: syntax-check the Python and shell files, then exercise the MCP
+  server over stdio by listing tools, cleaning the hello-world project, building
+  the ROM, and reading the captured build log.
+
+Did:
+
+- Moved the ledger into Phase 1 after human sign-off for Phase 0.
+- Added a dependency-free Python stdio MCP server exposing `build_rom`,
+  `clean`, and `read_build_log`.
+- Captured build output and metadata under
+  `artifacts/phase1/sgdk-build/`.
+- Added a reusable validator that talks to the server as an MCP client.
+- Updated `scripts/build-sgdk.sh` so the `clean` target succeeds without
+  expecting an output ROM.
+
+Evidence:
+
+- `python3 -m py_compile mcp-servers/sgdk-build/server.py
+  scripts/validate-sgdk-build-mcp.py` passed.
+- `bash -n scripts/build-sgdk.sh` passed.
+- `scripts/validate-sgdk-build-mcp.py` passed with:
+  `SGDK build MCP ok:
+  /Users/chrissotraidis/Documents/GitHub/drive16/examples/sgdk-hello-world/out/rom.bin`.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Add the Genteel emulator sidecar adapter and MCP server.
+
 ## 2026-06-29 - ITERATION 10 - Phase 0 evidence packet
 
 Plan:

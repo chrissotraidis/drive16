@@ -37,6 +37,11 @@ docker run \
   "$IMAGE" \
   "$TARGET"
 
+if [ "$TARGET" = "clean" ]; then
+  echo "Cleaned project: $PROJECT_DIR"
+  exit 0
+fi
+
 if [ -f "$PROJECT_DIR/out/rom.bin" ]; then
   echo "Built ROM: $PROJECT_DIR/out/rom.bin"
 else

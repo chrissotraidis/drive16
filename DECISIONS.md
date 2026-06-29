@@ -1,5 +1,28 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Python stdio MCP server for SGDK builds
+
+Context:
+
+Phase 1 starts by exposing the proven docker-sgdk build path as MCP tools. The
+repo does not yet have a Node, Rust, or Python package manifest, and adding a
+package manager would be extra surface for this first integration slice.
+
+Decision:
+
+Implement `mcp-servers/sgdk-build/server.py` as a small dependency-free Python
+stdio MCP server. It exposes `build_rom`, `clean`, and `read_build_log`, invokes
+`scripts/build-sgdk.sh`, and stores the latest log under
+`artifacts/phase1/sgdk-build/`. For now, project paths must stay inside the
+Drive16 repository.
+
+Consequence:
+
+The Phase 1 build tool is immediately runnable on a clean checkout with Python
+and Docker. Later app and OpenCode integration can keep this server as a
+sidecar process or replace it with a packaged implementation once the app
+runtime is chosen in Phase 3.
+
 ## 2026-06-29 - Genteel frame-stream patch for live-view proof
 
 Context:

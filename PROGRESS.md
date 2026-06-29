@@ -1,11 +1,34 @@
 # Drive16 Progress
 
-Current phase: Phase 0, manual spike
+Current phase: Phase 1, agent build loop, text only
 
-Exit criterion: a hand-built ROM shows a controllable sprite and plays a bundled
-loop, verified by a Genteel screenshot, with the live-view path confirmed.
+Exit criterion: from a text prompt, the agent writes C, builds the ROM, runs it,
+reads a screenshot, and self-corrects a deliberate compile error.
 
-## Phase 0 Checklist
+## Phase 1 Checklist
+
+- [x] Human sign-off: Phase 0 approved.
+- [x] Wrap SGDK build as an MCP server with `build_rom`, `clean`, and
+  `read_build_log`.
+- [ ] Wrap Genteel as a sidecar adapter and MCP server with `run_rom`,
+  `capture_frame`, `send_input`, and `read_state`.
+- [ ] Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
+- [ ] Configure `opencode serve` with OpenRouter and the Phase 1 MCP servers.
+- [ ] Drive the loop from a plain CLI prompt, such as "make the screen blue".
+- [ ] Prove the agent can self-correct a deliberate compile error.
+
+## Current Task
+
+SGDK build MCP server wrapper is complete and verified against the hello-world
+project.
+
+## Next Up
+
+Add the Genteel emulator sidecar adapter and MCP server.
+
+## Completed Phase 0 Gate
+
+Evidence packet: `docs/phase0-evidence.md`.
 
 - [x] Bootstrap repo skeleton and living project files.
 - [x] Add a pinned docker-sgdk build script for SGDK 2.11.
@@ -25,12 +48,3 @@ loop, verified by a Genteel screenshot, with the live-view path confirmed.
 - [x] Local validation: the Phase 0 asset ROM emits non-silent audio from the bundled VGM loop.
 - [x] Local validation: the Phase 0 asset ROM shows a controllable bundled sprite through scripted input.
 - [x] Add a complete Phase 0 human validation runbook.
-
-## Current Task
-
-Phase 0 gate reached. Evidence packet is in `docs/phase0-evidence.md`; await
-human sign-off before starting Phase 1.
-
-## Next Up
-
-After Phase 0 sign-off, start Phase 1 with the SGDK build MCP server wrapper.
