@@ -1,5 +1,41 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 3 - Phase 0 validation runbook
+
+Plan:
+
+- Task: add a complete Phase 0 human validation runbook and align the ledger
+  with the architecture's known-good homebrew accuracy check.
+- Files: `docs/phase0-validation.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: check Markdown/text style, confirm referenced scripts exist,
+  run `git diff --check`, and keep the Phase 0 gate open.
+
+Did:
+
+- Added `docs/phase0-validation.md` with the required manual evidence for
+  docker-sgdk, Genteel screenshots, known-good open homebrew accuracy, live
+  framebuffer availability, audible VGM playback, and controllable sprite input.
+- Updated `PROGRESS.md` so the known-good homebrew accuracy check is an explicit
+  Phase 0 checklist item.
+
+Evidence:
+
+- `docs/phase0-validation.md` references checked-in scripts:
+  `scripts/build-sgdk.sh`, `scripts/validate-genteel.sh`, and
+  `scripts/validate-phase0-assets.sh`.
+- `git diff --check` passed.
+
+VALIDATION REQUEST:
+
+Please follow `docs/phase0-validation.md` and paste back the evidence block from
+the end of the runbook. Phase 0 cannot close until that evidence exists.
+
+Next:
+
+- Wait for Phase 0 validation evidence.
+- If validation fails, repair the exact failed script, fixture, or emulator
+  command and rerun the relevant section.
+
 ## 2026-06-29 - ITERATION 2 - Phase 0 bundled asset fixture
 
 Plan:
