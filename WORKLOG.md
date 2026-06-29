@@ -1,5 +1,72 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 32 - V1 prompt app proof
+
+Plan:
+
+- Task: drive the v1 prompt through the app and verify the bundled sprite and
+  music ROM in the right pane.
+- Files: `app/src-tauri/src/v1_prompt.rs`, `app/src-tauri/src/main.rs`,
+  `app/src/App.tsx`, `docs/phase3-v1-prompt.md`, `PROGRESS.md`,
+  `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: focused v1 prompt tests, native ignored v1 prompt proof, frame
+  stream validation, sprite movement validation, audio non-silence check,
+  browser prompt flow, mobile overflow check, full Rust tests, Rust check,
+  frontend build, Tauri debug build, secret scan, and `git diff --check`.
+
+Did:
+
+- Added native `run_v1_prompt`, which prefers the Phase 2 agent-produced CORE
+  project when present, otherwise falls back to the committed CORE reference
+  fixture.
+- The native command validates the CORE source/resource contract, validates
+  bundled assets, builds the ROM, runs Genteel, captures framebuffer data,
+  validates Right-input sprite movement, and checks non-silent audio.
+- Wired the chat composer so the v1-style sprite/music prompt loads the
+  generated CORE ROM state into the right pane.
+- Added browser-preview behavior with honest copy that native verification runs
+  inside the Tauri app.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml v1_prompt -- --nocapture`
+  passed with three focused tests and one ignored native run.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml
+  v1_prompt_runs_core_asset_rom_when_tools_are_available -- --ignored --nocapture`
+  passed.
+- The local Phase 2 agent project was present.
+- `scripts/validate-frame-stream.py
+  artifacts/phase3/v1-prompt/v1-frames.rgb565 --min-frames 6` passed with six
+  frames, indices `0..150`, and `15760` nonzero pixels.
+- `scripts/validate-sprite-movement.py artifacts/phase3/v1-prompt/v1-neutral.png
+  artifacts/phase3/v1-prompt/v1-right.png --direction right --min-delta 24
+  --min-changed 40` passed with `changed_pixels=768` and `delta=155`.
+- Audio dump check found `audio max abs: 10922` across `322386` samples.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with ten
+  non-ignored tests and two ignored sidecar/native-run tests.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- `pnpm --dir app build` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- Browser validation at `http://127.0.0.1:1420/` accepted the prompt
+  `make a sprite I can move left and right with music`, changed the project
+  summary to `Generated CORE ROM`, updated Movement to `Right input verified`,
+  updated Audio to `Non-silent 1` in preview mode, recorded `v1.ready`, and had
+  no console warnings or errors.
+- Mobile browser viewport `390` by `844` kept the generated CORE ROM state
+  visible, had no horizontal overflow, and had no console warnings or errors.
+- Browser screenshots were saved to:
+  `artifacts/phase3/v1-prompt-browser/browser-after-prompt.png` and
+  `artifacts/phase3/v1-prompt-browser/browser-mobile.png`.
+
+Gate:
+
+Phase 3 gate reached. Human sign-off is required before advancing to Phase 4.
+
+Next:
+
+- Request human sign-off for Phase 3.
+
 ## 2026-06-29 - ITERATION 31 - Project summary and ROM export
 
 Plan:

@@ -2,6 +2,7 @@ mod opencode;
 mod preflight;
 mod project;
 mod starter_rom;
+mod v1_prompt;
 
 #[tauri::command]
 fn run_preflight() -> preflight::PreflightReport {
@@ -52,6 +53,13 @@ async fn export_current_rom() -> Result<project::RomExportResult, String> {
         .map_err(|error| format!("ROM export task failed: {}", error))?
 }
 
+#[tauri::command]
+async fn run_v1_prompt(prompt: String) -> Result<v1_prompt::V1PromptResult, String> {
+    tauri::async_runtime::spawn_blocking(move || v1_prompt::run_v1_prompt(prompt))
+        .await
+        .map_err(|error| format!("V1 prompt task failed: {}", error))?
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -60,7 +68,8 @@ fn main() {
             connect_opencode,
             send_opencode_message,
             load_project_summary,
-            export_current_rom
+            export_current_rom,
+            run_v1_prompt
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Drive16");

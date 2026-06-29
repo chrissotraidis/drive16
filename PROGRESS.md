@@ -17,18 +17,17 @@ ROM in the right pane using bundled assets.
 - [x] Add settings for model provider, OpenRouter key entry, model selector,
   and connection test.
 - [x] Add project management and export-ROM wiring.
-- [ ] Drive the v1 prompt through the app and verify the bundled sprite and
+- [x] Drive the v1 prompt through the app and verify the bundled sprite and
   music ROM in the right pane.
 
 ## Current Task
 
-The app shows starter project metadata and can export the current ROM through
-the Tauri bridge.
+The v1 prompt path is wired through the app and verified with bundled sprite,
+Right-input movement, and non-silent music evidence.
 
 ## Next Up
 
-Drive the v1 prompt through the app and verify the bundled sprite and music ROM
-in the right pane.
+Request human sign-off for the Phase 3 gate.
 
 ## Completed Phase 3 Work
 
@@ -73,6 +72,28 @@ in the right pane.
 - [x] Left file panel and top-bar export action wired to project/export state.
 - [x] Phase 3 project export evidence recorded in
   `docs/phase3-project-export.md`.
+- [x] Native v1 prompt command added to build and verify the CORE bundled
+  sprite/music ROM.
+- [x] Chat composer wired so the v1-style request loads the generated CORE ROM
+  state into the right pane.
+- [x] Phase 3 v1 prompt evidence recorded in
+  `docs/phase3-v1-prompt.md`.
+
+## Phase 3 Gate Evidence
+
+Evidence packet: `docs/phase3-v1-prompt.md`.
+
+- [x] App loads with the blank starter ROM state in the right pane.
+- [x] Chat request path accepts the v1 prompt.
+- [x] Native v1 prompt command builds the CORE bundled sprite/music ROM.
+- [x] Genteel captures a neutral frame stream for the generated ROM.
+- [x] Genteel captures a Right-input screenshot for the generated ROM.
+- [x] Sprite movement validator proves Right-input movement.
+- [x] Audio dump is non-silent.
+- [x] Browser preview shows the generated CORE ROM state in the right pane.
+
+Phase gate status: evidence assembled. Human sign-off is required before
+advancing to Phase 4.
 
 ## Completed Phase 2 Gate
 

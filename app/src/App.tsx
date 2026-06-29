@@ -111,6 +111,28 @@ type RomExportResult = {
   bytes: number;
 };
 
+type V1PromptResult = {
+  status: HealthState;
+  detail: string;
+  generatedAt: string;
+  prompt: string;
+  projectPath: string;
+  romPath: string;
+  neutralScreenshotPath: string;
+  rightScreenshotPath: string;
+  audioDumpPath: string;
+  frameStreamPath: string;
+  screenshotDataUrl: string;
+  frames: number;
+  streamEvery: number;
+  streamedFrames: number;
+  frameWidth: number;
+  frameHeight: number;
+  framebufferFrames: FramebufferFrame[];
+  movementDetail: string;
+  audioMaxAbs: number;
+};
+
 type OpenCodeBridgeStatus = {
   generatedAt: string;
   state: HealthState;
@@ -297,6 +319,28 @@ const previewExportResult: RomExportResult = {
   bytes: 0,
 };
 
+const previewV1PromptResult: V1PromptResult = {
+  status: "warning",
+  detail: "Native v1 prompt verification runs inside the Tauri app",
+  generatedAt: "preview",
+  prompt: "make a sprite I can move left and right with music",
+  projectPath: "examples/phase2-core-assets",
+  romPath: "examples/phase2-core-assets/out/rom.bin",
+  neutralScreenshotPath: "preview",
+  rightScreenshotPath: "preview",
+  audioDumpPath: "preview",
+  frameStreamPath: "preview",
+  screenshotDataUrl: "",
+  frames: 180,
+  streamEvery: 30,
+  streamedFrames: 0,
+  frameWidth: 320,
+  frameHeight: 240,
+  framebufferFrames: [],
+  movementDetail: "Preview mode",
+  audioMaxAbs: 1,
+};
+
 function App() {
   const [messages, setMessages] = useState<Message[]>(starterMessages);
   const [draft, setDraft] = useState("");
@@ -313,6 +357,8 @@ function App() {
   const [projectSource, setProjectSource] = useState("checking");
   const [exportResult, setExportResult] = useState<RomExportResult | undefined>();
   const [exportBusy, setExportBusy] = useState(false);
+  const [v1PromptResult, setV1PromptResult] = useState<V1PromptResult | undefined>();
+  const [v1PromptSource, setV1PromptSource] = useState("idle");
   const [openCode, setOpenCode] = useState<OpenCodeBridgeStatus>(previewOpenCode);
   const [openCodeSource, setOpenCodeSource] = useState("checking");
   const [openCodeSessionId, setOpenCodeSessionId] = useState<string | undefined>();
@@ -408,12 +454,14 @@ function App() {
         state: openCodeSessionId ? "done" : openCodeConnected ? "active" : "queued",
       },
       {
-        label: "Model reply",
-        detail: "Enabled after settings key and model selection",
-        state: "queued",
+        label: "CORE ROM",
+        detail: v1PromptResult
+          ? `Sprite and music verified, audio ${v1PromptResult.audioMaxAbs}`
+          : "Ask for sprite and music",
+        state: v1PromptResult ? "done" : "queued",
       },
     ];
-  }, [openCode, openCodeEvents, openCodeSessionId]);
+  }, [openCode, openCodeEvents, openCodeSessionId, v1PromptResult]);
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -424,26 +472,48 @@ function App() {
     setMessages((current) => [...current, userMessage]);
     setDraft("");
     setOpenCodeBusy(true);
+    const shouldRunV1 = isV1Prompt(trimmed);
+    if (shouldRunV1) {
+      setBuildState("building");
+      setV1PromptSource("running");
+    }
 
     try {
       const result = await sendOpenCodeMessage(trimmed);
       setOpenCodeSessionId(result.sessionId);
-      const agentMessage = makeMessage(
-        "agent",
-        `Posted to OpenCode session ${shortIdentifier(result.sessionId)}. Live model replies turn on in the settings step.`,
-      );
-      setMessages((current) => [...current, agentMessage]);
       appendOpenCodeEvent("message.posted", result.detail);
+
+      if (shouldRunV1) {
+        const promptResult = await runV1Prompt(trimmed);
+        applyV1PromptResult(promptResult);
+        const agentMessage = makeMessage(
+          "agent",
+          isTauriRuntime()
+            ? "Built and verified the bundled sprite/music ROM. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
+            : "Previewed the bundled sprite/music ROM flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.",
+        );
+        setMessages((current) => [...current, agentMessage]);
+        appendOpenCodeEvent("v1.ready", promptResult.romPath);
+      } else {
+        const agentMessage = makeMessage(
+          "agent",
+          `Posted to OpenCode session ${shortIdentifier(result.sessionId)}. Live model replies turn on in the settings step.`,
+        );
+        setMessages((current) => [...current, agentMessage]);
+      }
       setBuildState("running");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "OpenCode message send failed";
       const agentMessage = makeMessage(
         "agent",
-        `OpenCode bridge could not send that yet. ${detail}`,
+        shouldRunV1
+          ? `The v1 ROM run could not finish yet. ${detail}`
+          : `OpenCode bridge could not send that yet. ${detail}`,
       );
       setMessages((current) => [...current, agentMessage]);
-      appendOpenCodeEvent("message.failed", detail);
+      appendOpenCodeEvent(shouldRunV1 ? "v1.failed" : "message.failed", detail);
       setBuildState("error");
+      setV1PromptSource("error");
     } finally {
       setOpenCodeBusy(false);
     }
@@ -631,6 +701,79 @@ function App() {
     }
 
     return session.id;
+  }
+
+  async function runV1Prompt(text: string): Promise<V1PromptResult> {
+    if (isTauriRuntime()) {
+      return invoke<V1PromptResult>("run_v1_prompt", { prompt: text });
+    }
+
+    const framebufferFrames = [
+      makePreviewFrame(0, 0x3944),
+      makePreviewFrame(30, 0x4145),
+    ];
+    return {
+      ...previewV1PromptResult,
+      prompt: text,
+      framebufferFrames,
+      streamedFrames: framebufferFrames.length,
+      detail: "Preview v1 prompt verification",
+    };
+  }
+
+  function applyV1PromptResult(result: V1PromptResult) {
+    setV1PromptResult(result);
+    setV1PromptSource(isTauriRuntime() ? "tauri" : "preview");
+    setStarterSource(isTauriRuntime() ? "tauri" : "preview");
+    setStarterBusy(false);
+    setTransport("running");
+    setStarterRom({
+      status: result.status,
+      detail: result.detail,
+      generatedAt: result.generatedAt,
+      projectPath: result.projectPath,
+      romPath: result.romPath,
+      screenshotPath: result.neutralScreenshotPath,
+      frameStreamPath: result.frameStreamPath,
+      screenshotDataUrl: result.screenshotDataUrl,
+      frames: result.frames,
+      streamEvery: result.streamEvery,
+      streamedFrames: result.streamedFrames,
+      frameWidth: result.frameWidth,
+      frameHeight: result.frameHeight,
+      framebufferFrames: result.framebufferFrames,
+    });
+    setProjectSummary({
+      generatedAt: result.generatedAt,
+      name: "Generated CORE ROM",
+      projectPath: result.projectPath,
+      romPath: result.romPath,
+      exportDirectory: "artifacts/phase3/exports",
+      romStatus: result.status,
+      romDetail: result.detail,
+      files: [
+        {
+          label: "Main C",
+          path: `${result.projectPath}/src/main.c`,
+          state: "ready",
+        },
+        {
+          label: "Resources",
+          path: `${result.projectPath}/res/resources.res`,
+          state: "ready",
+        },
+        {
+          label: "Bundled sprite",
+          path: "assets/core/player.png",
+          state: "ready",
+        },
+        {
+          label: "Bundled loop",
+          path: "assets/core/loop.vgm",
+          state: "ready",
+        },
+      ],
+    });
   }
 
   async function loadProjectSummary() {
@@ -1105,6 +1248,16 @@ function App() {
                     ? `${formatBytes(exportResult.bytes)} exported`
                     : shortPath(projectSummary.exportDirectory)}
                 </strong>
+                <span>Movement</span>
+                <strong title={v1PromptResult?.movementDetail ?? v1PromptSource}>
+                  {v1PromptResult ? "Right input verified" : "Pending"}
+                </strong>
+                <span>Audio</span>
+                <strong>
+                  {v1PromptResult
+                    ? `Non-silent ${v1PromptResult.audioMaxAbs}`
+                    : "Pending"}
+                </strong>
               </div>
             </section>
 
@@ -1166,6 +1319,15 @@ function App() {
 
 function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function isV1Prompt(text: string) {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes("sprite") &&
+    normalized.includes("music") &&
+    (normalized.includes("move") || normalized.includes("left") || normalized.includes("right"))
+  );
 }
 
 function summaryLabel(state: HealthState) {

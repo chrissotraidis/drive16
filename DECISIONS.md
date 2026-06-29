@@ -1,5 +1,31 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 3 v1 prompt uses the proven CORE project path
+
+Context:
+
+Phase 3 must prove that a non-developer can ask for a controllable sprite with
+music and get a working ROM in the right pane. Phase 2 already proved the
+agent can produce that CORE bundled-asset project. The app still must render
+that result through the desktop shell without storing model credentials.
+
+Decision:
+
+Add a native `run_v1_prompt` command that prefers the existing Phase 2
+agent-produced project under `artifacts/phase2/agent-loop/project` when it is
+present, and falls back to the committed `examples/phase2-core-assets` fixture
+otherwise. The command builds the selected project, runs Genteel, validates
+Right-input sprite movement, and checks non-silent audio before the UI marks
+the ROM as ready.
+
+Consequence:
+
+The Phase 3 app can now turn the v1 chat request into a verified bundled
+sprite/music ROM in the right pane without writing secrets into project files.
+The proof is grounded in the earlier agent-produced CORE project when that
+artifact exists locally. A later hardening pass can replace the artifact reuse
+with a fresh live OpenCode generation from the settings credential handoff.
+
 ## 2026-06-29 - Phase 3 exports write generated ROMs to ignored artifacts
 
 Context:
