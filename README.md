@@ -31,5 +31,5 @@ the app license, pending human confirmation before finalizing a `LICENSE` file.
 
 ## Current phase
 
-The project is in Phase 0: manual spike. See `PROGRESS.md` for the current
-checklist and `WORKLOG.md` for evidence.
+The project is in Phase 3: the Drive16 application. See `PROGRESS.md` for the
+current checklist and `WORKLOG.md` for evidence.

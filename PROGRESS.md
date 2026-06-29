@@ -1,32 +1,55 @@
 # Drive16 Progress
 
-Current phase: Phase 2, core assets via bundled pack
+Current phase: Phase 3, the Drive16 application
 
-Exit criterion: from a prompt, the agent produces a ROM with a controllable
-bundled sprite and a playing bundled loop, using CORE tools only.
+Exit criterion: a non-developer launches the app, sees a blank ROM running,
+types "make a sprite I can move left and right with music", and gets a working
+ROM in the right pane using bundled assets.
 
-## Phase 2 Checklist
+## Phase 3 Checklist
 
-- [x] Human sign-off: Phase 1 approved.
-- [x] Promote the original Drive16 sprite and loop into a CORE bundled asset
-  pack.
-- [x] Add a Phase 2 CORE asset fixture project that references the pack through
-  `resources.res`.
-- [x] Teach the agent, via RAG or skill context, to wire the bundled sprite and
-  music loop.
-- [x] Add a Phase 2 validation harness for a prompt-driven asset ROM.
-- [x] Drive the loop from a plain prompt for a controllable bundled sprite with
-  music.
-- [x] Verify the generated ROM in Genteel with scripted input and audio output.
+- [x] Human sign-off: Phase 2 approved.
+- [x] Scaffold the Tauri 2 plus React/Vite two-pane app shell.
+- [ ] Add app-side dependency and tool health preflight checks.
+- [ ] Launch a starter blank ROM path for the app preview.
+- [ ] Render the Genteel live framebuffer in the right pane.
+- [ ] Connect the left conversation pane to OpenCode HTTP/SSE.
+- [ ] Add settings for model provider, OpenRouter key entry, model selector,
+  and connection test.
+- [ ] Add project management and export-ROM wiring.
+- [ ] Drive the v1 prompt through the app and verify the bundled sprite and
+  music ROM in the right pane.
 
 ## Current Task
 
-Phase 2 is locally evidenced and waiting for human sign-off before Phase 3.
+The first Phase 3 Tauri/React app shell is scaffolded and verified.
 
 ## Next Up
 
-Request human sign-off for Phase 2. Do not begin Phase 3 until sign-off is
-given.
+Add app-side dependency and tool health preflight checks.
+
+## Completed Phase 3 Work
+
+- [x] Phase 2 approval received from the human.
+- [x] Tauri 2 shell scaffolded under `app/src-tauri/`.
+- [x] React and Vite frontend scaffolded under `app/src/`.
+- [x] Two-pane Drive16 shell added with conversation, tool stream, project
+  files, blank ROM preview, transport controls, tool health, and local
+  interaction state.
+- [x] Phase 3 app shell evidence recorded in `docs/phase3-app-shell.md`.
+
+## Completed Phase 2 Gate
+
+Evidence packet: `docs/phase2-evidence.md`.
+
+- [x] OpenCode ran from a plain prompt with the Phase 2 CORE MCP servers.
+- [x] RAG was queried before asset wiring and Genesis C edits.
+- [x] The agent fixed an initial resource-path build failure and rebuilt.
+- [x] The generated SGDK project built to `out/rom.bin`.
+- [x] Genteel ran the generated ROM and captured neutral and Right-input
+  screenshots.
+- [x] Scripted input moved the bundled sprite right.
+- [x] The emulator MCP audio dump was non-silent.
 
 ## Completed Phase 2 Work
 
@@ -51,19 +74,6 @@ given.
 - [x] Phase 2 agent-loop validation passed with OpenCode, SGDK build MCP,
   Genteel emulator MCP, scripted input, screenshot verification, and non-silent
   audio evidence.
-
-## Completed Phase 2 Gate
-
-Evidence packet: `docs/phase2-evidence.md`.
-
-- [x] OpenCode ran from a plain prompt with the Phase 2 CORE MCP servers.
-- [x] RAG was queried before asset wiring and Genesis C edits.
-- [x] The agent fixed an initial resource-path build failure and rebuilt.
-- [x] The generated SGDK project built to `out/rom.bin`.
-- [x] Genteel ran the generated ROM and captured neutral and Right-input
-  screenshots.
-- [x] Scripted input moved the bundled sprite right.
-- [x] The emulator MCP audio dump was non-silent.
 
 ## Completed Phase 1 Gate
 

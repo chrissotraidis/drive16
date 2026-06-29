@@ -1,5 +1,25 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 3 app shell uses Tauri with React and Vite
+
+Context:
+
+Phase 3 begins the desktop app shell. The architecture already selects Tauri
+2.x for the native shell, but the repo had only an `app/` placeholder and no
+frontend framework, package manifest, or Rust shell.
+
+Decision:
+
+Use a Tauri 2 shell with a React and Vite frontend for the Phase 3 app. Keep
+the first slice to a visible two-pane shell with local UI state, while OpenCode
+HTTP/SSE and Genteel framebuffer integration remain separate follow-up units.
+
+Consequence:
+
+Drive16 now has a runnable app surface that can host the proven Phase 1 and
+Phase 2 loops. The frontend remains lightweight and package-local under `app/`,
+and Tauri sidecar/process isolation remains aligned with the license posture.
+
 ## 2026-06-29 - Phase 2 audio evidence belongs in emulator MCP
 
 Context:

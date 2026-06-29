@@ -1,5 +1,60 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 25 - Phase 3 Tauri app shell
+
+Plan:
+
+- Task: begin Phase 3 with a runnable two-pane app shell.
+- Files: `app/`, `docs/phase3-app-shell.md`, `PROGRESS.md`, `WORKLOG.md`,
+  `DECISIONS.md`, and `README.md`.
+- Verification: install app dependencies with the bundled Node runtime, build
+  the React frontend, check and build the Tauri Rust shell, launch the local
+  preview, capture desktop and mobile screenshots, run a browser interaction
+  check, scan for the pasted OpenRouter key, and run `git diff --check`.
+
+Did:
+
+- Recorded Phase 2 human approval and moved `PROGRESS.md` to Phase 3.
+- Added a Tauri 2 shell under `app/src-tauri/`.
+- Added a React and Vite frontend under `app/src/`.
+- Built the first Drive16 two-pane app screen with conversation, tool stream,
+  project files, blank ROM preview, transport controls, tool health, model
+  selector, and export affordance.
+- Added local UI behavior for sending a message, pause and resume, reset, and
+  Right/Left sprite marker movement.
+- Fixed the first mobile responsive bug where the top bar overlapped the
+  workspace.
+- Refreshed the local Rust stable toolchain to `rustc 1.96.0` so current Tauri
+  dependencies with Rust 2024-edition crates could compile.
+
+Evidence:
+
+- `pnpm --dir app install` passed after approving the `esbuild` build script
+  in `app/pnpm-workspace.yaml`.
+- `pnpm --dir app build` passed with Vite output under ignored `app/dist/`.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- Preview server ran at `http://127.0.0.1:1420/`.
+- Chrome automation captured:
+  `artifacts/phase3/app-shell/desktop.png` and
+  `artifacts/phase3/app-shell/mobile.png`.
+- Desktop viewport check returned `scrollWidth: 1440`, `innerWidth: 1440`,
+  `scrollHeight: 900`, and `innerHeight: 900`.
+- Mobile responsive check returned matching top-bar bottom and workspace top:
+  `149.6875`.
+- Interaction check passed: message count became 5, pause and resume toggled
+  the emulator viewport, and Right moved the sprite marker from `402.875px` to
+  `464.859px`.
+
+Gate:
+
+None.
+
+Next:
+
+- Add app-side dependency and tool health preflight checks.
+
 ## 2026-06-29 - ITERATION 24 - Phase 2 agent-loop gate evidence
 
 Plan:

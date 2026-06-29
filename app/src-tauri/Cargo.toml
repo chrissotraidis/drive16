@@ -1,0 +1,13 @@
+[package]
+name = "drive16"
+version = "0.1.0"
+description = "A conversational Sega Genesis game builder"
+authors = ["Drive16 contributors"]
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
