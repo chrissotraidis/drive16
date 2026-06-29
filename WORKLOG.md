@@ -1,5 +1,55 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 18 - Phase 2 CORE asset fixture
+
+Plan:
+
+- Task: add the Phase 2 reference SGDK fixture that uses the CORE bundled asset
+  pack through `resources.res`.
+- Files: `examples/phase2-core-assets/`,
+  `scripts/validate-phase2-core-assets.sh`, `scripts/README.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run the fixture validator, which validates the core assets,
+  builds the ROM through docker-sgdk, captures neutral and Right-input
+  screenshots in Genteel, checks the screenshots differ, checks the audio dump
+  is non-silent, and run `git diff --check`.
+
+Did:
+
+- Added `examples/phase2-core-assets` as the Phase 2 reference fixture.
+- The fixture references `drive16_player` and `drive16_loop` from
+  `assets/core/` through `res/resources.res`.
+- Added `scripts/validate-phase2-core-assets.sh`.
+
+Evidence:
+
+- `scripts/validate-phase2-core-assets.sh` passed.
+- The validator ran `scripts/validate-core-assets.py` with:
+  `Core assets ok: /Users/chrissotraidis/Documents/GitHub/drive16/assets/core`.
+- SGDK built:
+  `examples/phase2-core-assets/out/rom.bin`.
+- Genteel captured the neutral screenshot:
+  `artifacts/phase2/core-assets/phase2-core-assets.png`.
+- Genteel captured the scripted Right-input screenshot:
+  `artifacts/phase2/core-assets/phase2-core-assets-right.png`.
+- The screenshot byte comparison confirmed the Right-input run changed the
+  frame from the neutral run.
+- The audio dump check passed with:
+  `Audio dump is non-silent: max abs sample 10922`.
+- Visual inspection shows the neutral screenshot contains `Drive16 Phase 2`,
+  the bundled sprite, and `Core VGM loop plays`; the Right-input screenshot
+  shows the sprite moved to the right edge.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Teach the agent, via RAG or skill context, to wire the bundled sprite and
+  music loop from a prompt.
+
 ## 2026-06-29 - ITERATION 17 - Phase 2 CORE asset pack
 
 Plan:

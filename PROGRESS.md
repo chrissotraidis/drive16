@@ -10,7 +10,7 @@ bundled sprite and a playing bundled loop, using CORE tools only.
 - [x] Human sign-off: Phase 1 approved.
 - [x] Promote the original Drive16 sprite and loop into a CORE bundled asset
   pack.
-- [ ] Add a Phase 2 CORE asset fixture project that references the pack through
+- [x] Add a Phase 2 CORE asset fixture project that references the pack through
   `resources.res`.
 - [ ] Teach the agent, via RAG or skill context, to wire the bundled sprite and
   music loop.
@@ -21,13 +21,13 @@ bundled sprite and a playing bundled loop, using CORE tools only.
 
 ## Current Task
 
-Phase 2 has started. The CORE bundled asset pack is established under
-`assets/core/` with stable symbols for the agent to use.
+The Phase 2 CORE asset fixture is established and verifies the bundled sprite,
+music loop, scripted input, screenshot capture, and non-silent audio.
 
 ## Next Up
 
-Add and verify a Phase 2 CORE asset fixture project that references the pack
-through `resources.res`.
+Teach the agent, via RAG or skill context, to wire the bundled sprite and music
+loop from a prompt.
 
 ## Completed Phase 2 Work
 
@@ -37,6 +37,8 @@ through `resources.res`.
 - [x] Core pack validator added at `scripts/validate-core-assets.py`.
 - [x] RAG project-pattern notes updated with Phase 2 asset symbols and wiring
   guidance.
+- [x] Phase 2 reference fixture added at `examples/phase2-core-assets`.
+- [x] Fixture validator added at `scripts/validate-phase2-core-assets.sh`.
 
 ## Completed Phase 1 Gate
 

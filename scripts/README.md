@@ -18,3 +18,5 @@ Toolchain and validation scripts live here.
   pack.
 - `validate-phase0-assets.sh`: builds and runs the Drive16 Phase 0 sprite and
   VGM validation ROM.
+- `validate-phase2-core-assets.sh`: builds and runs the Phase 2 CORE asset ROM,
+  then checks scripted input and non-silent audio.
