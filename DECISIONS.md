@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ComfyUI health probing is native and local-only
+
+Context:
+
+Phase 4 needs ComfyUI endpoint configuration and health checks before wrapping
+ComfyUI through MCP. ComfyUI is a separate GPL process and must stay optional.
+Browser-only probing can also be blocked by local CORS behavior.
+
+Decision:
+
+Add a native Tauri command that accepts only local `http://127.0.0.1` or
+`http://localhost` ComfyUI endpoints, normalizes the port to `8188` when
+omitted, and probes `GET /system_stats`. The settings UI exposes the endpoint
+field and test action only after `AI sprites` is enabled.
+
+Consequence:
+
+Drive16 can check whether a local ComfyUI process is available without linking
+ComfyUI into the app, without accepting remote endpoints, and without making
+the CORE bundled-asset flow depend on the enhancement.
+
 ## 2026-06-30 - Phase 4 enhancements start behind default-off toggles
 
 Context:

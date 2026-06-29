@@ -10,7 +10,7 @@ still builds a working ROM.
 
 - [x] Human sign-off: Phase 3 approved.
 - [x] Add default-off enhancement toggles so the CORE path remains independent.
-- [ ] Add ComfyUI endpoint configuration and health probing behind the AI
+- [x] Add ComfyUI endpoint configuration and health probing behind the AI
   sprites toggle.
 - [ ] Wrap ComfyUI via `comfyui-mcp`.
 - [ ] Ship the tuned Genesis palette ComfyUI workflow.
@@ -23,13 +23,12 @@ still builds a working ROM.
 
 ## Current Task
 
-Phase 4 has started. Enhancement toggles are added in settings and default to
-off.
+ComfyUI endpoint configuration and health probing are wired behind the AI
+sprites toggle.
 
 ## Next Up
 
-Add ComfyUI endpoint configuration and health probing behind the AI sprites
-toggle.
+Wrap ComfyUI via `comfyui-mcp`.
 
 ## Completed Phase 4 Work
 
@@ -37,6 +36,10 @@ toggle.
 - [x] Settings now include default-off toggles for AI sprites and MML music.
 - [x] Phase 4 enhancement-toggle evidence recorded in
   `docs/phase4-enhancement-toggles.md`.
+- [x] Native ComfyUI endpoint health probing added behind the AI sprites
+  toggle.
+- [x] Phase 4 ComfyUI endpoint evidence recorded in
+  `docs/phase4-comfyui-endpoint.md`.
 
 ## Completed Phase 3 Work
 

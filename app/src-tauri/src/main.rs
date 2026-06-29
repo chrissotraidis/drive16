@@ -1,3 +1,4 @@
+mod comfyui;
 mod opencode;
 mod preflight;
 mod project;
@@ -60,6 +61,23 @@ async fn run_v1_prompt(prompt: String) -> Result<v1_prompt::V1PromptResult, Stri
         .map_err(|error| format!("V1 prompt task failed: {}", error))?
 }
 
+#[tauri::command]
+async fn check_comfyui_endpoint(
+    request: comfyui::ComfyUiEndpointRequest,
+) -> comfyui::ComfyUiEndpointStatus {
+    tauri::async_runtime::spawn_blocking(move || comfyui::check_endpoint(request))
+        .await
+        .unwrap_or_else(|error| comfyui::ComfyUiEndpointStatus {
+            generated_at: "0".to_string(),
+            state: "warning".to_string(),
+            detail: format!("ComfyUI task failed: {}", error),
+            base_url: String::new(),
+            system_stats_url: String::new(),
+            version: None,
+            devices: 0,
+        })
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -69,7 +87,8 @@ fn main() {
             send_opencode_message,
             load_project_summary,
             export_current_rom,
-            run_v1_prompt
+            run_v1_prompt,
+            check_comfyui_endpoint
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Drive16");

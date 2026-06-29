@@ -174,6 +174,16 @@ type EnhancementSettings = {
   musicGeneration: boolean;
 };
 
+type ComfyUiEndpointStatus = {
+  generatedAt: string;
+  state: ConnectionState;
+  detail: string;
+  baseUrl: string;
+  systemStatsUrl: string;
+  version?: string;
+  devices: number;
+};
+
 type DecodedFramebufferFrame = {
   frameIndex: number;
   width: number;
@@ -183,6 +193,7 @@ type DecodedFramebufferFrame = {
 
 const openRouterKeyUrl = "https://openrouter.ai/api/v1/key";
 const openRouterModelsUrl = "https://openrouter.ai/api/v1/models";
+const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
 
 const preferredOpenRouterModels = [
   "~anthropic/claude-sonnet-latest",
@@ -379,6 +390,15 @@ function App() {
   const [enhancements, setEnhancements] = useState<EnhancementSettings>({
     spriteGeneration: false,
     musicGeneration: false,
+  });
+  const [comfyUiEndpoint, setComfyUiEndpoint] = useState(defaultComfyUiEndpoint);
+  const [comfyUiConnection, setComfyUiConnection] = useState<ComfyUiEndpointStatus>({
+    generatedAt: "0",
+    state: "idle",
+    detail: "Not tested",
+    baseUrl: defaultComfyUiEndpoint,
+    systemStatsUrl: `${defaultComfyUiEndpoint}/system_stats`,
+    devices: 0,
   });
   const [modelConnection, setModelConnection] = useState<ModelConnectionReport>({
     state: "idle",
@@ -933,6 +953,56 @@ function App() {
     }
   }
 
+  async function testComfyUiConnection() {
+    if (!enhancements.spriteGeneration) {
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "warning",
+        detail: "Enable AI sprites first",
+      }));
+      return;
+    }
+
+    const endpoint = comfyUiEndpoint.trim();
+    if (!endpoint) {
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "missing",
+        detail: "ComfyUI endpoint required",
+      }));
+      return;
+    }
+
+    setComfyUiConnection((current) => ({
+      ...current,
+      state: "testing",
+      detail: "Checking ComfyUI",
+    }));
+
+    try {
+      const result = isTauriRuntime()
+        ? await invoke<ComfyUiEndpointStatus>("check_comfyui_endpoint", {
+            request: { endpoint },
+          })
+        : await checkComfyUiEndpointInBrowser(endpoint);
+
+      setComfyUiConnection(result);
+      appendOpenCodeEvent(
+        result.state === "ready" ? "comfyui.ready" : "comfyui.missing",
+        result.detail,
+      );
+    } catch (error) {
+      const detail =
+        error instanceof Error ? `ComfyUI check failed: ${error.message}` : "ComfyUI check failed";
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "missing",
+        detail,
+      }));
+      appendOpenCodeEvent("comfyui.failed", detail);
+    }
+  }
+
   function handleOpenRouterKeyChange(value: string) {
     setOpenRouterKey(value);
     if (modelConnection.state === "ready" || modelConnection.state === "missing") {
@@ -943,11 +1013,30 @@ function App() {
     }
   }
 
+  function handleComfyUiEndpointChange(value: string) {
+    setComfyUiEndpoint(value);
+    if (comfyUiConnection.state === "ready" || comfyUiConnection.state === "missing") {
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "idle",
+        detail: "Not tested",
+      }));
+    }
+  }
+
   function handleEnhancementChange(key: keyof EnhancementSettings, enabled: boolean) {
     setEnhancements((current) => ({
       ...current,
       [key]: enabled,
     }));
+
+    if (key === "spriteGeneration" && !enabled) {
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "idle",
+        detail: "Not tested",
+      }));
+    }
 
     appendOpenCodeEvent(
       enabled ? "enhancement.enabled" : "enhancement.disabled",
@@ -1319,6 +1408,8 @@ function App() {
       {settingsOpen ? (
         <SettingsPanel
           activeModel={activeModel}
+          comfyUiConnection={comfyUiConnection}
+          comfyUiEndpoint={comfyUiEndpoint}
           connection={modelConnection}
           enhancements={enhancements}
           modelOptions={modelOptions}
@@ -1327,12 +1418,14 @@ function App() {
           openRouterKey={openRouterKey}
           showOpenRouterKey={showOpenRouterKey}
           onClose={() => setSettingsOpen(false)}
+          onComfyUiEndpointChange={handleComfyUiEndpointChange}
           onEnhancementChange={handleEnhancementChange}
           onModelChange={setActiveModel}
           onOpenRouterKeyChange={handleOpenRouterKeyChange}
           onProviderChange={setModelProvider}
           onRefreshModels={refreshOpenRouterModels}
           onShowOpenRouterKeyChange={setShowOpenRouterKey}
+          onTestComfyUiConnection={testComfyUiConnection}
           onTestConnection={testModelConnection}
         />
       ) : null}
@@ -1598,8 +1691,57 @@ function modelsSourceLabel(source: string) {
   return "Fallback models";
 }
 
+async function checkComfyUiEndpointInBrowser(endpoint: string): Promise<ComfyUiEndpointStatus> {
+  const baseUrl = normalizeComfyUiEndpoint(endpoint);
+  const systemStatsUrl = `${baseUrl}/system_stats`;
+  const response = await fetch(systemStatsUrl, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const stats = (await response.json()) as {
+    system?: { comfyui_version?: string };
+    devices?: unknown[];
+  };
+  if (!stats.system) {
+    throw new Error("system stats missing");
+  }
+
+  return {
+    generatedAt: Date.now().toString(),
+    state: "ready",
+    detail: "ComfyUI system stats available",
+    baseUrl,
+    systemStatsUrl,
+    version: stats.system.comfyui_version,
+    devices: Array.isArray(stats.devices) ? stats.devices.length : 0,
+  };
+}
+
+function normalizeComfyUiEndpoint(endpoint: string) {
+  const trimmed = endpoint.trim().replace(/\/+$/, "");
+  if (!trimmed) {
+    throw new Error("endpoint required");
+  }
+
+  const withScheme = trimmed.includes("://") ? trimmed : `http://${trimmed}`;
+  const parsed = new URL(withScheme);
+  if (parsed.protocol !== "http:") {
+    throw new Error("use local http endpoint");
+  }
+  if (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "localhost") {
+    throw new Error("endpoint must be local");
+  }
+
+  const port = parsed.port || "8188";
+  return `http://${parsed.hostname}:${port}`;
+}
+
 function SettingsPanel({
   activeModel,
+  comfyUiConnection,
+  comfyUiEndpoint,
   connection,
   enhancements,
   modelOptions,
@@ -1608,15 +1750,19 @@ function SettingsPanel({
   openRouterKey,
   showOpenRouterKey,
   onClose,
+  onComfyUiEndpointChange,
   onEnhancementChange,
   onModelChange,
   onOpenRouterKeyChange,
   onProviderChange,
   onRefreshModels,
   onShowOpenRouterKeyChange,
+  onTestComfyUiConnection,
   onTestConnection,
 }: {
   activeModel: string;
+  comfyUiConnection: ComfyUiEndpointStatus;
+  comfyUiEndpoint: string;
   connection: ModelConnectionReport;
   enhancements: EnhancementSettings;
   modelOptions: ModelOption[];
@@ -1625,15 +1771,18 @@ function SettingsPanel({
   openRouterKey: string;
   showOpenRouterKey: boolean;
   onClose: () => void;
+  onComfyUiEndpointChange: (value: string) => void;
   onEnhancementChange: (key: keyof EnhancementSettings, enabled: boolean) => void;
   onModelChange: (value: string) => void;
   onOpenRouterKeyChange: (value: string) => void;
   onProviderChange: (value: ModelProvider) => void;
   onRefreshModels: () => void;
   onShowOpenRouterKeyChange: (value: boolean) => void;
+  onTestComfyUiConnection: () => void;
   onTestConnection: () => void;
 }) {
   const testing = connection.state === "testing";
+  const testingComfyUi = comfyUiConnection.state === "testing";
 
   return (
     <div className="settings-backdrop">
@@ -1764,6 +1913,51 @@ function SettingsPanel({
                   {enhancements.spriteGeneration ? "On" : "Off"}
                 </span>
               </label>
+
+              {enhancements.spriteGeneration ? (
+                <div className="comfyui-config" data-testid="comfyui-config">
+                  <label className="field-row">
+                    <span>ComfyUI endpoint</span>
+                    <div className="endpoint-field">
+                      <input
+                        aria-label="ComfyUI endpoint"
+                        autoComplete="off"
+                        data-testid="comfyui-endpoint-input"
+                        onChange={(event) => onComfyUiEndpointChange(event.target.value)}
+                        spellCheck={false}
+                        type="url"
+                        value={comfyUiEndpoint}
+                      />
+                      <button
+                        aria-label="Test ComfyUI"
+                        data-testid="test-comfyui"
+                        disabled={testingComfyUi}
+                        onClick={onTestComfyUiConnection}
+                        type="button"
+                      >
+                        <ShieldCheck size={15} />
+                        {testingComfyUi ? "Checking" : "Test"}
+                      </button>
+                    </div>
+                  </label>
+
+                  <div
+                    className={`connection-summary ${comfyUiConnection.state}`}
+                    data-testid="comfyui-connection-status"
+                  >
+                    {connectionIcon(comfyUiConnection.state)}
+                    <span>{connectionLabel(comfyUiConnection.state)}</span>
+                    <small>{comfyUiConnection.detail}</small>
+                  </div>
+
+                  <div className="settings-meta">
+                    <span>{comfyUiConnection.version ?? "Version pending"}</span>
+                    <strong>{`${comfyUiConnection.devices} device${
+                      comfyUiConnection.devices === 1 ? "" : "s"
+                    }`}</strong>
+                  </div>
+                </div>
+              ) : null}
 
               <label className="enhancement-toggle" data-testid="music-enhancement-toggle">
                 <input

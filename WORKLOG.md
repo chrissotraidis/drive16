@@ -1,5 +1,58 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 35 - ComfyUI endpoint health check
+
+Plan:
+
+- Task: add ComfyUI endpoint configuration and health probing behind the AI
+  sprites toggle.
+- Files: `app/src-tauri/src/comfyui.rs`, `app/src-tauri/src/main.rs`,
+  `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase4-comfyui-endpoint.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: focused native ComfyUI tests, frontend build, rendered
+  settings flow in the in-app browser, secret scan, Markdown punctuation
+  check, and `git diff --check`.
+
+Did:
+
+- Added native `check_comfyui_endpoint` with local-only endpoint normalization
+  and `GET /system_stats` probing.
+- Added an endpoint field and `Test` action that appear only when `AI sprites`
+  is enabled.
+- Kept browser-preview behavior honest by reporting a failed state when no
+  local ComfyUI server is available.
+- Recorded the official ComfyUI `/system_stats` route source in
+  `docs/phase4-comfyui-endpoint.md`.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture`
+  passed with five focused tests.
+- `pnpm --dir app build` passed.
+- Browser check at `http://127.0.0.1:1420/` showed title `Drive16`, app
+  content, and no framework error overlay.
+- Agent Settings kept the ComfyUI config hidden while `AI sprites` was off.
+- Enabling `AI sprites` revealed the endpoint field with
+  `http://127.0.0.1:8188`.
+- Clicking `Test` changed the ComfyUI status to a clean failed state because
+  no local ComfyUI server was running in browser preview.
+- Browser console warnings and errors were empty.
+- Browser viewport had no horizontal overflow.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- Final `pnpm --dir app build` passed.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Wrap ComfyUI via `comfyui-mcp`.
+
 ## 2026-06-30 - ITERATION 34 - Phase 4 enhancement toggles
 
 Plan:

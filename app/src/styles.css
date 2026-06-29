@@ -951,7 +951,9 @@ h3 {
 }
 
 .field-row select,
-.secret-field input {
+.field-row > input,
+.secret-field input,
+.endpoint-field input {
   width: 100%;
   min-width: 0;
   height: 38px;
@@ -962,7 +964,9 @@ h3 {
   outline: none;
 }
 
-.field-row select {
+.field-row select,
+.field-row > input,
+.endpoint-field input {
   padding: 0 10px;
 }
 
@@ -985,6 +989,31 @@ h3 {
   border-radius: 7px;
   color: var(--accent-2);
   background: var(--panel-2);
+}
+
+.endpoint-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 94px;
+  gap: 8px;
+}
+
+.endpoint-field button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: #120e0b;
+  background: var(--accent-2);
+  font-weight: 900;
+}
+
+.endpoint-field button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 .connection-summary {
@@ -1053,6 +1082,16 @@ h3 {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.comfyui-config {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d0a08;
 }
 
 .enhancement-toggle {
