@@ -41,8 +41,6 @@ if not neutral.exists():
     raise SystemExit(f"Neutral screenshot missing: {neutral}")
 if not right.exists():
     raise SystemExit(f"Right-input screenshot missing: {right}")
-if neutral.read_bytes() == right.read_bytes():
-    raise SystemExit("Right-input screenshot did not change from neutral screenshot")
 
 with wave.open(str(audio), "rb") as wav:
     frames = wav.readframes(wav.getnframes())
@@ -60,6 +58,11 @@ if max_abs == 0:
 
 print(f"Audio dump is non-silent: max abs sample {max_abs}")
 PY
+
+scripts/validate-sprite-movement.py "$SCREENSHOT" "$RIGHT_SCREENSHOT" \
+  --direction right \
+  --min-delta 24 \
+  --min-changed 40
 
 echo "Neutral screenshot: $SCREENSHOT"
 echo "Right-input screenshot: $RIGHT_SCREENSHOT"

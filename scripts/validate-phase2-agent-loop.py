@@ -27,6 +27,7 @@ GENTEEL_BUILD = REPO_ROOT / "scripts" / "build-genteel.sh"
 NEUTRAL_FRAME = ARTIFACT_ROOT / "verification-neutral.png"
 RIGHT_FRAME = ARTIFACT_ROOT / "verification-right.png"
 INPUT_SCRIPT = ARTIFACT_ROOT / "verification-hold-right.csv"
+SPRITE_MOVEMENT = REPO_ROOT / "scripts" / "validate-sprite-movement.py"
 
 MAKEFILE = """GDK ?= /sgdk
 
@@ -354,8 +355,22 @@ def verify_runtime(rom: Path) -> int:
         raise ValidationError(f"Neutral screenshot missing or invalid: {NEUTRAL_FRAME}")
     if not RIGHT_FRAME.is_file() or RIGHT_FRAME.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValidationError(f"Right-input screenshot missing or invalid: {RIGHT_FRAME}")
-    if NEUTRAL_FRAME.read_bytes() == RIGHT_FRAME.read_bytes():
-        raise ValidationError("Right-input screenshot did not change from neutral screenshot.")
+    movement = run(
+        [
+            str(SPRITE_MOVEMENT),
+            str(NEUTRAL_FRAME),
+            str(RIGHT_FRAME),
+            "--direction",
+            "right",
+            "--min-delta",
+            "24",
+            "--min-changed",
+            "40",
+        ],
+        timeout=30,
+    )
+    if movement.returncode != 0:
+        raise ValidationError(f"Sprite movement validation failed:\n{movement.stdout}\n{movement.stderr}")
     return None
 
 

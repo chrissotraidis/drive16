@@ -1,5 +1,51 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 23 - Sprite movement screenshot validator
+
+Plan:
+
+- Task: strengthen Phase 2 controllable-sprite evidence beyond byte-different
+  screenshots.
+- Files: `scripts/validate-sprite-movement.py`,
+  `scripts/validate-phase2-core-assets.sh`,
+  `scripts/validate-phase2-agent-loop.py`, `scripts/README.md`,
+  `docs/phase2-agent-loop.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: compile the new validator and Phase 2 harness, run the
+  movement validator against existing Phase 2 screenshots, rerun the Phase 2
+  fixture validator, rerun the Phase 2 harness in gate mode, and run
+  `git diff --check`.
+
+Did:
+
+- Added `scripts/validate-sprite-movement.py`, a dependency-free PNG decoder
+  and movement-signal validator.
+- Replaced byte-only screenshot comparison in the Phase 2 fixture and agent
+  harness with the new movement validator.
+
+Evidence:
+
+- `python3 -m py_compile scripts/validate-sprite-movement.py
+  scripts/validate-phase2-agent-loop.py` passed.
+- `scripts/validate-sprite-movement.py
+  artifacts/phase2/core-assets/phase2-core-assets.png
+  artifacts/phase2/core-assets/phase2-core-assets-right.png --direction right
+  --min-delta 24 --min-changed 40` passed with:
+  `Sprite movement ok: direction=right changed_pixels=768 delta=155 orthogonal_span=25`.
+- `scripts/validate-phase2-core-assets.sh` passed and now includes:
+  `Sprite movement ok: direction=right changed_pixels=768 delta=155 orthogonal_span=25`.
+- `scripts/validate-phase2-agent-loop.py` passed in gate mode and printed:
+  `VALIDATION REQUEST: Phase 2 agent-loop validation is ready but cannot run yet.`
+  `DRIVE16_PHASE2_MODEL is not set.`
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Run the Phase 2 agent-loop validation after OpenRouter is configured.
+
 ## 2026-06-29 - ITERATION 22 - Phase 2 final-run audio prompt
 
 Plan:

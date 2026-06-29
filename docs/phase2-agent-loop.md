@@ -27,7 +27,8 @@ The script verifies:
 - `drive16-emulator` ran the resulting ROM;
 - `send_input`, `capture_frame`, and `capture_audio` were used during the run;
 - the final Right-input emulator run included `dump_audio`;
-- Genteel captures neutral and Right-input screenshots that differ;
+- Genteel captures neutral and Right-input screenshots with a validated
+  rightward sprite movement signal;
 - the emulator MCP audio dump is non-silent.
 
 Artifacts are written under `artifacts/phase2/agent-loop/`.

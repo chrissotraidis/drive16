@@ -47,6 +47,8 @@ are configured.
   `scripts/validate-phase2-agent-loop.py`.
 - [x] Emulator MCP audio capture added so Phase 2 can prove music through CORE
   tools.
+- [x] Sprite movement validator added so scripted input evidence is stronger
+  than a byte-level screenshot difference.
 
 ## Completed Phase 1 Gate
 

@@ -26,3 +26,5 @@ Toolchain and validation scripts live here.
   confirms RAG retrieves the bundled asset symbols.
 - `validate-phase2-agent-loop.py`: prepares and optionally runs the OpenCode
   Phase 2 bundled-asset validation gate.
+- `validate-sprite-movement.py`: compares neutral and scripted-input PNG
+  screenshots to prove a sprite-like movement signal.
