@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ReactNode } from "react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
@@ -54,6 +54,14 @@ type PreflightReport = {
   checks: HealthCheck[];
 };
 
+type FramebufferFrame = {
+  frameIndex: number;
+  width: number;
+  height: number;
+  format: string;
+  rgb565Data: string;
+};
+
 type StarterRomPreview = {
   status: HealthState;
   detail: string;
@@ -66,6 +74,16 @@ type StarterRomPreview = {
   frames: number;
   streamEvery: number;
   streamedFrames: number;
+  frameWidth: number;
+  frameHeight: number;
+  framebufferFrames: FramebufferFrame[];
+};
+
+type DecodedFramebufferFrame = {
+  frameIndex: number;
+  width: number;
+  height: number;
+  rgba: Uint8ClampedArray;
 };
 
 const starterMessages: Message[] = [
@@ -158,6 +176,9 @@ const previewStarterRom: StarterRomPreview = {
   frames: 180,
   streamEvery: 30,
   streamedFrames: 0,
+  frameWidth: 320,
+  frameHeight: 240,
+  framebufferFrames: [],
 };
 
 function App() {
@@ -253,7 +274,7 @@ function App() {
     setStarterSource("checking");
 
     if (!isTauriRuntime()) {
-      setStarterRom(previewStarterRom);
+      setStarterRom(makePreviewStarterRom());
       setStarterSource("preview");
       setStarterBusy(false);
       return;
@@ -393,34 +414,45 @@ function App() {
             <div className="screen-bezel">
               <div
                 className={`genesis-screen ${transport} ${
-                  starterRom.screenshotDataUrl ? "captured" : "fallback"
+                  starterRom.framebufferFrames.length > 0
+                    ? "framebuffer"
+                    : starterRom.screenshotDataUrl
+                      ? "captured"
+                      : "fallback"
                 }`}
                 data-testid="starter-rom-screen"
               >
-                {starterRom.screenshotDataUrl ? (
-                  <img
-                    className="starter-frame"
-                    src={starterRom.screenshotDataUrl}
-                    alt="Starter project ROM frame"
-                  />
-                ) : (
-                  <>
-                    <div className="scanlines" />
-                    <span className="screen-title">DRIVE16 BLANK ROM</span>
-                    <span className="screen-status">
-                      {starterBusy
-                        ? "LOADING"
-                        : transport === "running"
-                          ? "PREVIEW"
-                          : "PAUSED"}
-                    </span>
-                    <span
-                      className="sprite-cursor"
-                      style={{ left: `${spriteX}%` }}
-                      aria-hidden="true"
-                    />
-                  </>
-                )}
+                <FramebufferCanvas
+                  fallback={
+                    starterRom.screenshotDataUrl ? (
+                      <img
+                        className="starter-frame"
+                        src={starterRom.screenshotDataUrl}
+                        alt="Starter project ROM frame"
+                      />
+                    ) : (
+                      <>
+                        <div className="scanlines" />
+                        <span className="screen-title">DRIVE16 BLANK ROM</span>
+                        <span className="screen-status">
+                          {starterBusy
+                            ? "LOADING"
+                            : transport === "running"
+                              ? "PREVIEW"
+                              : "PAUSED"}
+                        </span>
+                        <span
+                          className="sprite-cursor"
+                          style={{ left: `${spriteX}%` }}
+                          aria-hidden="true"
+                        />
+                      </>
+                    )
+                  }
+                  frames={starterRom.framebufferFrames}
+                  streamEvery={starterRom.streamEvery}
+                  transport={transport}
+                />
                 <span className={`screen-badge ${starterRom.status}`}>
                   {starterBadge(starterRom, starterBusy, transport)}
                 </span>
@@ -448,6 +480,12 @@ function App() {
                 <strong>
                   {starterRom.streamedFrames > 0
                     ? `${starterRom.streamedFrames} frames`
+                    : "Pending"}
+                </strong>
+                <span>Canvas</span>
+                <strong>
+                  {starterRom.framebufferFrames.length > 0
+                    ? `${starterRom.frameWidth}x${starterRom.frameHeight}`
                     : "Pending"}
                 </strong>
               </div>
@@ -516,6 +554,9 @@ function sourceLabel(source: string, nativeLabel = "Native preflight") {
 
 function starterLabel(preview: StarterRomPreview, busy: boolean) {
   if (busy) return "Launching starter ROM";
+  if (preview.status === "ready" && preview.framebufferFrames.length > 0) {
+    return "Framebuffer stream loaded";
+  }
   if (preview.status === "ready") return "Starter ROM loaded";
   if (preview.generatedAt === "error") return "Starter ROM unavailable";
   return "Starter ROM preview";
@@ -528,6 +569,9 @@ function starterBadge(
 ) {
   if (busy) return "LOADING";
   if (transport === "paused") return "PAUSED";
+  if (preview.status === "ready" && preview.framebufferFrames.length > 0) {
+    return "RGB565";
+  }
   if (preview.status === "ready") return "GENTEEL";
   return "PREVIEW";
 }
@@ -542,6 +586,152 @@ function healthIcon(state: HealthState) {
   if (state === "ready") return <CheckCircle2 size={15} />;
   if (state === "missing") return <AlertCircle size={15} />;
   return <Activity size={15} />;
+}
+
+function FramebufferCanvas({
+  fallback,
+  frames,
+  streamEvery,
+  transport,
+}: {
+  fallback: ReactNode;
+  frames: FramebufferFrame[];
+  streamEvery: number;
+  transport: TransportState;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [frameCursor, setFrameCursor] = useState(0);
+  const decodedFrames = useMemo(() => decodeFramebufferFrames(frames), [frames]);
+  const activeFrame =
+    decodedFrames.length > 0 ? decodedFrames[frameCursor % decodedFrames.length] : null;
+
+  useEffect(() => {
+    setFrameCursor(0);
+  }, [decodedFrames.length]);
+
+  useEffect(() => {
+    if (transport !== "running" || decodedFrames.length <= 1) return;
+
+    const intervalMs = Math.max(90, Math.round((streamEvery / 60) * 1000));
+    const timer = window.setInterval(() => {
+      setFrameCursor((value) => (value + 1) % decodedFrames.length);
+    }, intervalMs);
+
+    return () => window.clearInterval(timer);
+  }, [decodedFrames.length, streamEvery, transport]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !activeFrame) return;
+
+    canvas.width = activeFrame.width;
+    canvas.height = activeFrame.height;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    const imageData = context.createImageData(activeFrame.width, activeFrame.height);
+    imageData.data.set(activeFrame.rgba);
+    context.putImageData(imageData, 0, 0);
+  }, [activeFrame]);
+
+  if (!activeFrame) {
+    return <>{fallback}</>;
+  }
+
+  return (
+    <>
+      <canvas
+        ref={canvasRef}
+        aria-label="Genteel framebuffer"
+        className="framebuffer-canvas"
+        data-frame-index={activeFrame.frameIndex}
+        data-testid="framebuffer-canvas"
+      />
+      <span className="frame-index" data-testid="framebuffer-frame-index">
+        Frame {activeFrame.frameIndex}
+      </span>
+    </>
+  );
+}
+
+function decodeFramebufferFrames(frames: FramebufferFrame[]) {
+  return frames.flatMap((frame) => {
+    if (frame.format !== "RGB565") return [];
+    const bytes = base64ToBytes(frame.rgb565Data);
+    const expectedLength = frame.width * frame.height * 2;
+    if (bytes.length !== expectedLength) return [];
+
+    const rgba = new Uint8ClampedArray(frame.width * frame.height * 4);
+    for (let sourceIndex = 0, targetIndex = 0; sourceIndex < bytes.length; sourceIndex += 2) {
+      const value = bytes[sourceIndex] | (bytes[sourceIndex + 1] << 8);
+      const red = (value >> 11) & 0x1f;
+      const green = (value >> 5) & 0x3f;
+      const blue = value & 0x1f;
+      rgba[targetIndex] = (red << 3) | (red >> 2);
+      rgba[targetIndex + 1] = (green << 2) | (green >> 4);
+      rgba[targetIndex + 2] = (blue << 3) | (blue >> 2);
+      rgba[targetIndex + 3] = 255;
+      targetIndex += 4;
+    }
+
+    return [
+      {
+        frameIndex: frame.frameIndex,
+        width: frame.width,
+        height: frame.height,
+        rgba,
+      },
+    ];
+  });
+}
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function makePreviewStarterRom(): StarterRomPreview {
+  const framebufferFrames = [
+    makePreviewFrame(0, 0x3944),
+    makePreviewFrame(30, 0x4145),
+  ];
+
+  return {
+    ...previewStarterRom,
+    framebufferFrames,
+    streamedFrames: framebufferFrames.length,
+  };
+}
+
+function makePreviewFrame(frameIndex: number, color: number): FramebufferFrame {
+  const width = 320;
+  const height = 240;
+  const bytes = new Uint8Array(width * height * 2);
+  for (let index = 0; index < bytes.length; index += 2) {
+    bytes[index] = color & 0xff;
+    bytes[index + 1] = color >> 8;
+  }
+
+  return {
+    frameIndex,
+    width,
+    height,
+    format: "RGB565",
+    rgb565Data: bytesToBase64(bytes),
+  };
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunkSize = 32768;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function TopBar({

@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 3 framebuffer starts from sampled Genteel streams
+
+Context:
+
+Phase 3 needs the right pane to render the Genteel framebuffer. The current
+native starter path already runs Genteel as a separate sidecar process and
+writes a `D16F` RGB565 frame stream under ignored artifacts.
+
+Decision:
+
+Start the app-side framebuffer renderer by parsing the sampled Genteel stream
+file and drawing the returned RGB565 frames into a webview canvas. Keep Genteel
+as a separate process and keep persistent emulator process control, controller
+input, and per-frame app streaming as follow-up work on top of the same canvas
+path.
+
+Consequence:
+
+The app now proves the right pane can render actual Genteel framebuffer data
+without linking emulator code into the Tauri binary. The first implementation
+is sampled stream replay rather than a long-running interactive emulator
+session, so later input and live-control work must extend the sidecar process
+adapter.
+
 ## 2026-06-29 - Phase 3 app shell uses Tauri with React and Vite
 
 Context:

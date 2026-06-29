@@ -27,6 +27,19 @@ pub struct StarterRomPreview {
     pub frames: u32,
     pub stream_every: u32,
     pub streamed_frames: usize,
+    pub frame_width: u16,
+    pub frame_height: u16,
+    pub framebuffer_frames: Vec<FramebufferFrame>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FramebufferFrame {
+    pub frame_index: u64,
+    pub width: u16,
+    pub height: u16,
+    pub format: String,
+    pub rgb565_data: String,
 }
 
 #[derive(Debug)]
@@ -83,7 +96,13 @@ fn launch_starter_rom_for_repo(repo_root: PathBuf) -> Result<StarterRomPreview, 
         ));
     }
 
-    let streamed_frames = count_frame_stream(&paths.frame_stream_path)?;
+    let framebuffer_frames = read_frame_stream(&paths.frame_stream_path)?;
+    let first_frame = framebuffer_frames
+        .first()
+        .ok_or_else(|| "Frame stream did not contain any frames".to_string())?;
+    let frame_width = first_frame.width;
+    let frame_height = first_frame.height;
+    let streamed_frames = framebuffer_frames.len();
     let screenshot_data_url = format!(
         "data:image/png;base64,{}",
         general_purpose::STANDARD.encode(screenshot_bytes)
@@ -101,6 +120,9 @@ fn launch_starter_rom_for_repo(repo_root: PathBuf) -> Result<StarterRomPreview, 
         frames: STARTER_FRAMES,
         stream_every: STREAM_EVERY,
         streamed_frames,
+        frame_width,
+        frame_height,
+        framebuffer_frames,
     })
 }
 
@@ -214,7 +236,7 @@ fn run_command(command: &mut Command, label: &str) -> Result<String, String> {
     }
 }
 
-fn count_frame_stream(path: &Path) -> Result<usize, String> {
+fn read_frame_stream(path: &Path) -> Result<Vec<FramebufferFrame>, String> {
     let data = fs::read(path).map_err(|error| {
         format!(
             "Starter ROM frame stream was not created at {}: {}",
@@ -223,7 +245,7 @@ fn count_frame_stream(path: &Path) -> Result<usize, String> {
         )
     })?;
     let mut offset = 0;
-    let mut frames = 0;
+    let mut frames = Vec::new();
 
     while offset < data.len() {
         if data.len() - offset < FRAME_HEADER_BYTES {
@@ -236,6 +258,7 @@ fn count_frame_stream(path: &Path) -> Result<usize, String> {
         let width = read_u16(&data, offset + 6)?;
         let height = read_u16(&data, offset + 8)?;
         let format = read_u16(&data, offset + 10)?;
+        let frame_index = read_u64(&data, offset + 12)?;
         let payload_len = read_u32(&data, offset + 20)? as usize;
         if version != 1 {
             return Err(format!("Unexpected frame stream version: {}", version));
@@ -257,14 +280,20 @@ fn count_frame_stream(path: &Path) -> Result<usize, String> {
         if next_offset > data.len() {
             return Err(format!(
                 "Truncated frame stream payload at frame {}",
-                frames
+                frames.len()
             ));
         }
-        frames += 1;
+        frames.push(FramebufferFrame {
+            frame_index,
+            width,
+            height,
+            format: "RGB565".to_string(),
+            rgb565_data: general_purpose::STANDARD.encode(&data[payload_offset..next_offset]),
+        });
         offset = next_offset;
     }
 
-    if frames == 0 {
+    if frames.is_empty() {
         Err("Frame stream did not contain any frames".to_string())
     } else {
         Ok(frames)
@@ -283,6 +312,15 @@ fn read_u32(data: &[u8], offset: usize) -> Result<u32, String> {
         .get(offset..offset + 4)
         .ok_or_else(|| format!("Missing u32 at byte {}", offset))?;
     Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn read_u64(data: &[u8], offset: usize) -> Result<u64, String> {
+    let bytes = data
+        .get(offset..offset + 8)
+        .ok_or_else(|| format!("Missing u64 at byte {}", offset))?;
+    Ok(u64::from_le_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]))
 }
 
 fn repo_root() -> PathBuf {
@@ -380,6 +418,50 @@ mod tests {
             .screenshot_data_url
             .starts_with("data:image/png;base64,"));
         assert!(preview.streamed_frames >= 1);
+        assert_eq!(preview.frame_width, 320);
+        assert_eq!(preview.frame_height, 240);
+        assert_eq!(preview.streamed_frames, preview.framebuffer_frames.len());
+        assert!(preview
+            .framebuffer_frames
+            .iter()
+            .all(|frame| frame.format == "RGB565"));
         assert_eq!(preview.rom_path, "examples/app-starter-blank/out/rom.bin");
+    }
+
+    #[test]
+    fn frame_stream_reader_decodes_rgb565_records() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "drive16-frame-stream-test-{}-{}",
+            unix_timestamp(),
+            std::process::id()
+        ));
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        let stream_path = temp_dir.join("frames.rgb565");
+        let width = 320u16;
+        let height = 240u16;
+        let payload = vec![0x1f; width as usize * height as usize * 2];
+        let mut stream = Vec::new();
+        stream.extend_from_slice(b"D16F");
+        stream.extend_from_slice(&1u16.to_le_bytes());
+        stream.extend_from_slice(&width.to_le_bytes());
+        stream.extend_from_slice(&height.to_le_bytes());
+        stream.extend_from_slice(&565u16.to_le_bytes());
+        stream.extend_from_slice(&42u64.to_le_bytes());
+        stream.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        stream.extend_from_slice(&payload);
+        fs::write(&stream_path, stream).expect("frame stream should be written");
+
+        let frames = read_frame_stream(&stream_path).expect("frame stream should parse");
+        fs::remove_dir_all(&temp_dir).expect("temp dir should be removed");
+
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].frame_index, 42);
+        assert_eq!(frames[0].width, 320);
+        assert_eq!(frames[0].height, 240);
+        assert_eq!(frames[0].format, "RGB565");
+        assert_eq!(
+            frames[0].rgb565_data,
+            general_purpose::STANDARD.encode(payload)
+        );
     }
 }

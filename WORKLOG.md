@@ -1,5 +1,67 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 28 - Genteel framebuffer canvas
+
+Plan:
+
+- Task: render the Genteel framebuffer stream in the right pane.
+- Files: `app/src-tauri/src/starter_rom.rs`, `app/src/App.tsx`,
+  `app/src/styles.css`, `docs/phase3-framebuffer.md`, `PROGRESS.md`,
+  `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: parse and test RGB565 frame records, rerun the native sidecar
+  launch test, validate the stream artifact, build and check the app, validate
+  the rendered canvas in the in-app Browser at desktop and mobile viewports,
+  scan for the pasted OpenRouter key, and run `git diff --check`.
+
+Did:
+
+- Extended `launch_starter_rom` to parse Genteel `D16F` frame records and
+  return base64 RGB565 frame payloads with stream metadata.
+- Added focused Rust coverage for the RGB565 stream reader.
+- Replaced the right-pane screenshot-only rendering path with a canvas that
+  decodes RGB565 frames into RGBA pixels.
+- Wired pause and resume to the canvas frame advancement.
+- Added browser-preview framebuffer samples so the canvas path can be visually
+  checked without native Tauri commands.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with three
+  non-ignored tests and one ignored sidecar test.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml
+  starter_rom_launches_existing_rom_when_assets_are_present -- --ignored`
+  passed.
+- `scripts/validate-frame-stream.py
+  artifacts/phase3/starter-rom/starter-frames.rgb565 --min-frames 6` passed
+  with six frames and `358400` nonzero pixels.
+- `pnpm --dir app build` passed.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- Browser validation at `http://127.0.0.1:1420/` found title `Drive16`, a
+  nonblank `Drive16 Agent` DOM, no framework overlay, and no console warnings
+  or errors.
+- Browser canvas check found one `framebuffer-canvas` at `320` by `240`.
+- Browser frame samples moved between indices `30` and `0` while running.
+- Browser pause interaction found one `Pause emulator` control and changed the
+  screen state to `paused framebuffer`.
+- Default browser viewport was `1280` by `720`, with no document overflow and
+  screen bounds clear of the status panel.
+- Mobile browser viewport was `390` by `844`, had no horizontal overflow, and
+  showed the framebuffer canvas correctly after scrolling.
+- Browser screenshots were saved to:
+  `artifacts/phase3/framebuffer/browser-default.png`,
+  `artifacts/phase3/framebuffer/browser-mobile-top.png`, and
+  `artifacts/phase3/framebuffer/browser-mobile-framebuffer.png`.
+
+Gate:
+
+None.
+
+Next:
+
+- Connect the left conversation pane to OpenCode HTTP/SSE.
+
 ## 2026-06-29 - ITERATION 27 - Starter blank ROM preview
 
 Plan:

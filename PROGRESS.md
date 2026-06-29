@@ -12,7 +12,7 @@ ROM in the right pane using bundled assets.
 - [x] Scaffold the Tauri 2 plus React/Vite two-pane app shell.
 - [x] Add app-side dependency and tool health preflight checks.
 - [x] Launch a starter blank ROM path for the app preview.
-- [ ] Render the Genteel live framebuffer in the right pane.
+- [x] Render the Genteel live framebuffer in the right pane.
 - [ ] Connect the left conversation pane to OpenCode HTTP/SSE.
 - [ ] Add settings for model provider, OpenRouter key entry, model selector,
   and connection test.
@@ -22,11 +22,11 @@ ROM in the right pane using bundled assets.
 
 ## Current Task
 
-The starter blank ROM path is implemented and verified in the app preview.
+The Genteel RGB565 framebuffer stream is rendered in the right pane.
 
 ## Next Up
 
-Render the Genteel live framebuffer in the right pane.
+Connect the left conversation pane to OpenCode HTTP/SSE.
 
 ## Completed Phase 3 Work
 
@@ -50,6 +50,12 @@ Render the Genteel live framebuffer in the right pane.
   browser-preview fallback.
 - [x] Phase 3 starter ROM evidence recorded in
   `docs/phase3-starter-rom.md`.
+- [x] Native starter launch now returns sampled RGB565 framebuffer records
+  from the Genteel stream.
+- [x] Right pane renders those framebuffer records through a pixelated canvas
+  with pause/resume animation state.
+- [x] Phase 3 framebuffer evidence recorded in
+  `docs/phase3-framebuffer.md`.
 
 ## Completed Phase 2 Gate
 
