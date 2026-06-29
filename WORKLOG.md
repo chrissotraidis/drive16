@@ -1,5 +1,58 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 14 - OpenCode MCP project config
+
+Plan:
+
+- Task: configure OpenCode with the Phase 1 MCP servers without committing any
+  credentials.
+- Files: `opencode.json`, `scripts/validate-opencode-config.py`,
+  `docs/phase1-opencode.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: compile the validator, confirm OpenCode resolves the three MCP
+  servers from project config, smoke-test `opencode serve`, and report the
+  OpenRouter credential gate.
+
+Did:
+
+- Added project-level `opencode.json` wiring `drive16-sgdk-build`,
+  `drive16-emulator`, and `drive16-rag`.
+- Added `docs/phase1-opencode.md` with the non-secret setup and OpenRouter
+  credential gate.
+- Added `scripts/validate-opencode-config.py` to verify OpenCode config
+  resolution and headless server startup.
+
+Evidence:
+
+- `opencode --version` reported `1.14.33`.
+- `npm view opencode-ai version bin license --json` reported latest npm
+  version `1.17.11`, binary `opencode`, and license `MIT`.
+- `python3 -m py_compile scripts/validate-opencode-config.py` passed.
+- `scripts/validate-opencode-config.py` passed with:
+  `OpenCode config ok`
+  `VALIDATION REQUEST: configure OpenRouter with opencode providers login or OPENROUTER_API_KEY before the agent loop can be run.`
+- `git diff --check` passed.
+
+VALIDATION REQUEST:
+
+Configure OpenRouter outside the repo before the Phase 1 agent loop can be run:
+
+```sh
+opencode providers login
+```
+
+or:
+
+```sh
+export OPENROUTER_API_KEY=...
+```
+
+After that, run the first CLI text-loop prompt.
+
+Next:
+
+- Run the plain CLI text-loop validation after OpenRouter is configured.
+
 ## 2026-06-29 - ITERATION 13 - RAG corpus and local index
 
 Plan:

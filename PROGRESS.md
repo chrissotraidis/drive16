@@ -13,18 +13,21 @@ reads a screenshot, and self-corrects a deliberate compile error.
 - [x] Wrap Genteel as a sidecar adapter and MCP server with `run_rom`,
   `capture_frame`, `send_input`, and `read_state`.
 - [x] Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
-- [ ] Configure `opencode serve` with OpenRouter and the Phase 1 MCP servers.
+- [x] Add project OpenCode config for the Phase 1 MCP servers.
+- [x] Verify `opencode serve` starts with the project config.
+- [ ] Configure OpenRouter credential and model outside the repo.
 - [ ] Drive the loop from a plain CLI prompt, such as "make the screen blue".
 - [ ] Prove the agent can self-correct a deliberate compile error.
 
 ## Current Task
 
-`mcp-local-rag` is installed under ignored artifacts, and the SGDK plus VDP
-corpus indexes successfully.
+OpenCode project config resolves the three Phase 1 MCP servers and
+`opencode serve` starts locally. OpenRouter credentials are not configured.
 
 ## Next Up
 
-Configure `opencode serve` with OpenRouter and the Phase 1 MCP servers.
+Configure OpenRouter credentials outside the repo, then run the first text-loop
+CLI validation.
 
 ## Completed Phase 0 Gate
 

@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Project OpenCode config keeps credentials external
+
+Context:
+
+Phase 1 needs OpenCode to run with the SGDK build server, Genteel emulator
+server, RAG server, and an OpenRouter model. The installed OpenCode binary is
+version `1.14.33`, supports `opencode serve`, and loads project-level
+`opencode.json`. No OpenRouter credential is currently configured.
+
+Decision:
+
+Commit project `opencode.json` with only the local Phase 1 MCP server
+configuration. Keep OpenRouter credentials outside the repo through
+`opencode providers login` or `OPENROUTER_API_KEY`, and document that as a
+validation gate in `docs/phase1-opencode.md`.
+
+Consequence:
+
+The non-secret OpenCode setup is reproducible and checked in. The next
+end-to-end agent run cannot be marked complete until a human configures an
+OpenRouter credential and model outside git.
+
 ## 2026-06-29 - Local RAG uses pinned mcp-local-rag under artifacts
 
 Context:
