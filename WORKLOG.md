@@ -1,5 +1,74 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 2 - Phase 0 bundled asset fixture
+
+Plan:
+
+- Task: add a Phase 0 asset-backed SGDK fixture without advancing beyond the
+  manual spike.
+- Files: `scripts/build-sgdk.sh`, `scripts/generate-phase0-assets.py`,
+  `scripts/validate-phase0-assets.sh`, `assets/phase0/`,
+  `examples/phase0-assets/`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: use upstream SGDK resource samples and headers as syntax
+  references, generate original assets, verify asset metadata locally,
+  syntax-check scripts, run `git diff --check`, and run the SGDK build wrapper
+  to confirm the remaining local gate is Docker Desktop.
+
+Did:
+
+- Updated `scripts/build-sgdk.sh` so projects inside the repo can reference
+  shared repo-level assets while still building inside docker-sgdk.
+- Added `scripts/generate-phase0-assets.py` to generate original validation
+  assets: a 32x32 indexed PNG sprite and a one-second PSG-only VGM loop.
+- Added `examples/phase0-assets/`, which wires `SPRITE phase0_player` and
+  `XGM phase0_loop` through `res/resources.res`.
+- Added a simple SGDK ROM that starts the XGM loop and moves the sprite with
+  the D-pad.
+- Added `scripts/validate-phase0-assets.sh` as the single command for the
+  eventual build plus Genteel screenshot validation.
+
+Evidence:
+
+- SGDK upstream sample/resource references checked:
+  `sample/advanced/sprites-sharing-tiles/res/res_sprite.res`,
+  `sample/basics/pools/res/resources.res`, `sample/snd/sound-test/res/resources.res`,
+  `inc/sprite_eng.h`, `inc/snd/xgm.h`, and `tools/xgm2tool/.../VGM.java`.
+- `scripts/generate-phase0-assets.py --check` passed.
+- `file assets/phase0/player.png assets/phase0/loop.vgm` reported
+  `player.png` as a 32 x 32, 8-bit colormap PNG and `loop.vgm` as VGM v1.5
+  with SN76489 PSG.
+- `bash -n scripts/build-sgdk.sh`, `bash -n scripts/validate-genteel.sh`, and
+  `bash -n scripts/validate-phase0-assets.sh` passed.
+- `git diff --check` passed.
+- `scripts/build-sgdk.sh examples/phase0-assets` stopped with the expected
+  local environment gate: "Docker is installed, but the Docker daemon is not
+  reachable."
+
+VALIDATION REQUEST:
+
+Please run this from the repo root after starting Docker Desktop:
+
+```sh
+scripts/validate-phase0-assets.sh
+```
+
+Expected result:
+
+- `examples/phase0-assets/out/rom.bin` is built by docker-sgdk.
+- Genteel captures `artifacts/phase0/phase0-assets.png`.
+- In a normal Genteel window, the D-pad moves the bundled sprite and the PSG
+  loop is audible.
+
+If the Genteel command shape differs, paste the `validate-genteel.sh` output so
+the adapter command can be corrected.
+
+Next:
+
+- Wait for the Docker and Genteel validation results.
+- If validation passes, close the Phase 0 manual spike checklist and request the
+  phase gate sign-off before starting Phase 1.
+
 ## 2026-06-29 - ITERATION 1 - Bootstrap and Phase 0 validation request
 
 Plan:

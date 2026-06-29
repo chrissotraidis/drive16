@@ -1,5 +1,24 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 0 validation assets are original
+
+Context:
+
+Phase 0 needs a bundled sprite and VGM loop, but the architecture forbids
+commercial ROM-derived material and requires license hygiene.
+
+Decision:
+
+Generate tiny original validation assets under `assets/phase0/` with
+`scripts/generate-phase0-assets.py`: an indexed 32x32 sprite PNG and a PSG-only
+VGM loop.
+
+Consequence:
+
+Phase 0 can validate SGDK `SPRITE` and `XGM` resource wiring without copying
+commercial game art or music. Final asset licensing should be confirmed before
+release alongside the app license.
+
 ## 2026-06-29 - Proposed app license: MIT
 
 Context:

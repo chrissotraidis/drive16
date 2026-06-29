@@ -18,12 +18,22 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 PROJECT_DIR="$(cd "$PROJECT" && pwd)"
+REPO_ROOT="$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+
+if [ -n "$REPO_ROOT" ] && [ "$PROJECT_DIR" != "$REPO_ROOT" ]; then
+  PROJECT_REL="${PROJECT_DIR#"$REPO_ROOT"/}"
+  MOUNT_DIR="$REPO_ROOT"
+  WORK_DIR="/workspace/$PROJECT_REL"
+else
+  MOUNT_DIR="$PROJECT_DIR"
+  WORK_DIR="/workspace"
+fi
 
 docker run \
   --rm \
   --platform "$PLATFORM" \
-  -v "$PROJECT_DIR:/m68k" \
-  -w /m68k \
+  -v "$MOUNT_DIR:/workspace" \
+  -w "$WORK_DIR" \
   "$IMAGE" \
   "$TARGET"
 
