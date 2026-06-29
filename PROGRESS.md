@@ -13,6 +13,7 @@ loop, verified by a Genteel screenshot, with the live-view path confirmed.
 - [x] Add original Phase 0 sprite and VGM validation assets.
 - [x] Add an SGDK asset ROM fixture wiring the sprite and VGM through `rescomp`.
 - [x] Add a pinned known-good open homebrew validator for Genteel accuracy.
+- [x] Align the Genteel screenshot validator with the observed upstream CLI.
 - [ ] Human validation: docker-sgdk builds the hello-world ROM.
 - [ ] Human validation: Genteel runs the hello-world ROM.
 - [ ] Human validation: Genteel captures a headless screenshot.

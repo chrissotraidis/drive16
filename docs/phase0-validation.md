@@ -7,7 +7,10 @@ Phase 1 until every evidence item below is captured and recorded in
 ## Prerequisites
 
 - Docker Desktop is running.
-- A Genteel binary is available.
+- A Genteel binary is available. The expected upstream source is
+  `https://github.com/segin/genteel`, observed at commit
+  `bd4fc05b2020a6889b323815f22ae577c70e52fa`. Build instructions in the
+  upstream README use `cargo build --release --features gui`.
 - Network access for the known-good homebrew fetch. The checked-in validator
   downloads a pinned upstream SGDK hello-world ROM into ignored `artifacts/`
   storage, verifies its SHA-256 hash, and records source/license metadata.
@@ -16,6 +19,12 @@ Set the Genteel path once per shell:
 
 ```sh
 export GENTEEL_BIN=/path/to/genteel
+```
+
+The checked-in validator expects the current upstream CLI shape:
+
+```sh
+genteel --headless 180 --screenshot artifacts/phase0/example.png path/to/rom.bin
 ```
 
 ## 1. Build The Hello-World ROM
@@ -87,8 +96,10 @@ Do not use commercial ROMs, disassemblies, or unlicensed downloads.
 ## 6. Confirm Live-Framebuffer Path
 
 Use the current Genteel build's documented live or debug framebuffer command.
-Record the exact command because the Drive16 sidecar adapter will need to match
-the real CLI.
+As of observed Genteel commit `bd4fc05b2020a6889b323815f22ae577c70e52fa`,
+headless screenshots and input scripts are documented, but a continuous
+framebuffer stream still needs explicit human confirmation. Record the exact
+command because the Drive16 sidecar adapter will need to match the real CLI.
 
 Expected evidence:
 

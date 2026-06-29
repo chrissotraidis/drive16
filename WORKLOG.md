@@ -1,5 +1,58 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 5 - Genteel CLI alignment
+
+Plan:
+
+- Task: replace the provisional Genteel screenshot command with the real
+  upstream CLI shape.
+- Files: `scripts/validate-genteel.sh`, `scripts/README.md`,
+  `docs/phase0-validation.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: inspect upstream `segin/genteel` README, input scripting docs,
+  and `src/main.rs`; syntax-check scripts; run `git diff --check`; keep runtime
+  validation gated because no Genteel binary is installed locally.
+
+Did:
+
+- Confirmed the likely intended Genteel repository is `segin/genteel`.
+- Confirmed its README describes an instrumentable Sega Mega Drive / Genesis
+  emulator with headless screenshots and AI-oriented instrumentation.
+- Patched `scripts/validate-genteel.sh` to call:
+  `genteel --headless <frames> --screenshot <path> <ROM>`.
+- Recorded observed Genteel source commit
+  `bd4fc05b2020a6889b323815f22ae577c70e52fa` in the runbook.
+
+Evidence:
+
+- `gh repo view segin/genteel` reported the description matching the Drive16
+  architecture and a repository push timestamp of 2026-06-28.
+- `src/main.rs` usage text lists `--headless <n>` and `--screenshot <path>`.
+- `src/main.rs` parser tests include
+  `genteel --headless 1200 --screenshot final.png rom.bin`.
+- `docs/input_scripting.md` documents
+  `genteel --script my_tas.txt --headless 1000 <ROM_PATH>`.
+- No local Genteel binary was found on PATH.
+
+VALIDATION REQUEST:
+
+After building or installing Genteel, rerun:
+
+```sh
+scripts/validate-genteel.sh examples/sgdk-hello-world/out/rom.bin artifacts/phase0/genteel-hello.png
+```
+
+Expected result:
+
+- The script runs Genteel headlessly for 180 frames.
+- `artifacts/phase0/genteel-hello.png` exists and shows the hello-world ROM.
+
+Next:
+
+- Wait for Docker and Genteel validation evidence.
+- If the upstream live-framebuffer path is not available, record the conflict
+  in `DECISIONS.md` before changing the emulator plan.
+
 ## 2026-06-29 - ITERATION 4 - Known-good homebrew validator
 
 Plan:

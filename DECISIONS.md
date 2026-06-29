@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Genteel CLI source for Phase 0 scripts
+
+Context:
+
+The first Genteel validation script used a provisional CLI shape because the
+local machine had no Genteel binary. Phase 0 needs exact headless screenshot
+commands before human validation can be reliable.
+
+Decision:
+
+Use `segin/genteel` as the intended Genteel source for Phase 0 validation and
+align scripts to the observed CLI at commit
+`bd4fc05b2020a6889b323815f22ae577c70e52fa`:
+`genteel --headless <frames> --screenshot <path> <ROM>`.
+
+Consequence:
+
+The screenshot validation script now matches upstream source evidence. The
+continuous live-framebuffer path is still an explicit Phase 0 validation item,
+not an assumed capability.
+
 ## 2026-06-29 - Known-good Phase 0 accuracy ROM
 
 Context:
