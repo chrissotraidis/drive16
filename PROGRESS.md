@@ -11,7 +11,7 @@ ROM in the right pane using bundled assets.
 - [x] Human sign-off: Phase 2 approved.
 - [x] Scaffold the Tauri 2 plus React/Vite two-pane app shell.
 - [x] Add app-side dependency and tool health preflight checks.
-- [ ] Launch a starter blank ROM path for the app preview.
+- [x] Launch a starter blank ROM path for the app preview.
 - [ ] Render the Genteel live framebuffer in the right pane.
 - [ ] Connect the left conversation pane to OpenCode HTTP/SSE.
 - [ ] Add settings for model provider, OpenRouter key entry, model selector,
@@ -22,12 +22,11 @@ ROM in the right pane using bundled assets.
 
 ## Current Task
 
-The app-side dependency and tool health preflight checks are implemented and
-verified.
+The starter blank ROM path is implemented and verified in the app preview.
 
 ## Next Up
 
-Launch a starter blank ROM path for the app preview.
+Render the Genteel live framebuffer in the right pane.
 
 ## Completed Phase 3 Work
 
@@ -43,6 +42,14 @@ Launch a starter blank ROM path for the app preview.
 - [x] Refreshable health panel wired to native preflight with a browser-preview
   fallback.
 - [x] Phase 3 preflight evidence recorded in `docs/phase3-preflight.md`.
+- [x] Dedicated blank starter SGDK fixture added at
+  `examples/app-starter-blank`.
+- [x] Native Tauri `launch_starter_rom` command added to build the starter ROM
+  when needed, run it through Genteel, and return a captured PNG data URL.
+- [x] Right-pane ROM panel wired to the starter preview result with a
+  browser-preview fallback.
+- [x] Phase 3 starter ROM evidence recorded in
+  `docs/phase3-starter-rom.md`.
 
 ## Completed Phase 2 Gate
 

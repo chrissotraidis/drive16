@@ -1,5 +1,72 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 27 - Starter blank ROM preview
+
+Plan:
+
+- Task: launch a starter blank ROM path for the app preview.
+- Files: `examples/app-starter-blank/`, `app/src-tauri/src/starter_rom.rs`,
+  `app/src-tauri/src/main.rs`, `app/src-tauri/Cargo.toml`,
+  `app/src-tauri/Cargo.lock`, `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase3-starter-rom.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: build the starter ROM with SGDK, run the native starter launch
+  test through Genteel, validate the emitted frame stream, build and test the
+  app, validate the rendered browser preview at desktop and mobile viewports,
+  scan for the pasted OpenRouter key, and run `git diff --check`.
+
+Did:
+
+- Added `examples/app-starter-blank`, a dedicated Phase 3 blank starter ROM
+  fixture.
+- Added native Tauri `launch_starter_rom`, which builds the starter ROM when
+  needed, runs Genteel as a sidecar process, validates the captured PNG and
+  RGB565 frame stream, and returns a PNG data URL to the frontend.
+- Wired the right pane to display the captured frame inside Tauri, with a clear
+  browser-preview fallback under Vite preview.
+- Replaced the fake controls panel with ROM metadata for the starter path.
+- Fixed the 1280 by 720 preview sizing so the emulator screen no longer crowds
+  the status panels.
+
+Evidence:
+
+- `scripts/build-sgdk.sh examples/app-starter-blank` passed and built:
+  `examples/app-starter-blank/out/rom.bin`.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml
+  starter_paths_stay_in_expected_locations` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml
+  starter_rom_launches_existing_rom_when_assets_are_present -- --ignored`
+  passed.
+- `scripts/validate-frame-stream.py
+  artifacts/phase3/starter-rom/starter-frames.rgb565 --min-frames 6` passed
+  with six frames and `358400` nonzero pixels.
+- Starter screenshot: `artifacts/phase3/starter-rom/starter-frame.png`.
+- `pnpm --dir app build` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- Browser validation at `http://127.0.0.1:1420/` found title `Drive16`, a
+  nonblank `Drive16 Agent` DOM, no framework overlay, and no console warnings
+  or errors.
+- Browser interaction check found exactly one `Launch starter ROM` button and
+  kept the expected preview fallback state.
+- Default browser viewport was `1280` by `720`, with no horizontal or vertical
+  document overflow and screen bounds clear of the status panel.
+- Mobile browser viewport was `390` by `844`, had no horizontal overflow, and
+  showed the ROM pane correctly after scrolling.
+- Browser screenshots were saved to:
+  `artifacts/phase3/starter-rom/browser-default.png`,
+  `artifacts/phase3/starter-rom/browser-mobile-top.png`, and
+  `artifacts/phase3/starter-rom/browser-mobile-rom.png`.
+
+Gate:
+
+None.
+
+Next:
+
+- Render the Genteel live framebuffer in the right pane.
+
 ## 2026-06-29 - ITERATION 26 - App-side tool preflight
 
 Plan:

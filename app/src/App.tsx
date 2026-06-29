@@ -54,6 +54,20 @@ type PreflightReport = {
   checks: HealthCheck[];
 };
 
+type StarterRomPreview = {
+  status: HealthState;
+  detail: string;
+  generatedAt: string;
+  projectPath: string;
+  romPath: string;
+  screenshotPath: string;
+  frameStreamPath: string;
+  screenshotDataUrl: string;
+  frames: number;
+  streamEvery: number;
+  streamedFrames: number;
+};
+
 const starterMessages: Message[] = [
   {
     id: 1,
@@ -132,6 +146,20 @@ const previewPreflight: PreflightReport = {
   ],
 };
 
+const previewStarterRom: StarterRomPreview = {
+  status: "warning",
+  detail: "Native starter ROM launch runs inside the Tauri app",
+  generatedAt: "preview",
+  projectPath: "examples/app-starter-blank",
+  romPath: "examples/app-starter-blank/out/rom.bin",
+  screenshotPath: "preview",
+  frameStreamPath: "preview",
+  screenshotDataUrl: "",
+  frames: 180,
+  streamEvery: 30,
+  streamedFrames: 0,
+};
+
 function App() {
   const [messages, setMessages] = useState<Message[]>(starterMessages);
   const [draft, setDraft] = useState("");
@@ -140,9 +168,13 @@ function App() {
   const [spriteX, setSpriteX] = useState(52);
   const [preflight, setPreflight] = useState<PreflightReport>(previewPreflight);
   const [preflightSource, setPreflightSource] = useState("checking");
+  const [starterRom, setStarterRom] = useState<StarterRomPreview>(previewStarterRom);
+  const [starterSource, setStarterSource] = useState("checking");
+  const [starterBusy, setStarterBusy] = useState(true);
 
   useEffect(() => {
     void refreshPreflight();
+    void launchStarterRom();
   }, []);
 
   const buildLabel = useMemo(() => {
@@ -181,6 +213,7 @@ function App() {
     setTransport("running");
     setBuildState("running");
     setSpriteX(52);
+    void launchStarterRom();
   }
 
   async function refreshPreflight() {
@@ -212,6 +245,40 @@ function App() {
         ],
       });
       setPreflightSource("error");
+    }
+  }
+
+  async function launchStarterRom() {
+    setStarterBusy(true);
+    setStarterSource("checking");
+
+    if (!isTauriRuntime()) {
+      setStarterRom(previewStarterRom);
+      setStarterSource("preview");
+      setStarterBusy(false);
+      return;
+    }
+
+    setBuildState("building");
+    try {
+      const preview = await invoke<StarterRomPreview>("launch_starter_rom");
+      setStarterRom(preview);
+      setStarterSource("tauri");
+      setBuildState("running");
+    } catch (error) {
+      setStarterRom({
+        ...previewStarterRom,
+        status: "warning",
+        detail:
+          error instanceof Error
+            ? error.message
+            : "Starter ROM launch was not available",
+        generatedAt: "error",
+      });
+      setStarterSource("error");
+      setBuildState("error");
+    } finally {
+      setStarterBusy(false);
     }
   }
 
@@ -309,7 +376,11 @@ function App() {
               >
                 {transport === "running" ? <Pause size={18} /> : <Play size={18} />}
               </IconControl>
-              <IconControl label="Reset" onClick={resetPreview}>
+              <IconControl
+                label="Launch starter ROM"
+                onClick={resetPreview}
+                disabled={starterBusy}
+              >
                 <RefreshCcw size={18} />
               </IconControl>
               <IconControl label="Fullscreen">
@@ -320,38 +391,65 @@ function App() {
 
           <div className="emulator-frame">
             <div className="screen-bezel">
-              <div className={`genesis-screen ${transport}`}>
-                <div className="scanlines" />
-                <span className="screen-title">DRIVE16 BLANK ROM</span>
-                <span className="screen-status">
-                  {transport === "running" ? "RUNNING" : "PAUSED"}
+              <div
+                className={`genesis-screen ${transport} ${
+                  starterRom.screenshotDataUrl ? "captured" : "fallback"
+                }`}
+                data-testid="starter-rom-screen"
+              >
+                {starterRom.screenshotDataUrl ? (
+                  <img
+                    className="starter-frame"
+                    src={starterRom.screenshotDataUrl}
+                    alt="Starter project ROM frame"
+                  />
+                ) : (
+                  <>
+                    <div className="scanlines" />
+                    <span className="screen-title">DRIVE16 BLANK ROM</span>
+                    <span className="screen-status">
+                      {starterBusy
+                        ? "LOADING"
+                        : transport === "running"
+                          ? "PREVIEW"
+                          : "PAUSED"}
+                    </span>
+                    <span
+                      className="sprite-cursor"
+                      style={{ left: `${spriteX}%` }}
+                      aria-hidden="true"
+                    />
+                  </>
+                )}
+                <span className={`screen-badge ${starterRom.status}`}>
+                  {starterBadge(starterRom, starterBusy, transport)}
                 </span>
-                <span
-                  className="sprite-cursor"
-                  style={{ left: `${spriteX}%` }}
-                  aria-hidden="true"
-                />
               </div>
             </div>
           </div>
 
           <div className="status-grid">
             <section className="runtime-panel" aria-label="Runtime status">
-              <SectionTitle icon={<Gamepad2 size={16} />} title="Controls" />
-              <div className="control-row">
-                <button
-                  aria-label="Move left"
-                  onClick={() => setSpriteX((value) => Math.max(12, value - 8))}
-                >
-                  Left
-                </button>
-                <button
-                  aria-label="Move right"
-                  onClick={() => setSpriteX((value) => Math.min(88, value + 8))}
-                >
-                  Right
-                </button>
-                <span>60 fps</span>
+              <SectionTitle icon={<Gamepad2 size={16} />} title="ROM" />
+              <div
+                className={`starter-summary ${starterRom.status}`}
+                data-testid="starter-rom-summary"
+              >
+                {healthIcon(starterRom.status)}
+                <span>{starterLabel(starterRom, starterBusy)}</span>
+                <small>{sourceLabel(starterSource, "Native starter ROM")}</small>
+              </div>
+              <div className="rom-metadata">
+                <span>ROM</span>
+                <strong title={starterRom.romPath}>{shortPath(starterRom.romPath)}</strong>
+                <span>Frame</span>
+                <strong>{starterRom.frames} frames</strong>
+                <span>Stream</span>
+                <strong>
+                  {starterRom.streamedFrames > 0
+                    ? `${starterRom.streamedFrames} frames`
+                    : "Pending"}
+                </strong>
               </div>
             </section>
 
@@ -409,11 +507,35 @@ function stateLabel(state: HealthState) {
   return "Check";
 }
 
-function sourceLabel(source: string) {
-  if (source === "tauri") return "Native preflight";
+function sourceLabel(source: string, nativeLabel = "Native preflight") {
+  if (source === "tauri") return nativeLabel;
   if (source === "checking") return "Checking";
   if (source === "error") return "Command unavailable";
   return "Preview mode";
+}
+
+function starterLabel(preview: StarterRomPreview, busy: boolean) {
+  if (busy) return "Launching starter ROM";
+  if (preview.status === "ready") return "Starter ROM loaded";
+  if (preview.generatedAt === "error") return "Starter ROM unavailable";
+  return "Starter ROM preview";
+}
+
+function starterBadge(
+  preview: StarterRomPreview,
+  busy: boolean,
+  transport: TransportState,
+) {
+  if (busy) return "LOADING";
+  if (transport === "paused") return "PAUSED";
+  if (preview.status === "ready") return "GENTEEL";
+  return "PREVIEW";
+}
+
+function shortPath(path: string) {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length <= 3) return path;
+  return `${parts[0]}/${parts[1]}/.../${parts[parts.length - 1]}`;
 }
 
 function healthIcon(state: HealthState) {
@@ -481,15 +603,23 @@ function SectionTitle({
 
 function IconControl({
   children,
+  disabled,
   label,
   onClick,
 }: {
   children: ReactNode;
+  disabled?: boolean;
   label: string;
   onClick?: () => void;
 }) {
   return (
-    <button className="icon-button" type="button" aria-label={label} onClick={onClick}>
+    <button
+      className="icon-button"
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {children}
     </button>
   );
