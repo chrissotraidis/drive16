@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Python stdio MCP server for the Genteel sidecar
+
+Context:
+
+Phase 1 needs an emulator adapter with `run_rom`, `capture_frame`,
+`send_input`, and `read_state`. Phase 0 already proved the pinned Genteel build,
+headless screenshot capture, input scripting, and the Drive16 RGB565 frame
+stream patch.
+
+Decision:
+
+Implement `mcp-servers/emulator/server.py` as a dependency-free Python stdio
+MCP server. It launches the pinned Genteel binary as a native sidecar process
+per `run_rom` call, writes screenshots and frame streams under
+`artifacts/phase1/emulator/`, and uses Genteel CSV input scripts as the first
+implementation of `send_input`.
+
+Consequence:
+
+The Phase 1 text loop can run and inspect ROM output without waiting for the
+Phase 3 Tauri live pane. The adapter remains process-isolated from the app and
+can evolve into a persistent live-view sidecar when the application shell needs
+continuous rendering.
+
 ## 2026-06-29 - Python stdio MCP server for SGDK builds
 
 Context:

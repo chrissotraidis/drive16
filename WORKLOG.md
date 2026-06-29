@@ -1,5 +1,53 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 12 - Genteel emulator MCP wrapper
+
+Plan:
+
+- Task: wrap the proven Genteel sidecar path as the Phase 1 emulator MCP
+  server.
+- Files: `mcp-servers/emulator/server.py`,
+  `scripts/validate-emulator-mcp.py`, `mcp-servers/emulator/README.md`,
+  `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: syntax-check the Python files, exercise the MCP server over
+  stdio by listing tools, writing a Genteel input script, running the
+  hello-world ROM headlessly, returning the captured PNG frame, and validating
+  the RGB565 frame stream.
+
+Did:
+
+- Added a dependency-free Python stdio MCP server exposing `run_rom`,
+  `capture_frame`, `send_input`, and `read_state`.
+- Wired `run_rom` to the pinned Genteel binary from `scripts/build-genteel.sh`.
+- Made `capture_frame` return the latest PNG frame as MCP image content plus a
+  file path.
+- Made `send_input` write sparse Genteel CSV input scripts for the next
+  emulator run.
+- Added a reusable validator that talks to the server as an MCP client.
+
+Evidence:
+
+- `python3 -m py_compile mcp-servers/emulator/server.py
+  scripts/validate-emulator-mcp.py` passed.
+- `scripts/validate-emulator-mcp.py` passed with:
+  `Emulator MCP ok:
+  /Users/chrissotraidis/Documents/GitHub/drive16/artifacts/phase1/emulator/last-frame.png`.
+- Visual inspection of
+  `artifacts/phase1/emulator/last-frame.png` shows the expected
+  `Drive16 Phase 0` and `Hello from SGDK` text.
+- `scripts/validate-frame-stream.py artifacts/phase1/emulator/last-frames.rgb565
+  --min-frames 3` passed with:
+  `Frame stream ok: 3 frames, indices 0..60, nonzero pixels 5520`.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
+
 ## 2026-06-29 - ITERATION 11 - SGDK build MCP wrapper
 
 Plan:

@@ -10,7 +10,7 @@ reads a screenshot, and self-corrects a deliberate compile error.
 - [x] Human sign-off: Phase 0 approved.
 - [x] Wrap SGDK build as an MCP server with `build_rom`, `clean`, and
   `read_build_log`.
-- [ ] Wrap Genteel as a sidecar adapter and MCP server with `run_rom`,
+- [x] Wrap Genteel as a sidecar adapter and MCP server with `run_rom`,
   `capture_frame`, `send_input`, and `read_state`.
 - [ ] Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
 - [ ] Configure `opencode serve` with OpenRouter and the Phase 1 MCP servers.
@@ -19,12 +19,12 @@ reads a screenshot, and self-corrects a deliberate compile error.
 
 ## Current Task
 
-SGDK build MCP server wrapper is complete and verified against the hello-world
-project.
+Genteel emulator sidecar MCP server wrapper is complete and verified against
+the hello-world ROM.
 
 ## Next Up
 
-Add the Genteel emulator sidecar adapter and MCP server.
+Stand up `mcp-local-rag` and index the SGDK plus VDP docs.
 
 ## Completed Phase 0 Gate
 
