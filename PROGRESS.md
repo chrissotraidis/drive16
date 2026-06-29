@@ -14,7 +14,7 @@ ROM in the right pane using bundled assets.
 - [x] Launch a starter blank ROM path for the app preview.
 - [x] Render the Genteel live framebuffer in the right pane.
 - [x] Connect the left conversation pane to OpenCode HTTP/SSE.
-- [ ] Add settings for model provider, OpenRouter key entry, model selector,
+- [x] Add settings for model provider, OpenRouter key entry, model selector,
   and connection test.
 - [ ] Add project management and export-ROM wiring.
 - [ ] Drive the v1 prompt through the app and verify the bundled sprite and
@@ -22,13 +22,12 @@ ROM in the right pane using bundled assets.
 
 ## Current Task
 
-The left conversation pane is connected to OpenCode HTTP/SSE with no-reply
-message posting.
+The model settings drawer supports provider selection, OpenRouter key entry,
+model selection, and a non-persistent OpenRouter connection test.
 
 ## Next Up
 
-Add settings for model provider, OpenRouter key entry, model selector, and
-connection test.
+Add project management and export-ROM wiring.
 
 ## Completed Phase 3 Work
 
@@ -64,6 +63,10 @@ connection test.
   a browser-preview fallback.
 - [x] Phase 3 OpenCode bridge evidence recorded in
   `docs/phase3-opencode-bridge.md`.
+- [x] Model settings drawer added for provider selection, OpenRouter key entry,
+  model selection, and connection testing.
+- [x] Phase 3 model settings evidence recorded in
+  `docs/phase3-model-settings.md`.
 
 ## Completed Phase 2 Gate
 

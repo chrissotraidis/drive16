@@ -6,6 +6,8 @@ import {
   Circle,
   Code2,
   Download,
+  Eye,
+  EyeOff,
   FolderTree,
   Gamepad2,
   KeyRound,
@@ -16,9 +18,11 @@ import {
   RefreshCcw,
   Send,
   Settings,
+  ShieldCheck,
   Square,
   TerminalSquare,
   Wrench,
+  X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ReactNode } from "react";
@@ -26,6 +30,8 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
+type ModelProvider = "openrouter" | "ollama";
+type ConnectionState = HealthState | "idle" | "testing";
 
 type Message = {
   id: number;
@@ -105,12 +111,49 @@ type OpenCodeEvent = {
   time: string;
 };
 
+type ModelOption = {
+  id: string;
+  name: string;
+};
+
+type ModelConnectionReport = {
+  state: ConnectionState;
+  detail: string;
+};
+
 type DecodedFramebufferFrame = {
   frameIndex: number;
   width: number;
   height: number;
   rgba: Uint8ClampedArray;
 };
+
+const openRouterKeyUrl = "https://openrouter.ai/api/v1/key";
+const openRouterModelsUrl = "https://openrouter.ai/api/v1/models";
+
+const preferredOpenRouterModels = [
+  "~anthropic/claude-sonnet-latest",
+  "~openai/gpt-latest",
+  "~google/gemini-pro-latest",
+  "~google/gemini-flash-latest",
+  "qwen/qwen3.7-max",
+  "openrouter/auto",
+];
+
+const fallbackModelOptions: ModelOption[] = [
+  {
+    id: "~anthropic/claude-sonnet-latest",
+    name: "Claude Sonnet Latest",
+  },
+  {
+    id: "~openai/gpt-latest",
+    name: "GPT Latest",
+  },
+  {
+    id: "~google/gemini-pro-latest",
+    name: "Gemini Pro Latest",
+  },
+];
 
 const starterMessages: Message[] = [
   {
@@ -210,6 +253,17 @@ function App() {
   const [openCodeSessionId, setOpenCodeSessionId] = useState<string | undefined>();
   const [openCodeEvents, setOpenCodeEvents] = useState<OpenCodeEvent[]>([]);
   const [openCodeBusy, setOpenCodeBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modelProvider, setModelProvider] = useState<ModelProvider>("openrouter");
+  const [activeModel, setActiveModel] = useState(fallbackModelOptions[0].id);
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>(fallbackModelOptions);
+  const [modelsSource, setModelsSource] = useState("fallback");
+  const [openRouterKey, setOpenRouterKey] = useState("");
+  const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
+  const [modelConnection, setModelConnection] = useState<ModelConnectionReport>({
+    state: "idle",
+    detail: "Not tested",
+  });
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
 
@@ -218,6 +272,13 @@ function App() {
     void launchStarterRom();
     void connectOpenCode();
   }, []);
+
+  useEffect(() => {
+    if (!settingsOpen || modelProvider !== "openrouter") return;
+    if (modelsSource !== "fallback") return;
+
+    void refreshOpenRouterModels();
+  }, [modelProvider, modelsSource, settingsOpen]);
 
   useEffect(() => {
     if (openCode.state !== "ready" || !openCode.eventUrl) return;
@@ -506,6 +567,108 @@ function App() {
     return session.id;
   }
 
+  async function refreshOpenRouterModels() {
+    setModelsSource("loading");
+
+    try {
+      const response = await fetch(openRouterModelsUrl, {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = (await response.json()) as {
+        data?: Array<{ id?: string; name?: string }>;
+      };
+      const modelMap = new Map(
+        (payload.data ?? [])
+          .filter((model): model is { id: string; name?: string } => Boolean(model.id))
+          .map((model) => [
+            model.id,
+            {
+              id: model.id,
+              name: model.name ?? model.id,
+            },
+          ]),
+      );
+      const preferred = preferredOpenRouterModels
+        .map((id) => modelMap.get(id))
+        .filter((model): model is ModelOption => Boolean(model));
+      const fallback = Array.from(modelMap.values()).slice(0, 8);
+      const nextOptions = preferred.length > 0 ? preferred : fallback;
+
+      if (nextOptions.length > 0) {
+        setModelOptions(nextOptions);
+        if (!nextOptions.some((model) => model.id === activeModel)) {
+          setActiveModel(nextOptions[0].id);
+        }
+      }
+      setModelsSource("ready");
+    } catch {
+      setModelOptions(fallbackModelOptions);
+      setModelsSource("error");
+    }
+  }
+
+  async function testModelConnection() {
+    if (modelProvider !== "openrouter") {
+      setModelConnection({
+        state: "warning",
+        detail: "Local provider test is pending",
+      });
+      return;
+    }
+
+    const trimmedKey = openRouterKey.trim();
+    if (!trimmedKey) {
+      setModelConnection({
+        state: "missing",
+        detail: "OpenRouter key required",
+      });
+      return;
+    }
+
+    setModelConnection({
+      state: "testing",
+      detail: "Testing OpenRouter",
+    });
+
+    try {
+      const response = await fetch(openRouterKeyUrl, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${trimmedKey}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      setModelConnection({
+        state: "ready",
+        detail: "OpenRouter key accepted",
+      });
+      appendOpenCodeEvent("model.ready", shortModelLabel(activeModel));
+    } catch (error) {
+      setModelConnection({
+        state: "missing",
+        detail:
+          error instanceof Error
+            ? `OpenRouter rejected the key: ${error.message}`
+            : "OpenRouter rejected the key",
+      });
+      appendOpenCodeEvent("model.failed", "OpenRouter key test failed");
+    }
+  }
+
+  function handleOpenRouterKeyChange(value: string) {
+    setOpenRouterKey(value);
+    if (modelConnection.state === "ready" || modelConnection.state === "missing") {
+      setModelConnection({
+        state: "idle",
+        detail: "Not tested",
+      });
+    }
+  }
+
   function resetPreview() {
     setTransport("running");
     setBuildState("running");
@@ -581,7 +744,13 @@ function App() {
 
   return (
     <main className="app-shell">
-      <TopBar buildLabel={buildLabel} buildState={buildState} />
+      <TopBar
+        activeModel={activeModel}
+        buildLabel={buildLabel}
+        buildState={buildState}
+        modelProvider={modelProvider}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
       <section className="workspace" aria-label="Drive16 workspace">
         <aside className="left-pane" aria-label="Conversation and project">
@@ -599,7 +768,11 @@ function App() {
                 {healthIcon(openCode.state)}
                 <span>{openCode.state === "ready" ? "OpenCode live" : "OpenCode check"}</span>
               </div>
-              <button className="icon-button" aria-label="Agent settings">
+              <button
+                className="icon-button"
+                aria-label="Agent settings"
+                onClick={() => setSettingsOpen(true)}
+              >
                 <Settings size={18} />
               </button>
             </div>
@@ -829,6 +1002,24 @@ function App() {
           </div>
         </section>
       </section>
+      {settingsOpen ? (
+        <SettingsPanel
+          activeModel={activeModel}
+          connection={modelConnection}
+          modelOptions={modelOptions}
+          modelProvider={modelProvider}
+          modelsSource={modelsSource}
+          openRouterKey={openRouterKey}
+          showOpenRouterKey={showOpenRouterKey}
+          onClose={() => setSettingsOpen(false)}
+          onModelChange={setActiveModel}
+          onOpenRouterKeyChange={handleOpenRouterKeyChange}
+          onProviderChange={setModelProvider}
+          onRefreshModels={refreshOpenRouterModels}
+          onShowOpenRouterKeyChange={setShowOpenRouterKey}
+          onTestConnection={testModelConnection}
+        />
+      ) : null}
     </main>
   );
 }
@@ -1043,12 +1234,211 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
+function shortModelLabel(model: string) {
+  const clean = model.replace(/^~/, "");
+  const pathParts = clean.split("/");
+  const slug = pathParts[pathParts.length - 1] ?? clean;
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part: string) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
+}
+
+function connectionIcon(state: ConnectionState) {
+  if (state === "ready") return <CheckCircle2 size={15} />;
+  if (state === "missing") return <AlertCircle size={15} />;
+  if (state === "testing") return <Activity size={15} />;
+  return <Circle size={15} />;
+}
+
+function connectionLabel(state: ConnectionState) {
+  if (state === "ready") return "Connected";
+  if (state === "missing") return "Failed";
+  if (state === "testing") return "Testing";
+  if (state === "warning") return "Check";
+  return "Not tested";
+}
+
+function modelsSourceLabel(source: string) {
+  if (source === "ready") return "Models live";
+  if (source === "loading") return "Models loading";
+  if (source === "error") return "Fallback models";
+  return "Fallback models";
+}
+
+function SettingsPanel({
+  activeModel,
+  connection,
+  modelOptions,
+  modelProvider,
+  modelsSource,
+  openRouterKey,
+  showOpenRouterKey,
+  onClose,
+  onModelChange,
+  onOpenRouterKeyChange,
+  onProviderChange,
+  onRefreshModels,
+  onShowOpenRouterKeyChange,
+  onTestConnection,
+}: {
+  activeModel: string;
+  connection: ModelConnectionReport;
+  modelOptions: ModelOption[];
+  modelProvider: ModelProvider;
+  modelsSource: string;
+  openRouterKey: string;
+  showOpenRouterKey: boolean;
+  onClose: () => void;
+  onModelChange: (value: string) => void;
+  onOpenRouterKeyChange: (value: string) => void;
+  onProviderChange: (value: ModelProvider) => void;
+  onRefreshModels: () => void;
+  onShowOpenRouterKeyChange: (value: boolean) => void;
+  onTestConnection: () => void;
+}) {
+  const testing = connection.state === "testing";
+
+  return (
+    <div className="settings-backdrop">
+      <section
+        aria-label="Agent settings"
+        aria-modal="true"
+        className="settings-panel"
+        role="dialog"
+      >
+        <div className="settings-header">
+          <div>
+            <p className="label">Settings</p>
+            <h2>Agent Settings</h2>
+          </div>
+          <button className="icon-button" type="button" aria-label="Close settings" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="settings-body">
+          <section className="settings-section" aria-label="Model provider">
+            <SectionTitle icon={<Settings size={16} />} title="Provider" />
+            <div className="segmented-control" role="group" aria-label="Model provider">
+              <button
+                className={modelProvider === "openrouter" ? "active" : ""}
+                type="button"
+                onClick={() => onProviderChange("openrouter")}
+              >
+                OpenRouter
+              </button>
+              <button
+                className={modelProvider === "ollama" ? "active" : ""}
+                type="button"
+                onClick={() => onProviderChange("ollama")}
+              >
+                Ollama
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-section" aria-label="OpenRouter settings">
+            <div className="settings-section-title">
+              <SectionTitle icon={<KeyRound size={16} />} title="OpenRouter" />
+              <button
+                className="refresh-health"
+                type="button"
+                aria-label="Refresh OpenRouter models"
+                onClick={onRefreshModels}
+                disabled={modelsSource === "loading"}
+              >
+                <RefreshCcw size={14} />
+              </button>
+            </div>
+
+            <label className="field-row">
+              <span>Model</span>
+              <select
+                aria-label="OpenRouter model"
+                value={activeModel}
+                onChange={(event) => onModelChange(event.target.value)}
+                disabled={modelProvider !== "openrouter"}
+              >
+                {modelOptions.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field-row">
+              <span>API key</span>
+              <div className="secret-field">
+                <input
+                  aria-label="OpenRouter API key"
+                  autoComplete="off"
+                  disabled={modelProvider !== "openrouter"}
+                  onChange={(event) => onOpenRouterKeyChange(event.target.value)}
+                  spellCheck={false}
+                  type={showOpenRouterKey ? "text" : "password"}
+                  value={openRouterKey}
+                />
+                <button
+                  aria-label={showOpenRouterKey ? "Hide OpenRouter key" : "Show OpenRouter key"}
+                  disabled={!openRouterKey}
+                  onClick={() => onShowOpenRouterKeyChange(!showOpenRouterKey)}
+                  type="button"
+                >
+                  {showOpenRouterKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </label>
+
+            <div
+              className={`connection-summary ${connection.state}`}
+              data-testid="model-connection-status"
+            >
+              {connectionIcon(connection.state)}
+              <span>{connectionLabel(connection.state)}</span>
+              <small>{connection.detail}</small>
+            </div>
+
+            <div className="settings-meta">
+              <span>{modelsSourceLabel(modelsSource)}</span>
+              <strong>{shortModelLabel(activeModel)}</strong>
+            </div>
+          </section>
+        </div>
+
+        <div className="settings-footer">
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+          <button
+            className="primary-action"
+            type="button"
+            onClick={onTestConnection}
+            disabled={testing}
+          >
+            <ShieldCheck size={16} />
+            {testing ? "Testing" : "Test connection"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function TopBar({
+  activeModel,
   buildLabel,
   buildState,
+  modelProvider,
+  onOpenSettings,
 }: {
+  activeModel: string;
   buildLabel: string;
   buildState: BuildState;
+  modelProvider: ModelProvider;
+  onOpenSettings: () => void;
 }) {
   return (
     <header className="top-bar">
@@ -1065,9 +1455,14 @@ function TopBar({
           <Square size={10} />
           {buildLabel}
         </span>
-        <button className="model-select" type="button">
+        <button
+          className="model-select"
+          type="button"
+          aria-label="Open model settings"
+          onClick={onOpenSettings}
+        >
           <KeyRound size={16} />
-          OpenRouter Claude Sonnet
+          {modelProvider === "openrouter" ? shortModelLabel(activeModel) : "Ollama"}
         </button>
       </div>
 

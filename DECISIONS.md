@@ -1,5 +1,28 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 3 model settings keep BYOK keys ephemeral
+
+Context:
+
+Phase 3 needs provider choice, OpenRouter key entry, model selection, and a
+connection test before the app drives the full prompt through OpenCode. The
+architecture requires BYOK or local model access and forbids subscription relay
+or secrets in the repo.
+
+Decision:
+
+Store the OpenRouter key only in frontend runtime state for this settings
+slice. Test it directly against OpenRouter's key endpoint from the webview,
+using the documented bearer-token flow and CORS-supported endpoint. Do not
+write the key to project files, local storage, OpenCode config, or docs.
+
+Consequence:
+
+The app can prove that a pasted OpenRouter key is accepted and that a model is
+selected without introducing secret persistence. Later app prompt wiring still
+needs a deliberate runtime handoff from settings to OpenCode so live model
+replies can run without committing credentials.
+
 ## 2026-06-29 - Phase 3 OpenCode bridge starts with no-reply messages
 
 Context:

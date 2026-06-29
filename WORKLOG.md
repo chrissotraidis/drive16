@@ -1,5 +1,60 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 30 - Model settings connection test
+
+Plan:
+
+- Task: add settings for model provider, OpenRouter key entry, model selector,
+  and connection test.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase3-model-settings.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: confirm the OpenRouter key endpoint supports local preview
+  CORS, build the frontend, test the settings dialog and OpenRouter key check
+  in the in-app Browser, verify mobile layout, scan for the pasted key, and run
+  the Tauri debug build.
+
+Did:
+
+- Added an `Agent Settings` drawer opened from the top model button or the
+  left-pane gear.
+- Added provider controls for OpenRouter and Ollama.
+- Loaded OpenRouter model options from the live model list endpoint, with a
+  small fallback list.
+- Added a password-masked OpenRouter key field that stays only in React state.
+- Added `Test connection`, which calls OpenRouter's key endpoint and renders a
+  safe connected or failed status without printing the key.
+
+Evidence:
+
+- OpenRouter `OPTIONS https://openrouter.ai/api/v1/key` from the local preview
+  origin returned `HTTP/2 204` with `access-control-allow-origin: *`.
+- `pnpm --dir app build` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with five
+  non-ignored tests and one ignored sidecar test.
+- Browser validation at `http://127.0.0.1:1420/` opened the settings dialog,
+  loaded six OpenRouter model options, selected the current Sonnet alias, and
+  kept browser console warnings and errors empty.
+- Browser connection test with the provided OpenRouter key returned
+  `Connected` and `OpenRouter key accepted`; the key input remained masked and
+  the event feed recorded `model.ready`.
+- Mobile browser viewport `390` by `844` reopened settings after reload with
+  runtime key length `0`, no horizontal overflow, and no console warnings or
+  errors.
+- Browser screenshots were saved to:
+  `artifacts/phase3/model-settings/browser-connected.png` and
+  `artifacts/phase3/model-settings/browser-mobile.png`.
+
+Gate:
+
+None.
+
+Next:
+
+- Add project management and export-ROM wiring.
+
 ## 2026-06-29 - ITERATION 29 - OpenCode HTTP/SSE bridge
 
 Plan:
