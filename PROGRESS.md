@@ -81,7 +81,9 @@ Request human sign-off for the Phase 3 gate.
 
 ## Phase 3 Gate Evidence
 
-Evidence packet: `docs/phase3-v1-prompt.md`.
+Evidence packet: `docs/phase3-evidence.md`.
+
+Core prompt proof: `docs/phase3-v1-prompt.md`.
 
 - [x] App loads with the blank starter ROM state in the right pane.
 - [x] Chat request path accepts the v1 prompt.

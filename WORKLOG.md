@@ -1,5 +1,47 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 33 - Phase 3 gate evidence packet
+
+Plan:
+
+- Task: consolidate the Phase 3 gate evidence into one review packet for
+  human sign-off.
+- Files: `docs/phase3-evidence.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: check the evidence against the Phase 3 exit criterion, run
+  Markdown style checks for forbidden punctuation, scan for pasted secrets, and
+  run `git diff --check`.
+
+Did:
+
+- Added `docs/phase3-evidence.md`, mapping every Phase 3 exit requirement to
+  the exact proof document, command result, browser check, and artifact path
+  already captured.
+- Updated `PROGRESS.md` so the Phase 3 gate points to the consolidated packet
+  while preserving `docs/phase3-v1-prompt.md` as the core prompt proof.
+- Kept the caveat explicit: the v1 prompt command prefers the existing Phase 2
+  agent-produced CORE project when present, with a committed fixture fallback.
+
+Evidence:
+
+- Reviewed the Phase 3 architecture exit criterion and current progress ledger.
+- Verified the gate packet references the recorded Phase 3 proof set:
+  app shell, preflight, starter ROM, framebuffer, OpenCode bridge, model
+  settings, project export, and v1 prompt proof.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+- Local app preview at `http://127.0.0.1:1420/` returned `HTTP 200`, and
+  OpenCode health at `http://127.0.0.1:4096/global/health` returned healthy.
+
+Gate:
+
+Phase 3 gate remains reached. Human sign-off is required before advancing to
+Phase 4.
+
+Next:
+
+- Request human sign-off for Phase 3.
+
 ## 2026-06-29 - ITERATION 32 - V1 prompt app proof
 
 Plan:
