@@ -13,6 +13,10 @@ Toolchain and validation scripts live here.
   stream records emitted by the Phase 0 Genteel patch.
 - `validate-emulator-audio-mcp.py`: verifies the emulator MCP can dump and
   inspect non-silent WAV audio from the Phase 2 CORE asset ROM.
+- `comfyui-mcp.sh`: launches the external MIT `comfyui-mcp` stdio server from
+  ignored artifacts for the Phase 4 AI sprite path.
+- `validate-comfyui-mcp-wrapper.py`: verifies the `comfyui-mcp` wrapper can
+  initialize and expose the expected ComfyUI tools.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.

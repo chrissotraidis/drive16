@@ -1,5 +1,53 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 36 - ComfyUI MCP wrapper
+
+Plan:
+
+- Task: wrap ComfyUI through `comfyui-mcp` as an optional OpenCode MCP server.
+- Files: `scripts/comfyui-mcp.sh`,
+  `scripts/validate-comfyui-mcp-wrapper.py`, `opencode.json`,
+  `scripts/validate-opencode-config.py`, `mcp-servers/README.md`,
+  `scripts/README.md`, `docs/phase4-comfyui-mcp.md`, `PROGRESS.md`,
+  `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: npm package metadata check, wrapper MCP handshake, OpenCode
+  config validation, secret scan, Markdown punctuation check, and
+  `git diff --check`.
+
+Did:
+
+- Added a `comfyui-mcp` launcher that installs the external MIT package into
+  ignored Phase 4 artifacts and runs it with Node.js 22 or newer.
+- Added `drive16-comfyui` to `opencode.json`.
+- Added a validator that initializes the wrapper over stdio and verifies the
+  expected ComfyUI tools are exposed.
+- Updated OpenCode config validation so the new MCP server is part of project
+  truth.
+
+Evidence:
+
+- `npm view comfyui-mcp@0.21.0 name version license bin engines --json` reported
+  package `comfyui-mcp`, version `0.21.0`, license `MIT`, binary
+  `comfyui-mcp`, and Node.js requirement `>=22.0.0`.
+- `scripts/validate-comfyui-mcp-wrapper.py` passed and reported
+  `ComfyUI MCP wrapper ok: 113 tools`.
+- The wrapper exposed `enqueue_workflow`, `generate_image`, and
+  `get_system_stats`.
+- `python3 scripts/validate-opencode-config.py` passed OpenCode config
+  validation and still reported the existing model-credential validation
+  request before full agent-loop runs.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Ship the tuned Genesis palette ComfyUI workflow.
+
 ## 2026-06-30 - ITERATION 35 - ComfyUI endpoint health check
 
 Plan:

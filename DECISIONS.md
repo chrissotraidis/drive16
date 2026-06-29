@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ComfyUI MCP wrapper uses the external MIT package
+
+Context:
+
+Phase 4 calls for wrapping ComfyUI via `comfyui-mcp`. The npm package
+`comfyui-mcp` is MIT licensed, runs as a standalone stdio MCP process, and
+requires Node.js 22 or newer. Drive16 must keep the ComfyUI path optional and
+separate from the Tauri app.
+
+Decision:
+
+Configure OpenCode with a `drive16-comfyui` local MCP server that launches
+`scripts/comfyui-mcp.sh`. The launcher installs `comfyui-mcp@0.21.0` into
+ignored Phase 4 artifacts, uses a Node 22 or newer runtime, defaults to local
+`COMFYUI_URL=http://127.0.0.1:8188`, and keeps downloaded cache data under
+ignored artifacts.
+
+Consequence:
+
+The agent can discover and call ComfyUI tools through MCP without vendoring or
+linking ComfyUI into Drive16. The wrapper is present even when no local ComfyUI
+server is running, and actual sprite generation stays behind later workflow and
+asset-validation units.
+
 ## 2026-06-30 - ComfyUI health probing is native and local-only
 
 Context:

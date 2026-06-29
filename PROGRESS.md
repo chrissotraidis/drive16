@@ -12,7 +12,7 @@ still builds a working ROM.
 - [x] Add default-off enhancement toggles so the CORE path remains independent.
 - [x] Add ComfyUI endpoint configuration and health probing behind the AI
   sprites toggle.
-- [ ] Wrap ComfyUI via `comfyui-mcp`.
+- [x] Wrap ComfyUI via `comfyui-mcp`.
 - [ ] Ship the tuned Genesis palette ComfyUI workflow.
 - [ ] Validate generated sprites as palette-legal SGDK SPRITE resources.
 - [ ] Wrap ctrmml as the MML music MCP server.
@@ -23,12 +23,11 @@ still builds a working ROM.
 
 ## Current Task
 
-ComfyUI endpoint configuration and health probing are wired behind the AI
-sprites toggle.
+OpenCode is configured with the optional `drive16-comfyui` MCP wrapper.
 
 ## Next Up
 
-Wrap ComfyUI via `comfyui-mcp`.
+Ship the tuned Genesis palette ComfyUI workflow.
 
 ## Completed Phase 4 Work
 
@@ -40,6 +39,10 @@ Wrap ComfyUI via `comfyui-mcp`.
   toggle.
 - [x] Phase 4 ComfyUI endpoint evidence recorded in
   `docs/phase4-comfyui-endpoint.md`.
+- [x] Optional `drive16-comfyui` MCP server configured through
+  `scripts/comfyui-mcp.sh`.
+- [x] Phase 4 ComfyUI MCP wrapper evidence recorded in
+  `docs/phase4-comfyui-mcp.md`.
 
 ## Completed Phase 3 Work
 

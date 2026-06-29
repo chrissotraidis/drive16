@@ -13,7 +13,12 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_MCP = {"drive16-sgdk-build", "drive16-emulator", "drive16-rag"}
+EXPECTED_MCP = {
+    "drive16-sgdk-build",
+    "drive16-emulator",
+    "drive16-rag",
+    "drive16-comfyui",
+}
 
 
 def run(command: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
