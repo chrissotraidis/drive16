@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Pin buildable Genteel revision for Phase 0
+
+Context:
+
+Genteel is the Phase 0 emulator target. The observed current `main` commit
+`bd4fc05b2020a6889b323815f22ae577c70e52fa` exposes the expected headless
+screenshot CLI but did not compile locally because `src/main.rs` references a
+missing audio helper.
+
+Decision:
+
+For Phase 0 validation, build Genteel from commit
+`8043061f50782d6066cd39925f0f808f06d665ea`, which preserves the documented
+`--headless <frames> --screenshot <path>` CLI and builds successfully on this
+machine with Rust 1.96.0.
+
+Consequence:
+
+The known-good homebrew screenshot and accuracy check can run locally now. This
+does not close the live-framebuffer requirement, and it should be revisited
+before Phase 1 if upstream `main` remains unbuildable.
+
 ## 2026-06-29 - Genteel CLI source for Phase 0 scripts
 
 Context:

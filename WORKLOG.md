@@ -1,5 +1,76 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 6 - Buildable Genteel pin and screenshot proof
+
+Plan:
+
+- Task: make Genteel validation reproducible locally and close only the
+  known-good screenshot/accuracy part of Phase 0.
+- Files: `scripts/build-genteel.sh`, `scripts/README.md`,
+  `docs/phase0-validation.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: build pinned Genteel from source with a temporary Rust toolchain
+  under ignored `artifacts/`, run the pinned known-good SGDK ROM through it,
+  inspect the screenshot, syntax-check scripts, and run `git diff --check`.
+
+Did:
+
+- Cloned Genteel into ignored `artifacts/phase0/genteel-src`.
+- Installed Rust 1.96.0 into ignored `artifacts/phase0/rustup` and
+  `artifacts/phase0/cargo`, leaving the global Rust 1.74.0 untouched.
+- Confirmed Genteel current `main` at
+  `bd4fc05b2020a6889b323815f22ae577c70e52fa` fails to compile locally because
+  `src/main.rs` references missing `audio::samples_per_frame_for_rate_and_region`.
+- Built Genteel successfully from commit
+  `8043061f50782d6066cd39925f0f808f06d665ea`.
+- Added `scripts/build-genteel.sh` to reproduce that pinned source build.
+- Ran the pinned known-good SGDK hello-world ROM through the built Genteel
+  binary and captured a screenshot.
+
+Evidence:
+
+- `scripts/build-genteel.sh` produced
+  `artifacts/phase0/genteel-src/target/release/genteel`.
+- `GENTEEL_BIN="$PWD/artifacts/phase0/genteel-src/target/release/genteel"
+  scripts/validate-known-good-homebrew.sh` passed.
+- Genteel output reported `Running 180 frames headless`, saved
+  `artifacts/phase0/known-good-homebrew.png`, and completed at about 622 fps.
+- `file artifacts/phase0/known-good-homebrew.png` reported a 320 x 240 PNG.
+- Visual inspection confirmed the screenshot shows `Hello world !` near screen
+  center.
+- `GENTEEL_BIN="$(scripts/build-genteel.sh)"
+  scripts/validate-known-good-homebrew.sh` passed.
+- `bash -n scripts/build-genteel.sh`, `bash -n scripts/validate-genteel.sh`,
+  `bash -n scripts/validate-known-good-homebrew.sh`, and
+  `bash -n scripts/validate-phase0-assets.sh` passed.
+- `git diff --check` passed.
+- `scripts/build-sgdk.sh examples/sgdk-hello-world` still stops at the local
+  environment gate: "Docker is installed, but the Docker daemon is not
+  reachable."
+
+VALIDATION REQUEST:
+
+Docker validation is still open. After Docker Desktop is running, run:
+
+```sh
+export GENTEEL_BIN="$(scripts/build-genteel.sh)"
+scripts/build-sgdk.sh examples/sgdk-hello-world
+scripts/validate-genteel.sh examples/sgdk-hello-world/out/rom.bin artifacts/phase0/genteel-hello.png
+scripts/validate-phase0-assets.sh
+```
+
+Expected result:
+
+- The Drive16 hello-world ROM builds and screenshots in Genteel.
+- The Phase 0 asset ROM builds, screenshots, plays the bundled loop, and moves
+  the bundled sprite.
+
+Next:
+
+- Wait for Docker validation and live-framebuffer evidence.
+- If Genteel's live-framebuffer path is unavailable in the pinned build, record
+  the conflict before changing the emulator plan.
+
 ## 2026-06-29 - ITERATION 5 - Genteel CLI alignment
 
 Plan:

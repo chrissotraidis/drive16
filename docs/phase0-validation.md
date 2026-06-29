@@ -8,9 +8,10 @@ Phase 1 until every evidence item below is captured and recorded in
 
 - Docker Desktop is running.
 - A Genteel binary is available. The expected upstream source is
-  `https://github.com/segin/genteel`, observed at commit
-  `bd4fc05b2020a6889b323815f22ae577c70e52fa`. Build instructions in the
-  upstream README use `cargo build --release --features gui`.
+  `https://github.com/segin/genteel`. Current `main` at observed commit
+  `bd4fc05b2020a6889b323815f22ae577c70e52fa` did not compile locally on
+  2026-06-29, so Phase 0 validation is pinned to buildable commit
+  `8043061f50782d6066cd39925f0f808f06d665ea`.
 - Network access for the known-good homebrew fetch. The checked-in validator
   downloads a pinned upstream SGDK hello-world ROM into ignored `artifacts/`
   storage, verifies its SHA-256 hash, and records source/license metadata.
@@ -18,7 +19,7 @@ Phase 1 until every evidence item below is captured and recorded in
 Set the Genteel path once per shell:
 
 ```sh
-export GENTEEL_BIN=/path/to/genteel
+export GENTEEL_BIN="$(scripts/build-genteel.sh)"
 ```
 
 The checked-in validator expects the current upstream CLI shape:
@@ -96,7 +97,7 @@ Do not use commercial ROMs, disassemblies, or unlicensed downloads.
 ## 6. Confirm Live-Framebuffer Path
 
 Use the current Genteel build's documented live or debug framebuffer command.
-As of observed Genteel commit `bd4fc05b2020a6889b323815f22ae577c70e52fa`,
+As of observed Genteel commit `8043061f50782d6066cd39925f0f808f06d665ea`,
 headless screenshots and input scripts are documented, but a continuous
 framebuffer stream still needs explicit human confirmation. Record the exact
 command because the Drive16 sidecar adapter will need to match the real CLI.

@@ -3,6 +3,8 @@
 Toolchain and validation scripts live here.
 
 - `build-sgdk.sh`: builds an SGDK project with the pinned docker-sgdk image.
+- `build-genteel.sh`: clones and builds the pinned Genteel source revision into
+  ignored `artifacts/` storage for Phase 0 validation.
 - `validate-genteel.sh`: runs a ROM through a Genteel binary and captures a
   screenshot with the upstream `--headless <frames> --screenshot <path>` CLI.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
