@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Phase 3 exports write generated ROMs to ignored artifacts
+
+Context:
+
+Phase 3 needs project management and export-ROM wiring before the app can drive
+the v1 prompt end to end. The current app project is still the starter SGDK
+fixture, and generated ROM files must not enter git.
+
+Decision:
+
+Export the current starter ROM by copying it into
+`artifacts/phase3/exports/` with a timestamped filename. Keep this as the
+Phase 3 export target until the app grows a user-selected project directory or
+save/export picker.
+
+Consequence:
+
+The app has a real native export path that can be tested without committing ROM
+artifacts. Later project management work can swap the destination to a
+user-selected folder while keeping the same command contract.
+
 ## 2026-06-29 - Phase 3 model settings keep BYOK keys ephemeral
 
 Context:

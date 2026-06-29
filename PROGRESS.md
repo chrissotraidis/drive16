@@ -16,18 +16,19 @@ ROM in the right pane using bundled assets.
 - [x] Connect the left conversation pane to OpenCode HTTP/SSE.
 - [x] Add settings for model provider, OpenRouter key entry, model selector,
   and connection test.
-- [ ] Add project management and export-ROM wiring.
+- [x] Add project management and export-ROM wiring.
 - [ ] Drive the v1 prompt through the app and verify the bundled sprite and
   music ROM in the right pane.
 
 ## Current Task
 
-The model settings drawer supports provider selection, OpenRouter key entry,
-model selection, and a non-persistent OpenRouter connection test.
+The app shows starter project metadata and can export the current ROM through
+the Tauri bridge.
 
 ## Next Up
 
-Add project management and export-ROM wiring.
+Drive the v1 prompt through the app and verify the bundled sprite and music ROM
+in the right pane.
 
 ## Completed Phase 3 Work
 
@@ -67,6 +68,11 @@ Add project management and export-ROM wiring.
   model selection, and connection testing.
 - [x] Phase 3 model settings evidence recorded in
   `docs/phase3-model-settings.md`.
+- [x] Native project summary and export-ROM commands added for the starter
+  project.
+- [x] Left file panel and top-bar export action wired to project/export state.
+- [x] Phase 3 project export evidence recorded in
+  `docs/phase3-project-export.md`.
 
 ## Completed Phase 2 Gate
 

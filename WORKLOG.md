@@ -1,5 +1,61 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 31 - Project summary and ROM export
+
+Plan:
+
+- Task: add project management and export-ROM wiring for the current starter
+  project.
+- Files: `app/src-tauri/src/project.rs`, `app/src-tauri/src/main.rs`,
+  `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase3-project-export.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: focused Rust tests for project summary and export copy, full
+  Rust tests, Rust check, frontend build, Tauri debug build, browser export UI
+  check, mobile overflow check, secret scan, and `git diff --check`.
+
+Did:
+
+- Added native project summary and export-ROM commands.
+- Implemented export by copying the current starter ROM into ignored
+  `artifacts/phase3/exports/`.
+- Wired the top-bar `Export ROM` button to the export command, with a browser
+  preview fallback.
+- Replaced the static file list with project-summary file entries and file
+  status.
+- Added runtime metadata for the export directory or exported ROM byte count.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml project -- --nocapture`
+  passed with two focused project/export tests.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with seven
+  non-ignored tests and one ignored sidecar test.
+- `cargo check --manifest-path app/src-tauri/Cargo.toml` passed.
+- `pnpm --dir app build` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and built:
+  `app/src-tauri/target/debug/drive16`.
+- Browser validation at `http://127.0.0.1:1420/` found title `Drive16`,
+  `OpenCode live`, project summary `Starter Project`, export metadata, an
+  `Export ROM` action, and no console warnings or errors.
+- Browser export interaction updated runtime metadata to `0 B exported` in
+  preview mode and recorded `export.preview` in the event feed.
+- Mobile browser viewport `390` by `844` kept the project summary visible,
+  kept export metadata present, had no horizontal overflow, and had no console
+  warnings or errors.
+- Browser screenshots were saved to:
+  `artifacts/phase3/project-export/browser-after-export.png` and
+  `artifacts/phase3/project-export/browser-mobile.png`.
+
+Gate:
+
+None.
+
+Next:
+
+- Drive the v1 prompt through the app and verify the bundled sprite and music
+  ROM in the right pane.
+
 ## 2026-06-29 - ITERATION 30 - Model settings connection test
 
 Plan:

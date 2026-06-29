@@ -157,6 +157,7 @@ button {
 
 .icon-button:disabled,
 .refresh-health:disabled,
+.top-actions button:disabled,
 .settings-footer button:disabled,
 .segmented-control button:disabled,
 .secret-field button:disabled {
@@ -473,10 +474,57 @@ h3 {
   font-size: 13px;
 }
 
-.file-tree span {
+.file-tree li > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.file-tree b,
+.file-tree small,
+.project-summary strong,
+.project-summary span,
+.project-summary small {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-tree b {
+  color: #eaded1;
+  font-size: 12px;
+}
+
+.file-tree small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.file-tree li.missing b {
+  color: #ff736a;
+}
+
+.project-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin-bottom: 12px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #17110d;
+}
+
+.project-summary strong {
+  color: var(--accent-2);
+  font-size: 12px;
+}
+
+.project-summary span,
+.project-summary small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .composer {

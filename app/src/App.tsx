@@ -85,6 +85,32 @@ type StarterRomPreview = {
   framebufferFrames: FramebufferFrame[];
 };
 
+type ProjectFileEntry = {
+  label: string;
+  path: string;
+  state: HealthState;
+};
+
+type ProjectSummary = {
+  generatedAt: string;
+  name: string;
+  projectPath: string;
+  romPath: string;
+  exportDirectory: string;
+  romStatus: HealthState;
+  romDetail: string;
+  files: ProjectFileEntry[];
+};
+
+type RomExportResult = {
+  generatedAt: string;
+  status: HealthState;
+  detail: string;
+  sourceRomPath: string;
+  exportPath: string;
+  bytes: number;
+};
+
 type OpenCodeBridgeStatus = {
   generatedAt: string;
   state: HealthState;
@@ -176,13 +202,6 @@ const starterMessages: Message[] = [
   },
 ];
 
-const projectFiles = [
-  "src/main.c",
-  "res/resources.res",
-  "assets/core/player.png",
-  "assets/core/loop.vgm",
-];
-
 const previewPreflight: PreflightReport = {
   generatedAt: "preview",
   summaryState: "warning",
@@ -237,6 +256,47 @@ const previewOpenCode: OpenCodeBridgeStatus = {
   launched: false,
 };
 
+const previewProjectSummary: ProjectSummary = {
+  generatedAt: "preview",
+  name: "Starter Project",
+  projectPath: "examples/app-starter-blank",
+  romPath: "examples/app-starter-blank/out/rom.bin",
+  exportDirectory: "artifacts/phase3/exports",
+  romStatus: "warning",
+  romDetail: "Native project summary runs inside the Tauri app",
+  files: [
+    {
+      label: "Main C",
+      path: "examples/app-starter-blank/src/main.c",
+      state: "ready",
+    },
+    {
+      label: "Resources",
+      path: "examples/app-starter-blank/res/resources.res",
+      state: "ready",
+    },
+    {
+      label: "Bundled sprite",
+      path: "assets/core/player.png",
+      state: "ready",
+    },
+    {
+      label: "Bundled loop",
+      path: "assets/core/loop.vgm",
+      state: "ready",
+    },
+  ],
+};
+
+const previewExportResult: RomExportResult = {
+  generatedAt: "preview",
+  status: "warning",
+  detail: "Export runs inside the Tauri app",
+  sourceRomPath: "examples/app-starter-blank/out/rom.bin",
+  exportPath: "artifacts/phase3/exports/drive16-starter-preview.bin",
+  bytes: 0,
+};
+
 function App() {
   const [messages, setMessages] = useState<Message[]>(starterMessages);
   const [draft, setDraft] = useState("");
@@ -248,6 +308,11 @@ function App() {
   const [starterRom, setStarterRom] = useState<StarterRomPreview>(previewStarterRom);
   const [starterSource, setStarterSource] = useState("checking");
   const [starterBusy, setStarterBusy] = useState(true);
+  const [projectSummary, setProjectSummary] =
+    useState<ProjectSummary>(previewProjectSummary);
+  const [projectSource, setProjectSource] = useState("checking");
+  const [exportResult, setExportResult] = useState<RomExportResult | undefined>();
+  const [exportBusy, setExportBusy] = useState(false);
   const [openCode, setOpenCode] = useState<OpenCodeBridgeStatus>(previewOpenCode);
   const [openCodeSource, setOpenCodeSource] = useState("checking");
   const [openCodeSessionId, setOpenCodeSessionId] = useState<string | undefined>();
@@ -271,6 +336,7 @@ function App() {
     void refreshPreflight();
     void launchStarterRom();
     void connectOpenCode();
+    void loadProjectSummary();
   }, []);
 
   useEffect(() => {
@@ -567,6 +633,62 @@ function App() {
     return session.id;
   }
 
+  async function loadProjectSummary() {
+    setProjectSource("checking");
+
+    if (!isTauriRuntime()) {
+      setProjectSummary(previewProjectSummary);
+      setProjectSource("preview");
+      return;
+    }
+
+    try {
+      const summary = await invoke<ProjectSummary>("load_project_summary");
+      setProjectSummary(summary);
+      setProjectSource("tauri");
+    } catch (error) {
+      setProjectSummary({
+        ...previewProjectSummary,
+        romStatus: "warning",
+        romDetail:
+          error instanceof Error
+            ? error.message
+            : "Native project summary was not available",
+        generatedAt: "error",
+      });
+      setProjectSource("error");
+    }
+  }
+
+  async function exportRom() {
+    setExportBusy(true);
+
+    if (!isTauriRuntime()) {
+      setExportResult(previewExportResult);
+      appendOpenCodeEvent("export.preview", previewExportResult.exportPath);
+      setExportBusy(false);
+      return;
+    }
+
+    try {
+      const result = await invoke<RomExportResult>("export_current_rom");
+      setExportResult(result);
+      appendOpenCodeEvent("export.ready", result.exportPath);
+      void loadProjectSummary();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "ROM export failed";
+      setExportResult({
+        ...previewExportResult,
+        status: "missing",
+        detail,
+        generatedAt: "error",
+      });
+      appendOpenCodeEvent("export.failed", detail);
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   async function refreshOpenRouterModels() {
     setModelsSource("loading");
 
@@ -748,7 +870,9 @@ function App() {
         activeModel={activeModel}
         buildLabel={buildLabel}
         buildState={buildState}
+        exportBusy={exportBusy}
         modelProvider={modelProvider}
+        onExportRom={exportRom}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
@@ -834,11 +958,21 @@ function App() {
 
             <section className="file-tree" aria-label="Project files">
               <SectionTitle icon={<FolderTree size={16} />} title="Files" />
+              <div className="project-summary" data-testid="project-summary">
+                <strong>{projectSummary.name}</strong>
+                <span title={projectSummary.projectPath}>
+                  {shortPath(projectSummary.projectPath)}
+                </span>
+                <small>{sourceLabel(projectSource, "Native project")}</small>
+              </div>
               <ul>
-                {projectFiles.map((file) => (
-                  <li key={file}>
+                {projectSummary.files.map((file) => (
+                  <li className={file.state} key={file.path}>
                     <Code2 size={14} />
-                    <span>{file}</span>
+                    <span>
+                      <b>{file.label}</b>
+                      <small title={file.path}>{shortPath(file.path)}</small>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -950,7 +1084,7 @@ function App() {
               </div>
               <div className="rom-metadata">
                 <span>ROM</span>
-                <strong title={starterRom.romPath}>{shortPath(starterRom.romPath)}</strong>
+                <strong title={projectSummary.romPath}>{shortPath(projectSummary.romPath)}</strong>
                 <span>Frame</span>
                 <strong>{starterRom.frames} frames</strong>
                 <span>Stream</span>
@@ -964,6 +1098,12 @@ function App() {
                   {starterRom.framebufferFrames.length > 0
                     ? `${starterRom.frameWidth}x${starterRom.frameHeight}`
                     : "Pending"}
+                </strong>
+                <span>Export</span>
+                <strong title={exportResult?.exportPath ?? projectSummary.exportDirectory}>
+                  {exportResult
+                    ? `${formatBytes(exportResult.bytes)} exported`
+                    : shortPath(projectSummary.exportDirectory)}
                 </strong>
               </div>
             </section>
@@ -1080,6 +1220,12 @@ function shortPath(path: string) {
 function shortIdentifier(value: string) {
   if (value.length <= 16) return value;
   return `${value.slice(0, 8)}...${value.slice(-4)}`;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function healthIcon(state: HealthState) {
@@ -1431,13 +1577,17 @@ function TopBar({
   activeModel,
   buildLabel,
   buildState,
+  exportBusy,
   modelProvider,
+  onExportRom,
   onOpenSettings,
 }: {
   activeModel: string;
   buildLabel: string;
   buildState: BuildState;
+  exportBusy: boolean;
   modelProvider: ModelProvider;
+  onExportRom: () => void;
   onOpenSettings: () => void;
 }) {
   return (
@@ -1471,9 +1621,9 @@ function TopBar({
           <Play size={16} />
           Run
         </button>
-        <button type="button">
+        <button type="button" onClick={onExportRom} disabled={exportBusy}>
           <Download size={16} />
-          Export ROM
+          {exportBusy ? "Exporting" : "Export ROM"}
         </button>
       </nav>
     </header>

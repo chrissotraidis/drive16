@@ -1,5 +1,6 @@
 mod opencode;
 mod preflight;
+mod project;
 mod starter_rom;
 
 #[tauri::command]
@@ -39,13 +40,27 @@ async fn send_opencode_message(
         .map_err(|error| format!("OpenCode message task failed: {}", error))?
 }
 
+#[tauri::command]
+fn load_project_summary() -> project::ProjectSummary {
+    project::load_project_summary()
+}
+
+#[tauri::command]
+async fn export_current_rom() -> Result<project::RomExportResult, String> {
+    tauri::async_runtime::spawn_blocking(project::export_current_rom)
+        .await
+        .map_err(|error| format!("ROM export task failed: {}", error))?
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             run_preflight,
             launch_starter_rom,
             connect_opencode,
-            send_opencode_message
+            send_opencode_message,
+            load_project_summary,
+            export_current_rom
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Drive16");
