@@ -1,5 +1,54 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 9 - Genteel RGB565 frame stream proof
+
+Plan:
+
+- Task: prove the Phase 0 live-framebuffer path with the smallest local Genteel
+  adapter that does not vendor or link emulator code into Drive16.
+- Files: `patches/genteel/phase0-frame-stream.patch`,
+  `scripts/build-genteel.sh`, `scripts/validate-frame-stream.py`,
+  `scripts/validate-genteel-frame-stream.sh`, `scripts/README.md`,
+  `docs/phase0-validation.md`, `DECISIONS.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- Verification: apply the patch through `scripts/build-genteel.sh`, build
+  Genteel, build the Phase 0 asset ROM, run it headlessly while streaming
+  frames, parse the raw stream records, inspect the screenshot cross-check, run
+  script syntax checks, and run `git diff --check`.
+
+Did:
+
+- Added a Drive16-owned patch for pinned Genteel commit
+  `8043061f50782d6066cd39925f0f808f06d665ea`.
+- Patched Genteel adds `--stream-frames <file>` and `--stream-every <n>`.
+- Added `scripts/validate-frame-stream.py` to parse and validate the raw
+  `D16F` RGB565 stream records.
+- Added `scripts/validate-genteel-frame-stream.sh` to build the patched Genteel
+  binary, build the Phase 0 asset ROM, stream frames, and validate the stream.
+- Updated the Phase 0 runbook with the frame-stream validation command.
+
+Evidence:
+
+- `scripts/build-genteel.sh` built the patched Genteel binary successfully.
+- `scripts/validate-genteel-frame-stream.sh` built
+  `examples/phase0-assets/out/rom.bin`, ran it for 180 frames, wrote
+  `artifacts/phase0/phase0-assets.frames`, and saved
+  `artifacts/phase0/phase0-stream-proof.png`.
+- `scripts/validate-frame-stream.py` reported:
+  `Frame stream ok: 6 frames, indices 0..150, nonzero pixels 5364`.
+- Visual inspection of `artifacts/phase0/phase0-stream-proof.png` shows the
+  Phase 0 text and bundled sprite.
+
+Gate:
+
+Phase 0 exit criterion is now evidenced. Do not start Phase 1 until the human
+confirms Phase 0 is complete.
+
+Next:
+
+- Request Phase 0 sign-off.
+- After sign-off, begin Phase 1 with the SGDK build MCP server wrapper.
+
 ## 2026-06-29 - ITERATION 8 - Live-framebuffer gate
 
 Plan:

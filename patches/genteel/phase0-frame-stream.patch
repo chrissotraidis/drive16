@@ -1,0 +1,138 @@
+diff --git a/src/main.rs b/src/main.rs
+index c750523..d531be5 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -959,6 +959,8 @@ impl Emulator {
+         frames: Option<u32>,
+         screenshot_path: Option<String>,
+         record_path: Option<String>,
++        frame_stream_path: Option<String>,
++        frame_stream_every: u32,
+     ) {
+         match frames {
+             Some(n) => println!("Running {} frames headless...", n),
+@@ -970,6 +972,21 @@ impl Emulator {
+             self.input.start_recording();
+         }
+
++        let mut frame_stream = match frame_stream_path.as_ref() {
++            Some(path) => match std::fs::File::create(path) {
++                Ok(file) => {
++                    println!("Streaming RGB565 frames to: {}", path);
++                    Some(file)
++                }
++                Err(e) => {
++                    eprintln!("Failed to create frame stream {}: {}", path, e);
++                    None
++                }
++            },
++            None => None,
++        };
++        let frame_stream_every = frame_stream_every.max(1);
++
+         let start_time = std::time::Instant::now();
+         let mut current = 0;
+         loop {
+@@ -983,6 +1000,14 @@ impl Emulator {
+             }
+
+             self.step_frame(None);
++            if let Some(file) = frame_stream.as_mut() {
++                if current % frame_stream_every == 0 {
++                    if let Err(e) = self.write_frame_stream_record(file, current as u64) {
++                        eprintln!("Failed to write frame stream record: {}", e);
++                        frame_stream = None;
++                    }
++                }
++            }
+             // Clear audio buffer in headless mode to prevent memory leak
+             self.audio_buffer.clear();
+             current += 1;
+@@ -1018,6 +1043,28 @@ impl Emulator {
+         );
+     }
+
++    fn write_frame_stream_record(
++        &self,
++        file: &mut std::fs::File,
++        frame_index: u64,
++    ) -> std::io::Result<()> {
++        use std::io::Write;
++
++        let bus = self.bus.borrow();
++        let fb = &bus.vdp.framebuffer;
++        file.write_all(b"D16F")?;
++        file.write_all(&1u16.to_le_bytes())?;
++        file.write_all(&320u16.to_le_bytes())?;
++        file.write_all(&240u16.to_le_bytes())?;
++        file.write_all(&565u16.to_le_bytes())?;
++        file.write_all(&frame_index.to_le_bytes())?;
++        file.write_all(&((fb.len() * 2) as u32).to_le_bytes())?;
++        for &pixel in fb {
++            file.write_all(&pixel.to_le_bytes())?;
++        }
++        Ok(())
++    }
++
+     pub fn save_screenshot(&self, path: &str) -> Result<(), String> {
+         let bus = self.bus.borrow();
+         let fb = &bus.vdp.framebuffer;
+@@ -1253,6 +1300,8 @@ fn print_usage() {
+     println!("  --gdb-password <pass>  Set password for GDB server authentication");
+     println!("  --gdb-password-file <path> Read GDB password from a file");
+     println!("  --dump-audio <file> Dump audio output to WAV file");
++    println!("  --stream-frames <file> Stream RGB565 frames to a binary file");
++    println!("  --stream-every <n> Write one streamed frame every N frames (default: 1)");
+     println!(
+         "  --input-mapping <type> Set keyboard mapping (original|ergonomic, default: original)"
+     );
+@@ -1302,6 +1351,8 @@ struct Config {
+     gdb_password: Option<String>,
+     dump_audio_path: Option<String>,
+     record_path: Option<String>,
++    frame_stream_path: Option<String>,
++    frame_stream_every: u32,
+     input_mapping: InputMapping,
+     debug: bool,
+     show_help: bool,
+@@ -1311,7 +1362,10 @@ impl Config {
+     where
+         I: IntoIterator<Item = String>,
+     {
+-        let mut config = Config::default();
++        let mut config = Config {
++            frame_stream_every: 1,
++            ..Config::default()
++        };
+         let mut iter = args.into_iter().skip(1);
+         let mut current_opt = iter.next();
+         while let Some(arg) = current_opt {
+@@ -1374,6 +1428,19 @@ impl Config {
+                     config.dump_audio_path = iter.next();
+                     current_opt = iter.next();
+                 }
++                "--stream-frames" => {
++                    config.frame_stream_path = iter.next();
++                    current_opt = iter.next();
++                }
++                "--stream-every" => {
++                    if let Some(value) = iter.next() {
++                        match value.parse::<u32>() {
++                            Ok(n) if n > 0 => config.frame_stream_every = n,
++                            _ => eprintln!("Invalid --stream-every value: {}", value),
++                        }
++                    }
++                    current_opt = iter.next();
++                }
+                 "--input-mapping" => {
+                     if let Some(mapping_str) = iter.next() {
+                         match mapping_str.to_lowercase().as_str() {
+@@ -1484,6 +1551,8 @@ fn main() {
+             config.headless_frames,
+             config.screenshot_path,
+             config.record_path,
++            config.frame_stream_path,
++            config.frame_stream_every,
+         );
+     } else {
+         // Interactive mode with SDL2 window

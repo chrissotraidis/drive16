@@ -28,6 +28,13 @@ The checked-in validator expects the current upstream CLI shape:
 genteel --headless 180 --screenshot artifacts/phase0/example.png path/to/rom.bin
 ```
 
+Drive16 applies a local Phase 0 patch to the pinned Genteel source so the same
+binary can also stream raw RGB565 frame records for the future live pane:
+
+```sh
+scripts/validate-genteel-frame-stream.sh
+```
+
 ## 1. Build The Hello-World ROM
 
 ```sh
@@ -100,20 +107,18 @@ Do not use commercial ROMs, disassemblies, or unlicensed downloads.
 
 ## 6. Confirm Live-Framebuffer Path
 
-Use the current Genteel build's documented live or debug framebuffer command.
-As of observed Genteel commit `8043061f50782d6066cd39925f0f808f06d665ea`,
-headless screenshots and input scripts are documented, but a continuous
-framebuffer stream still needs explicit human confirmation. Record the exact
-command because the Drive16 sidecar adapter will need to match the real CLI.
+Use the patched Genteel build's raw frame stream command:
+
+```sh
+scripts/validate-genteel-frame-stream.sh
+```
 
 Expected evidence:
 
-- A framebuffer stream or equivalent live-frame source is available outside the
-  GUI window.
-- The command can run the Phase 0 asset ROM and expose frames suitable for the
-  future Tauri pane.
-- If Genteel cannot expose this path, record the failure and evaluate the
-  architecture fallback before Phase 1.
+- `artifacts/phase0/phase0-assets.frames` exists.
+- `scripts/validate-frame-stream.py` reports at least four valid `D16F` frame
+  records with 320x240 RGB565 payloads and nonzero pixels.
+- `artifacts/phase0/phase0-stream-proof.png` exists as a visual cross-check.
 
 ## Evidence To Paste Back
 

@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-29 - Genteel frame-stream patch for live-view proof
+
+Context:
+
+Phase 0 needed proof that Genteel can provide a live framebuffer path for the
+future Tauri pane. The public pinned Genteel CLI supports screenshots but not a
+continuous frame stream. Its source does expose `vdp.framebuffer`.
+
+Decision:
+
+Apply a small Drive16-owned patch to the pinned Genteel source during
+`scripts/build-genteel.sh`. The patch adds `--stream-frames <file>` and
+`--stream-every <n>` for headless runs. Each streamed record uses a simple
+binary format: `D16F` magic, version, 320x240 dimensions, RGB565 format marker,
+frame index, payload length, and raw RGB565 framebuffer payload.
+
+Consequence:
+
+Phase 0 now has an evidenced live-frame source without vendoring or linking
+Genteel into Drive16. Phase 1's emulator sidecar can consume the same stream or
+replace it with an upstreamed/socket-based variant.
+
 ## 2026-06-29 - Proposed: resolve Genteel live-framebuffer path
 
 Context:

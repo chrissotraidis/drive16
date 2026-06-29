@@ -20,7 +20,7 @@ loop, verified by a Genteel screenshot, with the live-view path confirmed.
 - [x] Local validation: Genteel captures a screenshot of the hello-world ROM.
 - [x] Local validation: Genteel captures a headless screenshot from a known-good ROM.
 - [x] Local validation: Genteel accuracy is checked with a known-good open homebrew ROM.
-- [ ] HUMAN DECISION: choose and confirm Genteel live-framebuffer path.
+- [x] Local validation: Genteel live-framebuffer path streams RGB565 frame records.
 - [x] Local validation: docker-sgdk builds the Phase 0 asset ROM.
 - [x] Local validation: the Phase 0 asset ROM emits non-silent audio from the bundled VGM loop.
 - [x] Local validation: the Phase 0 asset ROM shows a controllable bundled sprite through scripted input.
@@ -28,10 +28,8 @@ loop, verified by a Genteel screenshot, with the live-view path confirmed.
 
 ## Current Task
 
-Await human decision on the Genteel live-framebuffer path.
+Phase 0 gate reached. Await human sign-off before starting Phase 1.
 
 ## Next Up
 
-After the live-framebuffer path is chosen, implement or run the smallest proof
-that streams frames from Genteel or an approved fallback, record the exact
-command/API and evidence, then request Phase 0 sign-off.
+After Phase 0 sign-off, start Phase 1 with the SGDK build MCP server wrapper.

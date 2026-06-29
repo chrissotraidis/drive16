@@ -7,6 +7,10 @@ Toolchain and validation scripts live here.
   ignored `artifacts/` storage for Phase 0 validation.
 - `validate-genteel.sh`: runs a ROM through a Genteel binary and captures a
   screenshot with the upstream `--headless <frames> --screenshot <path>` CLI.
+- `validate-genteel-frame-stream.sh`: builds/runs the patched Genteel binary and
+  verifies a raw RGB565 frame stream for the Phase 0 live-view proof.
+- `validate-frame-stream.py`: parses and validates the raw `D16F` RGB565 frame
+  stream records emitted by the Phase 0 Genteel patch.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.

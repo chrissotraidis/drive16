@@ -14,6 +14,7 @@ secrets/
 .cache/
 .tmp/
 tmp/
+__pycache__/
 
 # Node, Rust, and desktop build output
 node_modules/
