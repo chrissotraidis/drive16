@@ -28,7 +28,8 @@ loop, verified by a Genteel screenshot, with the live-view path confirmed.
 
 ## Current Task
 
-Phase 0 gate reached. Await human sign-off before starting Phase 1.
+Phase 0 gate reached. Evidence packet is in `docs/phase0-evidence.md`; await
+human sign-off before starting Phase 1.
 
 ## Next Up
 

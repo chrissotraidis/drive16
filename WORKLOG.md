@@ -1,5 +1,40 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 10 - Phase 0 evidence packet
+
+Plan:
+
+- Task: package the Phase 0 gate evidence without advancing to Phase 1.
+- Files: `docs/phase0-evidence.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: re-check frame stream parsing, generated asset metadata,
+  validation script syntax, audio dump metadata, and Markdown hygiene.
+
+Did:
+
+- Added `docs/phase0-evidence.md`, mapping each Phase 0 requirement to the
+  exact command and artifact that proves it.
+- Updated `PROGRESS.md` to point at the evidence packet while keeping the Phase
+  0 gate closed pending human sign-off.
+
+Evidence:
+
+- `scripts/validate-frame-stream.py artifacts/phase0/phase0-assets.frames
+  --min-frames 6` passed with:
+  `Frame stream ok: 6 frames, indices 0..150, nonzero pixels 5364`.
+- `scripts/generate-phase0-assets.py --check` passed.
+- `bash -n` passed for Phase 0 shell validators.
+- Audio dump check reported stereo, 16-bit, 53267 Hz, 161210 frames, max
+  absolute sample `10922`.
+
+Gate:
+
+Phase 0 is still awaiting explicit human sign-off. No Phase 1 work was started.
+
+Next:
+
+- Request Phase 0 sign-off.
+- After sign-off, begin Phase 1 with the SGDK build MCP server wrapper.
+
 ## 2026-06-29 - ITERATION 9 - Genteel RGB565 frame stream proof
 
 Plan:
