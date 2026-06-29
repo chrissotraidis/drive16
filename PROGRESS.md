@@ -1,36 +1,46 @@
 # Drive16 Progress
 
-Current phase: Phase 3, the Drive16 application
+Current phase: Phase 4, enhancements
 
-Exit criterion: a non-developer launches the app, sees a blank ROM running,
-types "make a sprite I can move left and right with music", and gets a working
-ROM in the right pane using bundled assets.
+Exit criterion: from a prompt, the agent can optionally generate a
+palette-legal sprite and a short MML track in place of bundled assets, and
+still builds a working ROM.
 
-## Phase 3 Checklist
+## Phase 4 Checklist
 
-- [x] Human sign-off: Phase 2 approved.
-- [x] Scaffold the Tauri 2 plus React/Vite two-pane app shell.
-- [x] Add app-side dependency and tool health preflight checks.
-- [x] Launch a starter blank ROM path for the app preview.
-- [x] Render the Genteel live framebuffer in the right pane.
-- [x] Connect the left conversation pane to OpenCode HTTP/SSE.
-- [x] Add settings for model provider, OpenRouter key entry, model selector,
-  and connection test.
-- [x] Add project management and export-ROM wiring.
-- [x] Drive the v1 prompt through the app and verify the bundled sprite and
-  music ROM in the right pane.
+- [x] Human sign-off: Phase 3 approved.
+- [x] Add default-off enhancement toggles so the CORE path remains independent.
+- [ ] Add ComfyUI endpoint configuration and health probing behind the AI
+  sprites toggle.
+- [ ] Wrap ComfyUI via `comfyui-mcp`.
+- [ ] Ship the tuned Genesis palette ComfyUI workflow.
+- [ ] Validate generated sprites as palette-legal SGDK SPRITE resources.
+- [ ] Wrap ctrmml as the MML music MCP server.
+- [ ] Ship the FM preset library.
+- [ ] Add the MML reference to the RAG corpus.
+- [ ] Wire the optional prompt path to use generated sprite and music assets.
+- [ ] Build the generated-asset ROM and verify it still works.
 
 ## Current Task
 
-The v1 prompt path is wired through the app and verified with bundled sprite,
-Right-input movement, and non-silent music evidence.
+Phase 4 has started. Enhancement toggles are added in settings and default to
+off.
 
 ## Next Up
 
-Request human sign-off for the Phase 3 gate.
+Add ComfyUI endpoint configuration and health probing behind the AI sprites
+toggle.
+
+## Completed Phase 4 Work
+
+- [x] Phase 3 approval received from the human.
+- [x] Settings now include default-off toggles for AI sprites and MML music.
+- [x] Phase 4 enhancement-toggle evidence recorded in
+  `docs/phase4-enhancement-toggles.md`.
 
 ## Completed Phase 3 Work
 
+- [x] Phase 3 approval received from the human.
 - [x] Phase 2 approval received from the human.
 - [x] Tauri 2 shell scaffolded under `app/src-tauri/`.
 - [x] React and Vite frontend scaffolded under `app/src/`.

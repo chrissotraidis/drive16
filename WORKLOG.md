@@ -1,5 +1,50 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 34 - Phase 4 enhancement toggles
+
+Plan:
+
+- Task: record Phase 3 approval and begin Phase 4 with default-off settings
+  toggles for the deferred generators.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase4-enhancement-toggles.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: frontend build, rendered settings check in the in-app browser,
+  secret scan, Markdown punctuation check, and `git diff --check`.
+
+Did:
+
+- Recorded the human's Phase 3 approval and moved `PROGRESS.md` to Phase 4.
+- Added default-off `AI sprites` and `MML music` toggles to Agent Settings.
+- Kept the toggles as UI state only so ComfyUI, `comfyui-mcp`, ctrmml, and the
+  generated-asset prompt path remain follow-up work behind explicit gates.
+- Added `docs/phase4-enhancement-toggles.md` and a decision entry for the
+  default-off enhancement boundary.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- Browser check at `http://127.0.0.1:1420/` showed title `Drive16` and the
+  `Phase 4 enhancements` header.
+- Agent Settings rendered the `Enhancements` section.
+- `AI sprites` and `MML music` were off by default after reload.
+- Clicking both toggles changed their visible statuses to `On`.
+- A final reload returned both toggles to off by default.
+- Browser console warnings and errors were empty.
+- Browser viewport had no horizontal overflow.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+
+Gate:
+
+None.
+
+Next:
+
+- Add ComfyUI endpoint configuration and health probing behind the AI sprites
+  toggle.
+
 ## 2026-06-29 - ITERATION 33 - Phase 3 gate evidence packet
 
 Plan:

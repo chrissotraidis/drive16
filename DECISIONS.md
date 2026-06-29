@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Phase 4 enhancements start behind default-off toggles
+
+Context:
+
+Phase 4 adds AI sprite generation through ComfyUI and MML music generation
+through ctrmml. The architecture requires both enhancement paths to stay off
+the CORE critical path so the proven bundled-asset flow remains reliable.
+
+Decision:
+
+Begin Phase 4 by adding app settings toggles for `AI sprites` and `MML music`.
+Both default to off and only change UI state in this slice. External
+dependencies, endpoint checks, MCP wrapping, generated assets, and prompt
+orchestration remain follow-up units behind these gates.
+
+Consequence:
+
+The app now has an explicit user-controlled boundary for the Phase 4
+enhancements before any GPL ComfyUI process, `comfyui-mcp`, or ctrmml compiler
+integration is added. The existing CORE ROM path remains the default.
+
 ## 2026-06-29 - Phase 3 v1 prompt uses the proven CORE project path
 
 Context:

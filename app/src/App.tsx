@@ -169,6 +169,11 @@ type ModelConnectionReport = {
   detail: string;
 };
 
+type EnhancementSettings = {
+  spriteGeneration: boolean;
+  musicGeneration: boolean;
+};
+
 type DecodedFramebufferFrame = {
   frameIndex: number;
   width: number;
@@ -371,6 +376,10 @@ function App() {
   const [modelsSource, setModelsSource] = useState("fallback");
   const [openRouterKey, setOpenRouterKey] = useState("");
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
+  const [enhancements, setEnhancements] = useState<EnhancementSettings>({
+    spriteGeneration: false,
+    musicGeneration: false,
+  });
   const [modelConnection, setModelConnection] = useState<ModelConnectionReport>({
     state: "idle",
     detail: "Not tested",
@@ -934,6 +943,18 @@ function App() {
     }
   }
 
+  function handleEnhancementChange(key: keyof EnhancementSettings, enabled: boolean) {
+    setEnhancements((current) => ({
+      ...current,
+      [key]: enabled,
+    }));
+
+    appendOpenCodeEvent(
+      enabled ? "enhancement.enabled" : "enhancement.disabled",
+      key === "spriteGeneration" ? "ComfyUI sprites" : "MML music",
+    );
+  }
+
   function resetPreview() {
     setTransport("running");
     setBuildState("running");
@@ -1299,12 +1320,14 @@ function App() {
         <SettingsPanel
           activeModel={activeModel}
           connection={modelConnection}
+          enhancements={enhancements}
           modelOptions={modelOptions}
           modelProvider={modelProvider}
           modelsSource={modelsSource}
           openRouterKey={openRouterKey}
           showOpenRouterKey={showOpenRouterKey}
           onClose={() => setSettingsOpen(false)}
+          onEnhancementChange={handleEnhancementChange}
           onModelChange={setActiveModel}
           onOpenRouterKeyChange={handleOpenRouterKeyChange}
           onProviderChange={setModelProvider}
@@ -1578,12 +1601,14 @@ function modelsSourceLabel(source: string) {
 function SettingsPanel({
   activeModel,
   connection,
+  enhancements,
   modelOptions,
   modelProvider,
   modelsSource,
   openRouterKey,
   showOpenRouterKey,
   onClose,
+  onEnhancementChange,
   onModelChange,
   onOpenRouterKeyChange,
   onProviderChange,
@@ -1593,12 +1618,14 @@ function SettingsPanel({
 }: {
   activeModel: string;
   connection: ModelConnectionReport;
+  enhancements: EnhancementSettings;
   modelOptions: ModelOption[];
   modelProvider: ModelProvider;
   modelsSource: string;
   openRouterKey: string;
   showOpenRouterKey: boolean;
   onClose: () => void;
+  onEnhancementChange: (key: keyof EnhancementSettings, enabled: boolean) => void;
   onModelChange: (value: string) => void;
   onOpenRouterKeyChange: (value: string) => void;
   onProviderChange: (value: ModelProvider) => void;
@@ -1714,6 +1741,55 @@ function SettingsPanel({
               <strong>{shortModelLabel(activeModel)}</strong>
             </div>
           </section>
+
+          <section className="settings-section" aria-label="Enhancement toggles">
+            <SectionTitle icon={<Wrench size={16} />} title="Enhancements" />
+            <div className="enhancement-list">
+              <label className="enhancement-toggle" data-testid="sprite-enhancement-toggle">
+                <input
+                  aria-label="AI sprites enhancement"
+                  checked={enhancements.spriteGeneration}
+                  onChange={(event) =>
+                    onEnhancementChange("spriteGeneration", event.target.checked)
+                  }
+                  data-testid="sprite-enhancement-input"
+                  type="checkbox"
+                />
+                <span className="toggle-switch" aria-hidden="true" />
+                <span className="toggle-copy">
+                  <strong>AI sprites</strong>
+                  <small>ComfyUI generator</small>
+                </span>
+                <span className="toggle-status">
+                  {enhancements.spriteGeneration ? "On" : "Off"}
+                </span>
+              </label>
+
+              <label className="enhancement-toggle" data-testid="music-enhancement-toggle">
+                <input
+                  aria-label="MML music enhancement"
+                  checked={enhancements.musicGeneration}
+                  onChange={(event) =>
+                    onEnhancementChange("musicGeneration", event.target.checked)
+                  }
+                  data-testid="music-enhancement-input"
+                  type="checkbox"
+                />
+                <span className="toggle-switch" aria-hidden="true" />
+                <span className="toggle-copy">
+                  <strong>MML music</strong>
+                  <small>ctrmml compiler</small>
+                </span>
+                <span className="toggle-status">
+                  {enhancements.musicGeneration ? "On" : "Off"}
+                </span>
+              </label>
+            </div>
+            <div className="settings-meta">
+              <span>CORE path</span>
+              <strong>Bundled assets remain default</strong>
+            </div>
+          </section>
         </div>
 
         <div className="settings-footer">
@@ -1758,7 +1834,7 @@ function TopBar({
         <Box size={22} />
         <div>
           <strong>Drive16</strong>
-          <span>Phase 3 shell</span>
+          <span>Phase 4 enhancements</span>
         </div>
       </div>
 
