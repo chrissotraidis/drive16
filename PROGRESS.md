@@ -15,19 +15,18 @@ bundled sprite and a playing bundled loop, using CORE tools only.
 - [x] Teach the agent, via RAG or skill context, to wire the bundled sprite and
   music loop.
 - [x] Add a Phase 2 validation harness for a prompt-driven asset ROM.
-- [ ] Drive the loop from a plain prompt for a controllable bundled sprite with
+- [x] Drive the loop from a plain prompt for a controllable bundled sprite with
   music.
-- [ ] Verify the generated ROM in Genteel with scripted input and audio output.
+- [x] Verify the generated ROM in Genteel with scripted input and audio output.
 
 ## Current Task
 
-The Phase 2 prompt-driven validation harness is ready and now expects emulator
-MCP audio evidence before running the agent gate.
+Phase 2 is locally evidenced and waiting for human sign-off before Phase 3.
 
 ## Next Up
 
-Run the Phase 2 agent-loop validation after an OpenRouter credential and model
-are configured.
+Request human sign-off for Phase 2. Do not begin Phase 3 until sign-off is
+given.
 
 ## Completed Phase 2 Work
 
@@ -49,6 +48,22 @@ are configured.
   tools.
 - [x] Sprite movement validator added so scripted input evidence is stronger
   than a byte-level screenshot difference.
+- [x] Phase 2 agent-loop validation passed with OpenCode, SGDK build MCP,
+  Genteel emulator MCP, scripted input, screenshot verification, and non-silent
+  audio evidence.
+
+## Completed Phase 2 Gate
+
+Evidence packet: `docs/phase2-evidence.md`.
+
+- [x] OpenCode ran from a plain prompt with the Phase 2 CORE MCP servers.
+- [x] RAG was queried before asset wiring and Genesis C edits.
+- [x] The agent fixed an initial resource-path build failure and rebuilt.
+- [x] The generated SGDK project built to `out/rom.bin`.
+- [x] Genteel ran the generated ROM and captured neutral and Right-input
+  screenshots.
+- [x] Scripted input moved the bundled sprite right.
+- [x] The emulator MCP audio dump was non-silent.
 
 ## Completed Phase 1 Gate
 

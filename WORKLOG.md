@@ -1,5 +1,57 @@
 # Drive16 Worklog
 
+## 2026-06-29 - ITERATION 24 - Phase 2 agent-loop gate evidence
+
+Plan:
+
+- Task: run and record the Phase 2 prompt-driven gate now that OpenRouter is
+  configured.
+- Files: `docs/phase2-evidence.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run the Phase 2 agent-loop harness with OpenCode, rerun the
+  verify-only artifact check, inspect the screenshots, run the sprite movement
+  validator, scan the workspace for the pasted OpenRouter key, and run
+  `git diff --check`.
+
+Did:
+
+- Ran the Phase 2 OpenCode validation with CORE tools only.
+- Confirmed the generated project uses `drive16_player` and `drive16_loop`.
+- Confirmed the agent repaired an initial asset path build failure and rebuilt
+  successfully.
+- Confirmed Genteel produced neutral and Right-input screenshots for the
+  generated ROM.
+- Confirmed the emulator MCP audio evidence is non-silent.
+- Added the Phase 2 evidence packet and marked the Phase 2 gate ready for
+  human sign-off.
+
+Evidence:
+
+- `DRIVE16_PHASE2_MODEL=openrouter/anthropic/claude-sonnet-4.6
+  scripts/validate-phase2-agent-loop.py --run-agent` passed with:
+  `Phase 2 agent-loop ok:
+  /Users/chrissotraidis/Documents/GitHub/drive16/artifacts/phase2/agent-loop/verification-right.png`.
+- `scripts/validate-phase2-agent-loop.py --verify-only` passed with:
+  `Phase 2 agent-loop artifacts ok:
+  /Users/chrissotraidis/Documents/GitHub/drive16/artifacts/phase2/agent-loop/verification-right.png`.
+- `scripts/validate-sprite-movement.py
+  artifacts/phase2/agent-loop/verification-neutral.png
+  artifacts/phase2/agent-loop/verification-right.png --direction right
+  --min-delta 24 --min-changed 40` passed with:
+  `Sprite movement ok: direction=right changed_pixels=768 delta=155 orthogonal_span=25`.
+- The OpenCode log at `artifacts/phase2/agent-loop/opencode-run.jsonl`
+  includes `query_documents`, `build_rom`, `run_rom`, `capture_frame`,
+  `send_input`, and `capture_audio`.
+- `capture_audio` reported `nonSilent: true` and `maxAbsSample: 10922`.
+- A workspace scan for the pasted OpenRouter key returned no files.
+
+Gate:
+
+Phase 2 gate reached. Human sign-off is required before Phase 3.
+
+Next:
+
+- Request human sign-off for Phase 2 before starting Phase 3.
+
 ## 2026-06-29 - ITERATION 23 - Sprite movement screenshot validator
 
 Plan:
