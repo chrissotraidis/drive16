@@ -1,5 +1,56 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 81 - Phase 5 enhancement readiness clarity
+
+Plan:
+
+- Task: implement Phase 5 Unit 7 so AI sprites and MML music show explicit
+  readiness states and next actions.
+- Files: `app/src/App.tsx`, `app/src/styles.css`, `DECISIONS.md`,
+  `PROGRESS.md`, `README.md`, `WORKLOG.md`, and
+  `docs/phase5-enhancement-readiness.md`.
+- Verification: build frontend, run native tests, open settings, inspect
+  disabled states, toggle MML music, toggle AI sprites, and run the ComfyUI
+  test path in browser preview.
+
+Did:
+
+- Added enhancement readiness state helpers for Disabled, Needs setup, Ready,
+  Running, and Failed.
+- Replaced AI sprites `On/Off` summary with explicit readiness labels.
+- Added an AI sprite readiness row with detail and next action.
+- Added checkpoint and LoRA summary rows above the ComfyUI config fields.
+- Replaced MML music `On/Off` summary with Disabled or Ready.
+- Added an MML readiness row that explains the generated-MML prompt path.
+- Added styling for readiness badges, rows, and model summary text.
+
+Evidence:
+
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 41 tests
+  and 4 live-environment tests ignored.
+- `pnpm --dir app build` passed.
+- Browser proof at `http://127.0.0.1:1420/`:
+  - AI sprites initially showed `Disabled` with `AI sprites are intentionally
+    off`.
+  - MML music initially showed `Disabled` with `MML generation is intentionally
+    off`.
+  - Toggling MML music changed readiness to `Ready`.
+  - Toggling AI sprites changed readiness to `Needs setup`.
+  - AI sprites showed checkpoint `sd_xl_base_1.0.safetensors` and LoRA
+    `pixel-art-xl.safetensors`.
+  - Running the browser ComfyUI test changed AI sprites to `Failed` with
+    `ComfyUI check failed: Failed to fetch` and a next action to check setup
+    and run Test again.
+
+Gate:
+
+Phase 5 Unit 7 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 8: improve Run, Save, Export, Import, and tool-health feedback.
+
 ## 2026-06-30 - ITERATION 80 - Phase 5 ROM-first layout
 
 Plan:

@@ -244,6 +244,15 @@ type EnhancementSettings = {
   musicGeneration: boolean;
 };
 
+type EnhancementReadinessState = "disabled" | "needsSetup" | "ready" | "running" | "failed";
+
+type EnhancementReadiness = {
+  state: EnhancementReadinessState;
+  label: string;
+  detail: string;
+  nextAction: string;
+};
+
 type PromptAssetMode = "core" | "generatedMusic" | "generatedAssets";
 
 type ComfyUiEndpointStatus = {
@@ -2984,6 +2993,81 @@ function connectionLabel(state: ConnectionState) {
   return "Not tested";
 }
 
+function spriteEnhancementReadiness(
+  enabled: boolean,
+  connection: ComfyUiEndpointStatus,
+  checkpoint: string,
+  lora: string,
+): EnhancementReadiness {
+  if (!enabled) {
+    return {
+      state: "disabled",
+      label: "Disabled",
+      detail: "AI sprites are intentionally off.",
+      nextAction: "Enable to configure ComfyUI.",
+    };
+  }
+
+  if (connection.state === "testing") {
+    return {
+      state: "running",
+      label: "Running",
+      detail: "Checking ComfyUI, checkpoint, LoRA, and workflow readiness.",
+      nextAction: "Wait for the readiness check.",
+    };
+  }
+
+  if (connection.state === "ready") {
+    return {
+      state: "ready",
+      label: "Ready",
+      detail: `${checkpoint || defaultComfyUiCheckpoint} with ${lora || defaultComfyUiLora}`,
+      nextAction: "Enable MML music too for generated sprite plus music prompts.",
+    };
+  }
+
+  if (connection.state === "missing") {
+    return {
+      state: "failed",
+      label: "Failed",
+      detail: connection.detail,
+      nextAction: "Check the endpoint, checkpoint, LoRA, then run Test.",
+    };
+  }
+
+  return {
+    state: "needsSetup",
+    label: "Needs setup",
+    detail: connection.detail === "Not tested" ? "ComfyUI readiness has not been tested." : connection.detail,
+    nextAction: "Run Test after endpoint, checkpoint, and LoRA are set.",
+  };
+}
+
+function musicEnhancementReadiness(enabled: boolean): EnhancementReadiness {
+  if (!enabled) {
+    return {
+      state: "disabled",
+      label: "Disabled",
+      detail: "MML generation is intentionally off.",
+      nextAction: "Enable to use the generated-MML prompt path.",
+    };
+  }
+
+  return {
+    state: "ready",
+    label: "Ready",
+    detail: "ctrmml wrapper and generated-MML prompt path are wired.",
+    nextAction: "Prompt for sprite and music to run the generated-MML proof.",
+  };
+}
+
+function enhancementConnectionState(state: EnhancementReadinessState): ConnectionState {
+  if (state === "ready") return "ready";
+  if (state === "running") return "testing";
+  if (state === "failed") return "missing";
+  return "warning";
+}
+
 function modelsSourceLabel(source: string) {
   if (source === "ready") return "Models live";
   if (source === "loading") return "Models loading";
@@ -3114,6 +3198,13 @@ function SettingsPanel({
 }) {
   const testing = connection.state === "testing";
   const testingComfyUi = comfyUiConnection.state === "testing";
+  const spriteReadiness = spriteEnhancementReadiness(
+    enhancements.spriteGeneration,
+    comfyUiConnection,
+    comfyUiCheckpoint,
+    comfyUiLora,
+  );
+  const musicReadiness = musicEnhancementReadiness(enhancements.musicGeneration);
 
   return (
     <div className="settings-backdrop">
@@ -3302,13 +3393,36 @@ function SettingsPanel({
                   <strong>AI sprites</strong>
                   <small>ComfyUI generator</small>
                 </span>
-                <span className="toggle-status">
-                  {enhancements.spriteGeneration ? "On" : "Off"}
+                <span className={`toggle-status ${spriteReadiness.state}`}>
+                  {spriteReadiness.label}
                 </span>
               </label>
 
+              <div
+                className={`enhancement-readiness ${spriteReadiness.state}`}
+                data-testid="sprite-readiness"
+              >
+                {connectionIcon(enhancementConnectionState(spriteReadiness.state))}
+                <span>
+                  <strong>{spriteReadiness.label}</strong>
+                  <small>{spriteReadiness.detail}</small>
+                  <em>{spriteReadiness.nextAction}</em>
+                </span>
+              </div>
+
               {enhancements.spriteGeneration ? (
                 <div className="comfyui-config" data-testid="comfyui-config">
+                  <div className="enhancement-models" data-testid="comfyui-model-readiness">
+                    <span>Checkpoint</span>
+                    <strong title={comfyUiCheckpoint || defaultComfyUiCheckpoint}>
+                      {comfyUiCheckpoint || defaultComfyUiCheckpoint}
+                    </strong>
+                    <span>LoRA</span>
+                    <strong title={comfyUiLora || defaultComfyUiLora}>
+                      {comfyUiLora || defaultComfyUiLora}
+                    </strong>
+                  </div>
+
                   <label className="field-row">
                     <span>ComfyUI endpoint</span>
                     <div className="endpoint-field">
@@ -3414,10 +3528,22 @@ function SettingsPanel({
                   <strong>MML music</strong>
                   <small>ctrmml compiler</small>
                 </span>
-                <span className="toggle-status">
-                  {enhancements.musicGeneration ? "On" : "Off"}
+                <span className={`toggle-status ${musicReadiness.state}`}>
+                  {musicReadiness.label}
                 </span>
               </label>
+
+              <div
+                className={`enhancement-readiness ${musicReadiness.state}`}
+                data-testid="music-readiness"
+              >
+                {connectionIcon(enhancementConnectionState(musicReadiness.state))}
+                <span>
+                  <strong>{musicReadiness.label}</strong>
+                  <small>{musicReadiness.detail}</small>
+                  <em>{musicReadiness.nextAction}</em>
+                </span>
+              </div>
             </div>
             <div className="settings-meta">
               <span>CORE path</span>

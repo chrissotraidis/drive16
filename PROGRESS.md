@@ -14,24 +14,24 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Import a local Genesis ROM into ignored storage and run it in the app.
 - [x] Add visible ROM controls and keyboard/controller mapping.
 - [x] Add collapsible or resizable ROM-first layout.
-- [ ] Clarify AI sprites and MML music readiness states.
+- [x] Clarify AI sprites and MML music readiness states.
 - [ ] Improve Run, Save, Export, Import, and tool-health feedback.
 - [ ] Validate and document the fully local Ollama plus local ComfyUI path.
 - [ ] Assemble Phase 5 evidence packet for human review.
 
 ## Current Task
 
-Phase 5 is open. Unit 6 added ROM-first layout controls: the conversation rail
-can collapse, ROM details can collapse into a compact strip, and focused mode
-keeps compact status visible while giving the emulator more room.
+Phase 5 is open. Unit 7 clarified enhancement readiness. AI sprites now show
+Disabled, Needs setup, Running, Ready, or Failed with a next action and readable
+checkpoint/LoRA state. MML music now shows Disabled or Ready instead of an
+ambiguous On/Off label.
 
-Evidence is recorded in `docs/phase5-rom-first-layout.md`.
+Evidence is recorded in `docs/phase5-enhancement-readiness.md`.
 
 ## Next Up
 
-Unit 7: clarify AI sprites and MML music readiness states so Disabled, Needs
-setup, Ready, Running, and Failed are visible without overstating what is
-currently enabled.
+Unit 8: improve Run, Save, Export, Import, and tool-health feedback so every
+action has local, immediate, visible results and clear next steps on error.
 
 ## Completed Phase 5 Work
 
@@ -68,6 +68,11 @@ currently enabled.
 - [x] ROM details can collapse into a compact status strip.
 - [x] Focused emulator mode keeps status available without showing full cards.
 - [x] Narrow viewport check passed without horizontal overflow.
+- [x] AI sprites show explicit Disabled, Needs setup, Ready, Running, and
+  Failed readiness labels.
+- [x] AI sprite readiness shows the selected SDXL checkpoint and Pixel Art LoRA.
+- [x] MML music shows Disabled or Ready with a generated-MML prompt path note.
+- [x] Enhancement readiness rows include a next action when setup is incomplete.
 
 ## Completed Phase 4 Work
 

@@ -1503,7 +1503,7 @@ kbd {
 
 .enhancement-toggle {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 34px;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(86px, auto);
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -1588,7 +1588,122 @@ kbd {
 }
 
 .toggle-status {
+  justify-self: end;
+  min-width: 76px;
+  padding: 4px 7px;
+  border: 1px solid rgba(244, 238, 230, 0.14);
+  border-radius: 999px;
+  background: rgba(244, 238, 230, 0.035);
   text-align: right;
+}
+
+.toggle-status.ready {
+  color: var(--green);
+}
+
+.toggle-status.running,
+.toggle-status.needsSetup {
+  color: var(--accent-2);
+}
+
+.toggle-status.failed {
+  color: #ff736a;
+}
+
+.enhancement-readiness {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(244, 238, 230, 0.035);
+}
+
+.enhancement-readiness.ready {
+  border-color: rgba(143, 207, 136, 0.32);
+}
+
+.enhancement-readiness.running,
+.enhancement-readiness.needsSetup,
+.enhancement-readiness.disabled {
+  border-color: rgba(255, 171, 82, 0.24);
+}
+
+.enhancement-readiness.failed {
+  border-color: rgba(255, 115, 106, 0.32);
+}
+
+.enhancement-readiness.ready svg {
+  color: var(--green);
+}
+
+.enhancement-readiness.failed svg {
+  color: #ff736a;
+}
+
+.enhancement-readiness.running svg,
+.enhancement-readiness.needsSetup svg,
+.enhancement-readiness.disabled svg {
+  color: var(--accent-2);
+}
+
+.enhancement-readiness strong,
+.enhancement-readiness small,
+.enhancement-readiness em {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.enhancement-readiness strong {
+  color: #eaded1;
+  font-size: 12px;
+}
+
+.enhancement-readiness small,
+.enhancement-readiness em {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.enhancement-readiness em {
+  margin-top: 2px;
+  color: var(--accent-2);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.enhancement-models {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(244, 238, 230, 0.1);
+  border-radius: 7px;
+  background: rgba(244, 238, 230, 0.025);
+}
+
+.enhancement-models span,
+.enhancement-models strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enhancement-models span {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.enhancement-models strong {
+  color: #eaded1;
 }
 
 .settings-footer {

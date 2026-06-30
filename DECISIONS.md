@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Enhancement toggles report readiness, not generic On/Off
+
+Context:
+
+Phase 5 needs AI sprites and MML music to be understandable from Agent
+Settings. A generic `Off` label made it unclear whether an enhancement was
+intentionally disabled, missing setup, currently checking, ready, or failed.
+
+Decision:
+
+Use explicit readiness labels for enhancement toggles. AI sprites can report
+Disabled, Needs setup, Running, Ready, or Failed based on ComfyUI readiness.
+MML music reports Disabled when intentionally off and Ready when enabled because
+the ctrmml wrapper and generated-MML prompt path are wired. Each readiness row
+includes a next action.
+
+Consequence:
+
+The settings modal no longer treats disabled features as broken. ComfyUI setup
+problems show a concrete next step, while MML music remains honest about its
+current proof boundary.
+
 ## 2026-06-30 - ROM-first layout collapses panels without losing status
 
 Context:
