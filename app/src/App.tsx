@@ -37,12 +37,20 @@ type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
 type ModelProvider = "openrouter" | "ollama";
 type ConnectionState = HealthState | "idle" | "testing";
+type MessageSource = "local" | "opencode" | "model";
 
 type Message = {
   id: number;
   role: "user" | "agent";
+  source?: MessageSource;
   body: string;
   time: string;
+};
+
+type ConversationMode = {
+  state: HealthState;
+  label: string;
+  detail: string;
 };
 
 type ToolStep = {
@@ -258,6 +266,7 @@ const starterMessages: Message[] = [
   {
     id: 1,
     role: "agent",
+    source: "local",
     body: "Starter project loaded. Blank ROM is running.",
     time: "09:41",
   },
@@ -270,7 +279,8 @@ const starterMessages: Message[] = [
   {
     id: 3,
     role: "agent",
-    body: "I will wire the bundled sprite and loop, build, run, then verify the frame.",
+    source: "local",
+    body: "Local proof path is ready: that prompt builds the bundled sprite/music ROM and verifies movement and audio.",
     time: "09:42",
   },
 ];
@@ -460,6 +470,7 @@ function App() {
     state: "idle",
     detail: "Not tested",
   });
+  const messagesRef = useRef<HTMLDivElement | null>(null);
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
 
@@ -503,6 +514,12 @@ function App() {
       events.close();
     };
   }, [openCode.eventUrl, openCode.state]);
+
+  useEffect(() => {
+    const element = messagesRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+  }, [messages]);
 
   const buildLabel = useMemo(() => {
     if (buildState === "building") return "Building";
@@ -548,6 +565,18 @@ function App() {
     ];
   }, [openCode, openCodeEvents, openCodeSessionId, v1PromptResult]);
 
+  const conversationMode = useMemo(
+    () =>
+      getConversationMode(
+        modelProvider,
+        activeModel,
+        ollamaModel,
+        modelConnection,
+        openCode,
+      ),
+    [activeModel, modelConnection, modelProvider, ollamaModel, openCode],
+  );
+
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = draft.trim();
@@ -565,6 +594,23 @@ function App() {
       setV1PromptSource("running");
     }
 
+    if (!shouldRunV1) {
+      const gateMessage = freeformGateMessage(
+        modelProvider,
+        activeModel,
+        ollamaModel,
+        modelConnection,
+        openCode,
+      );
+      if (gateMessage) {
+        appendOpenCodeEvent("message.gated", gateMessage);
+        setMessages((current) => [...current, makeMessage("agent", gateMessage, "local")]);
+        noteAction("Freeform model replies are paused. ROM-changing prompts still work.");
+        setOpenCodeBusy(false);
+        return;
+      }
+    }
+
     let openCodeResult: OpenCodeSendResult | undefined;
     try {
       openCodeResult = await sendOpenCodeMessage(trimmed);
@@ -576,7 +622,8 @@ function App() {
       if (!shouldRunV1) {
         const agentMessage = makeMessage(
           "agent",
-          "I caught that locally. This v1 shell can run ROM-changing prompts now; open Agent Settings to test the model before expecting freeform live replies.",
+          `The message stayed local. Freeform model replies are paused because ${detail}. ROM-changing prompts still use the verified local build path.`,
+          "local",
         );
         setMessages((current) => [...current, agentMessage]);
         noteAction("Message handled locally. ROM-changing prompts are still available.");
@@ -596,9 +643,17 @@ function App() {
             ? "generatedMusic"
             : "core";
         applyV1PromptResult(promptResult, promptAssetMode);
+        noteAction(
+          shouldRunGeneratedSprite
+            ? "Generated sprite and MML ROM proof completed."
+            : shouldRunGeneratedMusic
+              ? "Generated MML ROM proof completed."
+              : "CORE ROM proof completed.",
+        );
         const agentMessage = makeMessage(
           "agent",
           promptReadyMessage(shouldRunGeneratedMusic, shouldRunGeneratedSprite),
+          "local",
         );
         setMessages((current) => [...current, agentMessage]);
         const readyEvent = shouldRunGeneratedSprite
@@ -611,13 +666,14 @@ function App() {
         const agentMessage = makeMessage(
           "agent",
           openCodeResult
-            ? `Message sent to OpenCode session ${shortIdentifier(
+            ? `Logged to OpenCode session ${shortIdentifier(
                 openCodeResult.sessionId,
-              )}. ROM-changing prompts run here; freeform live replies need a tested model in Agent Settings.`
-            : "Message captured locally. ROM-changing prompts run here; freeform live replies need a tested model in Agent Settings.",
+              )} without requesting a model reply. Live freeform answer streaming is not wired in this shell yet; ROM-changing prompts use the verified local build path.`
+            : "Message captured locally. Live freeform answer streaming is not wired in this shell yet; ROM-changing prompts use the verified local build path.",
+          openCodeResult ? "opencode" : "local",
         );
         setMessages((current) => [...current, agentMessage]);
-        noteAction("Message captured. Use Agent Settings to test live model replies.");
+        noteAction("Message captured without a live model reply.");
       }
       setBuildState("running");
     } catch (error) {
@@ -627,6 +683,7 @@ function App() {
         shouldRunV1
           ? `The v1 ROM run could not finish yet. ${detail}`
           : `OpenCode bridge could not send that yet. ${detail}`,
+        "local",
       );
       setMessages((current) => [...current, agentMessage]);
       appendOpenCodeEvent(shouldRunV1 ? "v1.failed" : "message.failed", detail);
@@ -637,12 +694,13 @@ function App() {
     }
   }
 
-  function makeMessage(role: Message["role"], body: string): Message {
+  function makeMessage(role: Message["role"], body: string, source?: MessageSource): Message {
     const id = messageIdRef.current;
     messageIdRef.current += 1;
     return {
       id,
       role,
+      source,
       body,
       time: "Now",
     };
@@ -1534,11 +1592,26 @@ function App() {
             </button>
           </div>
 
-          <div className="messages" aria-label="Message history">
+          <div
+            className={`conversation-mode-panel ${conversationMode.state}`}
+            data-testid="conversation-mode-panel"
+          >
+            <span>
+              {healthIcon(conversationMode.state)}
+              Mode
+              <strong>{conversationMode.label}</strong>
+            </span>
+            <small>{conversationMode.detail}</small>
+          </div>
+
+          <div className="messages" aria-label="Message history" ref={messagesRef}>
             {messages.map((message) => (
-              <article className={`message ${message.role}`} key={message.id}>
+              <article
+                className={`message ${message.role} ${message.source ?? ""}`}
+                key={message.id}
+              >
                 <div className="message-meta">
-                  <span>{message.role === "agent" ? "Agent" : "You"}</span>
+                  <span>{messageMetaLabel(message)}</span>
                   <time>{message.time}</time>
                 </div>
                 <p>{message.body}</p>
@@ -1892,6 +1965,73 @@ function promptReadyMessage(generatedMusic: boolean, generatedSprite: boolean) {
   return isTauriRuntime()
     ? "Built and verified the bundled sprite/music ROM. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
     : "Previewed the bundled sprite/music ROM flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
+}
+
+function messageMetaLabel(message: Message) {
+  if (message.role === "user") return "You";
+  if (message.source === "opencode") return "OpenCode log";
+  if (message.source === "model") return "Model";
+  return "Local proof";
+}
+
+function getConversationMode(
+  provider: ModelProvider,
+  activeModel: string,
+  ollamaModel: string,
+  connection: ModelConnectionReport,
+  openCode: OpenCodeBridgeStatus,
+): ConversationMode {
+  const providerLabel = providerDisplayLabel(provider, activeModel, ollamaModel);
+
+  if (connection.state !== "ready") {
+    return {
+      state: "warning",
+      label: "ROM proof only",
+      detail: `${providerLabel} is ${connectionLabel(
+        connection.state,
+      ).toLowerCase()}; freeform model replies are paused.`,
+    };
+  }
+
+  if (openCode.state !== "ready") {
+    return {
+      state: "warning",
+      label: "Provider checked",
+      detail: `OpenCode is ${stateLabel(
+        openCode.state,
+      ).toLowerCase()}; freeform model replies are paused.`,
+    };
+  }
+
+  return {
+    state: "warning",
+    label: "OpenCode no-reply",
+    detail: "Provider and OpenCode are reachable; this shell logs freeform messages without live answer streaming.",
+  };
+}
+
+function freeformGateMessage(
+  provider: ModelProvider,
+  activeModel: string,
+  ollamaModel: string,
+  connection: ModelConnectionReport,
+  openCode: OpenCodeBridgeStatus,
+) {
+  const providerLabel = providerDisplayLabel(provider, activeModel, ollamaModel);
+
+  if (connection.state !== "ready") {
+    return `${providerLabel} is ${connectionLabel(
+      connection.state,
+    ).toLowerCase()}. Freeform model replies are paused; ROM-changing prompts still use the verified local build path.`;
+  }
+
+  if (openCode.state !== "ready") {
+    return `OpenCode is ${stateLabel(
+      openCode.state,
+    ).toLowerCase()}. Freeform model replies are paused; ROM-changing prompts still use the verified local build path.`;
+  }
+
+  return undefined;
 }
 
 function preflightSummaryLabel(state: HealthState, source = "") {

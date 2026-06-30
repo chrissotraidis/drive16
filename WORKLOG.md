@@ -1,5 +1,54 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 76 - Agent truthfulness and chat state
+
+Plan:
+
+- Task: clarify the conversation surface so local proof responses are not
+  confused with live model-backed inference.
+- Files: `app/src/App.tsx`, `app/src/styles.css`, `DECISIONS.md`,
+  `PROGRESS.md`, `README.md`, `WORKLOG.md`, and
+  `docs/phase5-agent-truthfulness.md`.
+- Verification: build the frontend, run focused OpenCode native tests, reload
+  the app, send a general prompt, send a ROM-changing prompt, and capture
+  browser evidence.
+
+Did:
+
+- Added a conversation mode row under the inference settings row.
+- Labeled local proof messages as `Local proof` instead of generic `Agent`.
+- Gated freeform prompts when the selected provider is not tested.
+- Kept ROM-changing prompts available through the verified local proof path.
+- Made the message history auto-scroll to the newest response.
+- Updated the top run status when the ROM proof completes.
+- Recorded the no-reply freeform boundary as a Drive16 decision.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml opencode -- --nocapture`
+  passed.
+- Browser proof at `http://127.0.0.1:1420/` loaded with title `Drive16`, no
+  framework overlay, and no console warnings or errors.
+- Initial mode row showed `ROM proof only` and said freeform model replies were
+  paused because `Claude Sonnet Latest` was not tested.
+- Sending `What can you do?` produced a `Local proof` reply explaining that
+  freeform replies are paused while ROM-changing prompts still use the
+  verified local build path.
+- Sending `Make a sprite I can move left and right with music.` produced a
+  `Local proof` ROM proof response and updated the top status to
+  `CORE ROM proof completed.`
+- Screenshot saved at
+  `/tmp/drive16-phase5-unit2/conversation-truthfulness.png`.
+
+Gate:
+
+Phase 5 Unit 2 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 3: add project menu actions for Load/Open Project and Import ROM.
+
 ## 2026-06-30 - ITERATION 75 - Phase 5 provider settings cleanup
 
 Plan:

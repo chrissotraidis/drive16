@@ -9,7 +9,7 @@ hardware target, and the hosted BYOK path is stable enough to share.
 
 - [x] Human sign-off: Phase 4 approved, begin Phase 5.
 - [x] Clean provider switching between OpenRouter and Ollama.
-- [ ] Clarify live agent inference versus local proof responses.
+- [x] Clarify live agent inference versus local proof responses.
 - [ ] Add project menu actions for load/open project and import ROM.
 - [ ] Import a local Genesis ROM into ignored storage and run it in the app.
 - [ ] Add visible ROM controls and keyboard/controller mapping.
@@ -21,20 +21,19 @@ hardware target, and the hosted BYOK path is stable enough to share.
 
 ## Current Task
 
-Phase 5 is open. Unit 1 cleaned up provider switching so OpenRouter and Ollama
-now render as separate settings surfaces. OpenRouter owns the hosted model
-dropdown, API key field, and OpenRouter key test. Ollama owns the local
-endpoint, local model name, and native `/api/tags` readiness probe. Browser
-preview does not pretend to test local Ollama; it reports that the native app
-does the local check. The conversation inference chip and project menu now
-follow the selected provider.
+Phase 5 is open. Unit 2 clarified the conversation surface. The app now shows
+an explicit conversation mode row, labels local proof responses separately from
+OpenCode logs or future model replies, gates freeform prompts when the selected
+provider is not tested, and keeps ROM-changing proof prompts available. The
+message pane auto-scrolls to the latest response, and the top status changes
+from freeform gating to the completed ROM proof when the local proof finishes.
 
-Evidence is recorded in `docs/phase5-provider-settings.md`.
+Evidence is recorded in `docs/phase5-agent-truthfulness.md`.
 
 ## Next Up
 
-Unit 2: clarify chat and agent truthfulness so the app clearly distinguishes
-local scripted proof responses from live model-backed inference.
+Unit 3: add project menu actions for Load/Open Project and Import ROM so the
+menu becomes the home for project and ROM actions.
 
 ## Completed Phase 5 Work
 
@@ -45,6 +44,11 @@ local scripted proof responses from live model-backed inference.
 - [x] Native Ollama readiness check added for local `/api/tags` model probing.
 - [x] Conversation and project menu inference labels now follow the selected
   provider.
+- [x] Conversation mode row now distinguishes ROM proof mode from paused
+  freeform model replies.
+- [x] Freeform prompts are gated when the selected provider is not tested.
+- [x] ROM-changing proof prompts still run and are labeled as local proof.
+- [x] Message history auto-scrolls to the latest local proof response.
 
 ## Completed Phase 4 Work
 

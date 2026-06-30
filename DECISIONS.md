@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Freeform chat stays gated until live replies are wired
+
+Context:
+
+Phase 5 needs the conversation pane to be honest about what is happening. The
+current app can run verified local ROM proof prompts and can post messages to
+OpenCode with `noReply`, but it does not yet stream a live model-written answer
+back into the shell.
+
+Decision:
+
+Label verified ROM-building responses as local proof. Gate general freeform
+prompts when the selected provider has not been tested. When provider and
+OpenCode readiness exist, continue treating the current OpenCode path as a
+no-reply log path until live answer streaming is implemented and verified.
+
+Consequence:
+
+The app no longer implies that Claude, Ollama, or any other selected model is
+answering when it is not. Phase 5 can add live response streaming later without
+rewriting the local proof path or weakening the provider boundary.
+
 ## 2026-06-30 - Ollama readiness uses a native local endpoint probe
 
 Context:
