@@ -1,5 +1,56 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 60 - Phase 4 evidence packet
+
+Plan:
+
+- Task: assemble a single Phase 4 evidence packet that distinguishes completed
+  proof from the remaining live ComfyUI gate.
+- Files: `docs/phase4-evidence.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: rerun the real readiness and generated-assets gate scripts,
+  check local model presence, run Markdown style and secret scans, confirm
+  generated artifacts are ignored, and run `git diff --check`.
+
+Did:
+
+- Added `docs/phase4-evidence.md`.
+- Listed completed Phase 4 evidence by requirement and linked each supporting
+  doc.
+- Recorded the open live gate separately from fixture evidence.
+- Added the exact validation commands required to close Phase 4.
+
+Evidence:
+
+- `docs/phase4-evidence.md` records that Phase 4 is not complete.
+- It points to the completed evidence docs for toggles, ComfyUI wrapper,
+  workflow, validator, SGDK resource proof, MML wrapper, generated-MML ROM
+  proof, app prompt gate, fixture combined prompt proof, and live validation
+  scripts.
+- It identifies the remaining gate as real live ComfyUI sprite output.
+- Local model scan found no `.safetensors`, `.ckpt`, or `.pt` files under
+  `/Users/chrissotraidis/Documents/ComfyUI`.
+- `scripts/check-phase4-comfyui-readiness.py` exited `68`: ComfyUI API is not
+  reachable on `127.0.0.1:8188`, the default checkpoint is not present in the
+  checked model paths, and workflow classes cannot be inspected without the
+  API.
+- `scripts/validate-phase4-generated-assets-prompt.sh` exited `66`: focused
+  Phase 4 prompt tests passed, 5 passed and 2 ignored, then the ignored live
+  generated-assets proof stopped because no successful live sprite run is
+  recorded.
+- Local preview at `http://127.0.0.1:1420/` responded with HTTP 200.
+
+Gate:
+
+VALIDATION REQUEST remains: install a real Pixel Art Diffusion XL compatible
+checkpoint from an explicit source, start local ComfyUI, pass
+`scripts/check-phase4-comfyui-readiness.py`, run the live sprite workflow, then
+rerun the real generated-assets proof.
+
+Next:
+
+- Install the real checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 59 - Explicit checkpoint install helper
 
 Plan:

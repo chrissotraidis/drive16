@@ -44,6 +44,8 @@ sprite plus generated MML music, including ROM build, Genteel screenshots,
 Right-input movement, and non-silent audio. A checkpoint install helper now
 places a user-provided compatible checkpoint file or URL into the local ComfyUI
 checkpoints folder with optional SHA-256 verification.
+The current Phase 4 evidence packet is recorded in `docs/phase4-evidence.md`;
+it keeps Phase 4 open on the real live ComfyUI sprite gate.
 
 ## Next Up
 
@@ -138,6 +140,7 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   passed without masking the live ComfyUI gate.
 - [x] Explicit checkpoint install helper added for user-provided compatible
   checkpoint files or URLs.
+- [x] Phase 4 evidence packet assembled at `docs/phase4-evidence.md`.
 
 ## Completed Phase 3 Work
 
