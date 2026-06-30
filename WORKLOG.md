@@ -1,5 +1,77 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 58 - Combined generated-assets fixture proof
+
+Plan:
+
+- Task: prove the combined generated-sprite plus generated-MML prompt path
+  without claiming live ComfyUI output exists.
+- Files: `scripts/validate-phase4-generated-assets-fixture-prompt.sh`,
+  `scripts/README.md`, `docs/phase4-generated-assets-fixture-prompt.md`,
+  `docs/phase4-generated-assets-validation.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- Verification: run the new fixture proof, inspect the generated resource
+  contract and artifacts, visually check the Genteel screenshot, rerun the real
+  live-gated generated-assets validator, then run hygiene scans and ignored
+  artifact checks.
+
+Did:
+
+- Added a fixture-only validation script that temporarily supplies a
+  validator-accepted synthetic generated sprite to the live-run contract.
+- Ran the same ignored native combined generated-assets prompt proof with
+  `use_generated_sprite: true`.
+- Restored the prior live ComfyUI run record after the fixture run, preserving
+  the real live gate.
+- Marked the optional prompt-path wiring checklist item complete, while
+  keeping live generated-sprite validation and final live ROM proof open.
+
+Evidence:
+
+- `scripts/validate-phase4-generated-assets-fixture-prompt.sh` passed.
+- The generated-sprite validator accepted the fixture PNG: 32x32, 4 palette
+  slots, and 704 transparent pixels.
+- Focused Phase 4 prompt tests passed: 5 passed, 2 ignored.
+- Ignored combined generated-assets proof passed: 1 passed.
+- The generated project referenced both
+  `SPRITE drive16_player "../../../../../artifacts/phase4/generated-assets-fixture/generated-sprite.png" 4 4 NONE 0`
+  and `XGM drive16_generated_music "generated_music.vgm"`.
+- Generated ROM:
+  `artifacts/phase4/generated-music-prompt/project/out/rom.bin`.
+- Genteel neutral screenshot:
+  `artifacts/phase4/generated-music-prompt/phase4-music-neutral.png`.
+- Genteel Right-input screenshot:
+  `artifacts/phase4/generated-music-prompt/phase4-music-right.png`.
+- Generated audio dump:
+  `artifacts/phase4/generated-music-prompt/phase4-music-audio.wav`.
+- Visual sanity check: the neutral screenshot shows `Drive16 Phase 4`,
+  `Generated sprite`, the generated sprite, and `Generated MML music`.
+- The prior failed live ComfyUI run record was restored after the fixture run.
+- `scripts/validate-phase4-generated-assets-prompt.sh` still exits `66` at
+  the expected live ComfyUI sprite gate.
+- `scripts/check-phase4-comfyui-readiness.py` still exits `68`: ComfyUI API
+  is not reachable on `127.0.0.1:8188`, the default checkpoint is not present
+  in the checked model paths, and workflow classes cannot be inspected without
+  the API.
+- `bash -n` passed for the fixture, live generated-assets, and generated-music
+  validation scripts.
+- `git diff --check` passed.
+- Secret scan and Markdown punctuation scan found no matches.
+- Fixture PNG, generated ROM, screenshots, audio dump, and live-run records are
+  ignored by git.
+- Local preview at `http://127.0.0.1:1420/` responded with HTTP 200.
+
+Gate:
+
+VALIDATION REQUEST remains: place a Pixel Art Diffusion XL compatible
+checkpoint, start local ComfyUI, pass `scripts/check-phase4-comfyui-readiness.py`,
+run the live sprite workflow, then rerun the real generated-assets proof.
+
+Next:
+
+- Place the checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 57 - Generated sprite SGDK resource proof
 
 Plan:

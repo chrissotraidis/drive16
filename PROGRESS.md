@@ -18,7 +18,7 @@ still builds a working ROM.
 - [x] Wrap ctrmml as the MML music MCP server.
 - [x] Ship the FM preset library.
 - [x] Add the MML reference to the RAG corpus.
-- [ ] Wire the optional prompt path to use generated sprite and music assets.
+- [x] Wire the optional prompt path to use generated sprite and music assets.
 - [ ] Build the generated-asset ROM and verify it still works.
 
 ## Current Task
@@ -39,6 +39,9 @@ and the browser-preview failure path renders an API readiness row for local QA.
 A validator-accepted synthetic generated-sprite PNG has also been proven
 through SGDK `rescomp`, a ROM build, and a Genteel screenshot. Live ComfyUI
 output is still required before the generated-sprite checklist item can close.
+The combined prompt path has been fixture-proven with that validated generated
+sprite plus generated MML music, including ROM build, Genteel screenshots,
+Right-input movement, and non-silent audio.
 
 ## Next Up
 
@@ -126,6 +129,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   native readiness before the environment or manifest fallback is used.
 - [x] Validator-accepted generated-sprite PNGs now have an SGDK `SPRITE`
   resource harness with ROM build and Genteel screenshot evidence.
+- [x] Combined generated-sprite plus generated-MML prompt path fixture proof
+  passed without masking the live ComfyUI gate.
 
 ## Completed Phase 3 Work
 

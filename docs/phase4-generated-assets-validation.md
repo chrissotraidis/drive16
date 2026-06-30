@@ -78,6 +78,30 @@ printed the checkpoint-aware sequence: default checkpoint path, optional
 `scripts/check-phase4-comfyui-readiness.py`, and
 `scripts/run-comfyui-sprite-workflow.py`.
 
+A fixture-only combined prompt proof was added and run:
+
+```sh
+scripts/validate-phase4-generated-assets-fixture-prompt.sh
+```
+
+Result: the script temporarily supplied a validator-accepted synthetic
+generated sprite PNG to the live-run contract, ran the same ignored combined
+generated-assets prompt proof, and restored the prior live-run record
+afterward. The generated project referenced both
+`SPRITE drive16_player "../../../../../artifacts/phase4/generated-assets-fixture/generated-sprite.png" 4 4 NONE 0`
+and `XGM drive16_generated_music "generated_music.vgm"`. The ignored proof
+passed, building a ROM, running Genteel, validating Right-input sprite
+movement, and verifying non-silent generated audio.
+
+The real live-gated proof was rerun immediately afterward:
+
+```sh
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Result: exit `66`, still gated on live ComfyUI sprite output. This confirms
+the fixture proof did not mask the remaining live checkpoint and ComfyUI gate.
+
 ## Validation Request
 
 Place a Pixel Art Diffusion XL compatible checkpoint at the default path:

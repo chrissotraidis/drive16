@@ -48,6 +48,10 @@ Toolchain and validation scripts live here.
   the RAG corpus and retrievable with generated-music terms.
 - `validate-phase4-generated-music-prompt.sh`: runs the Phase 4 generated-MML
   prompt-path tests and, when Docker is running, builds and verifies the ROM.
+- `validate-phase4-generated-assets-fixture-prompt.sh`: temporarily supplies a
+  validator-accepted synthetic generated sprite to prove the combined
+  generated-sprite plus generated-MML prompt path without closing the live
+  ComfyUI gate.
 - `validate-phase4-generated-assets-prompt.sh`: runs the combined Phase 4
   generated-sprite plus generated-MML prompt proof when live ComfyUI output and
   Docker are available.
