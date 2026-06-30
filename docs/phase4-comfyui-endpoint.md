@@ -20,6 +20,9 @@ Implemented behavior:
   native readiness command.
 - The endpoint status now reports compact readiness rows for API, checkpoint,
   Pixydust Quantizer, and workflow classes.
+- The native endpoint status keeps checkpoint and Pixydust filesystem rows
+  visible even when the API is down, and the checkpoint row can include nearby
+  local checkpoint hints without accepting them automatically.
 - Settings endpoint field and `Test` action that only render after enabling
   `AI sprites`.
 - Browser-preview fallback that reports a clean failed state when ComfyUI is
@@ -124,6 +127,29 @@ Rendered browser check after adding readiness rows:
 The browser-preview path can only prove endpoint/API rendering. The native
 Tauri command remains responsible for checkpoint, Pixydust, and workflow-class
 checks because those use local filesystem and ComfyUI `/object_info` access.
+
+The native command was rerun after adding checkpoint hints:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
+```
+
+Result:
+
+- `13 passed; 0 failed; 0 ignored`.
+
+The rendered browser preview was rerun after the hint UI was added:
+
+- Page identity remained `http://127.0.0.1:1420/`, title `Drive16`.
+- Agent Settings opened and the `AI sprites` toggle revealed the endpoint and
+  checkpoint fields.
+- Clicking `Test` with no local ComfyUI server rendered the clean failed
+  status and the `API` readiness row.
+- Browser console warnings and errors were empty.
+- Mobile viewport `390x844` rendered the same clean failed status and `API`
+  readiness row with no horizontal overflow after the responsive shell update.
+- Native checkpoint hint rendering is covered by the focused native tests,
+  because browser preview cannot inspect local model folders.
 
 ## Next
 

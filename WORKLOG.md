@@ -1,5 +1,60 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 65 - App readiness checkpoint hints
+
+Plan:
+
+- Task: surface checkpoint hints through the native app readiness rows while
+  keeping the selected-checkpoint gate strict.
+- Files: `app/src-tauri/src/comfyui.rs`, `app/src/App.tsx`,
+  `app/src/styles.css`, `docs/phase4-comfyui-readiness.md`,
+  `docs/phase4-comfyui-endpoint.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run focused native ComfyUI tests, frontend production build,
+  rendered browser settings check, full native tests, and hygiene scans.
+
+Did:
+
+- Added optional readiness-row hints to the native ComfyUI endpoint status.
+- The native command now keeps checkpoint and Pixydust filesystem rows visible
+  even when the ComfyUI API is down.
+- The checkpoint row reports nearby local checkpoint hints without accepting
+  them as ready.
+- The settings drawer renders readiness hints under the relevant row when the
+  native command provides them.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture`
+  passed with 13 tests.
+- `npm run build` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture` passed
+  with 26 passed and 4 ignored.
+- Browser preview at `http://127.0.0.1:1420/` reloaded with title `Drive16`
+  and no console warnings or errors.
+- In the browser preview, Agent Settings opened, `AI sprites` was enabled,
+  `Test` was clicked, and the clean failed API status plus `API` readiness row
+  rendered.
+- Browser preview cannot inspect native filesystem hints, so checkpoint hint
+  rendering is covered by the native tests.
+- Mobile viewport `390x844` initially exposed horizontal overflow from the
+  responsive shell. The shell was updated to use container width with a
+  horizontal overflow guard.
+- The mobile settings flow was rerun after the fix. It rendered the same clean
+  failed API status and `API` readiness row, browser console warnings and
+  errors were empty, and `documentElement` plus `body` reported no horizontal
+  overflow.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live ComfyUI sprite workflow and the
+real generated-assets ROM proof.
+
+Next:
+
+- Install the compatible checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 64 - Checkpoint installer symlink mode
 
 Plan:

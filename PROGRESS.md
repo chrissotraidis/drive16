@@ -55,6 +55,8 @@ require an explicit user-selected checkpoint source instead of auto-downloading
 model weights. The readiness report now also surfaces nearby local checkpoint
 hints without accepting them automatically. The checkpoint installer now also
 supports explicit local-file symlinks for large user-selected model weights.
+The native app settings readiness path now mirrors the checkpoint hints and
+keeps filesystem checks visible even when the ComfyUI API is not running.
 
 ## Next Up
 
@@ -160,6 +162,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   relaxing the real Pixel Art checkpoint gate.
 - [x] Checkpoint installer supports explicit local-file symlink mode for large
   user-selected model weights.
+- [x] Native app ComfyUI readiness rows surface checkpoint hints without
+  relaxing the required selected-checkpoint gate.
 
 ## Completed Phase 3 Work
 

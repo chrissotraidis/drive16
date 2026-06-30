@@ -35,6 +35,9 @@ API is not reachable.
 - The app's native `check_comfyui_endpoint` command now mirrors the same
   readiness concepts in the settings drawer: API, checkpoint, Pixydust, and
   workflow classes.
+- The native command keeps checkpoint and Pixydust filesystem rows visible
+  even when the ComfyUI API is down, and the checkpoint row can include nearby
+  local checkpoint hints without accepting them automatically.
 - The settings drawer includes a checkpoint filename field. It defaults to
   `pixel-art-diffusion-xl.safetensors`; a nonblank value is sent to the native
   readiness command before the command falls back to
@@ -115,6 +118,23 @@ without treating them as compatible Pixel Art Diffusion XL proof. On this
 machine it reports general image checkpoint hints from Fooocus and
 DiffusionBee, while the default checkpoint remains missing.
 
+The native app readiness path was refreshed with the same hint contract:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
+```
+
+Result: 13 passed. The added test proves a nearby checkpoint hint is reported
+while the selected Pixel Art Diffusion XL checkpoint remains missing.
+
+The frontend production build was rerun:
+
+```sh
+npm run build
+```
+
+Result: passed.
+
 The settings drawer readiness rows were verified in the in-app browser at
 `http://127.0.0.1:1420/`:
 
@@ -124,6 +144,26 @@ The settings drawer readiness rows were verified in the in-app browser at
 - Mobile viewport `390x844`: same failed API status and `API` readiness row
   rendered, no console warnings or errors, no horizontal overflow.
 - The temporary mobile viewport override was reset after validation.
+
+The rendered browser preview was rerun after adding native checkpoint hints:
+
+- Page identity: `http://127.0.0.1:1420/`, title `Drive16`.
+- App content was not blank and no Vite or framework error overlay appeared.
+- Agent Settings opened, `AI sprites` was enabled, and `Test` was clicked.
+- Browser-preview status stayed in the clean failed state because no local
+  ComfyUI server was running.
+- The `API` readiness row rendered with the fetch failure.
+- Browser console warnings and errors were empty.
+- Browser preview cannot inspect native filesystem hints; the hint row is
+  covered by the native tests above.
+
+The mobile browser preview was rerun at a `390x844` viewport after the hint UI
+and responsive shell update:
+
+- Agent Settings opened, `AI sprites` was enabled, and `Test` was clicked.
+- The clean failed status and `API` readiness row rendered.
+- Browser console warnings and errors were empty.
+- `documentElement` and `body` reported no horizontal overflow.
 
 ## Validation Request
 

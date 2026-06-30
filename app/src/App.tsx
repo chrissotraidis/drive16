@@ -52,6 +52,7 @@ type HealthCheck = {
   name: string;
   state: HealthState;
   detail: string;
+  hints?: string[];
 };
 
 type PreflightReport = {
@@ -2087,7 +2088,16 @@ function SettingsPanel({
                         <div className={`connection-summary ${check.state}`} key={check.name}>
                           {connectionIcon(check.state)}
                           <span>{check.name}</span>
-                          <small>{check.detail}</small>
+                          <small>
+                            {check.detail}
+                            {check.hints?.length ? (
+                              <span className="readiness-hints">
+                                {check.hints.slice(0, 3).map((hint) => (
+                                  <span key={hint}>{hint}</span>
+                                ))}
+                              </span>
+                            ) : null}
+                          </small>
                         </div>
                       ))}
                     </div>

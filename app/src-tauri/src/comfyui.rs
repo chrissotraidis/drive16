@@ -13,6 +13,7 @@ const SYSTEM_STATS_PATH: &str = "/system_stats";
 const OBJECT_INFO_PATH: &str = "/object_info";
 const MANIFEST_RELATIVE: &str = "assets/enhancements/comfyui/manifest.json";
 const WORKFLOW_RELATIVE: &str = "assets/enhancements/comfyui/drive16-genesis-sprite.workflow.json";
+const CHECKPOINT_SUFFIXES: [&str; 3] = ["safetensors", "ckpt", "pt"];
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +41,8 @@ pub struct ComfyUiReadinessCheck {
     pub name: String,
     pub state: String,
     pub detail: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub hints: Vec<String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -78,20 +81,24 @@ fn check_endpoint_for_repo(
     let stats = match probe_system_stats(&endpoint) {
         Ok(stats) => stats,
         Err(error) => {
-            return status(
-                "missing",
-                &error,
-                &endpoint,
-                None,
-                0,
-                vec![readiness_check("API", "missing", &error)],
-            )
+            let checks = phase4_readiness_checks(
+                &repo_root,
+                Err(&error),
+                checkpoint_override,
+                readiness_check("API", "missing", &error),
+            );
+            return status("missing", &error, &endpoint, None, 0, checks);
         }
     };
     let version = extract_version(&stats);
     let devices = extract_device_count(&stats);
     let object_info = probe_object_info(&endpoint);
-    let checks = phase4_readiness_checks(&repo_root, object_info.as_ref(), checkpoint_override);
+    let checks = phase4_readiness_checks(
+        &repo_root,
+        object_info.as_ref(),
+        checkpoint_override,
+        readiness_check("API", "ready", "System stats available"),
+    );
     let (state, detail) = summarize_readiness(&checks);
 
     status(&state, &detail, &endpoint, version, devices, checks)
@@ -244,25 +251,20 @@ fn phase4_readiness_checks(
     repo_root: &Path,
     object_info: Result<&Value, &String>,
     checkpoint_override: Option<String>,
+    api_check: ComfyUiReadinessCheck,
 ) -> Vec<ComfyUiReadinessCheck> {
     let manifest_path = repo_root.join(MANIFEST_RELATIVE);
     let workflow_path = repo_root.join(WORKFLOW_RELATIVE);
     let manifest = match read_json_file(&manifest_path) {
         Ok(value) => value,
         Err(error) => {
-            return vec![
-                readiness_check("API", "ready", "System stats available"),
-                readiness_check("Contract", "missing", &error),
-            ];
+            return vec![api_check, readiness_check("Contract", "missing", &error)];
         }
     };
     let workflow = match read_json_file(&workflow_path) {
         Ok(value) => value,
         Err(error) => {
-            return vec![
-                readiness_check("API", "ready", "System stats available"),
-                readiness_check("Contract", "missing", &error),
-            ];
+            return vec![api_check, readiness_check("Contract", "missing", &error)];
         }
     };
 
@@ -271,7 +273,7 @@ fn phase4_readiness_checks(
     let required_classes = class_types(&workflow);
     let comfyui_root = comfyui_root();
 
-    let mut checks = vec![readiness_check("API", "ready", "System stats available")];
+    let mut checks = vec![api_check];
     checks.push(checkpoint_readiness(
         &comfyui_root,
         &checkpoint,
@@ -375,7 +377,12 @@ fn checkpoint_readiness(
         return readiness_check("Checkpoint", "ready", &existing.display().to_string());
     }
 
-    readiness_check("Checkpoint", "missing", checkpoint)
+    readiness_check_with_hints(
+        "Checkpoint",
+        "missing",
+        checkpoint,
+        nearby_checkpoint_hints(comfyui_root, &candidates),
+    )
 }
 
 fn checkpoint_candidates(comfyui_root: &Path, checkpoint: &str) -> Vec<PathBuf> {
@@ -391,6 +398,64 @@ fn checkpoint_candidates(comfyui_root: &Path, checkpoint: &str) -> Vec<PathBuf> 
             .join(checkpoint),
         comfyui_root.join("models").join(checkpoint),
     ]
+}
+
+fn checkpoint_hint_directories(comfyui_root: &Path) -> Vec<PathBuf> {
+    let mut directories = vec![
+        comfyui_root.join("models").join("checkpoints"),
+        comfyui_root.join("models"),
+    ];
+    if let Some(home) = env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        directories.push(
+            home.join("Documents")
+                .join("GitHub")
+                .join("Fooocus")
+                .join("models")
+                .join("checkpoints"),
+        );
+        directories.push(home.join(".diffusionbee").join("downloaded_assets"));
+    }
+    directories
+}
+
+fn nearby_checkpoint_hints(comfyui_root: &Path, checked_paths: &[PathBuf]) -> Vec<String> {
+    let checked = checked_paths
+        .iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+    let mut hints = Vec::new();
+    for directory in checkpoint_hint_directories(comfyui_root) {
+        let entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(str::to_ascii_lowercase);
+            if !extension
+                .as_deref()
+                .map(|value| CHECKPOINT_SUFFIXES.contains(&value))
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let path_text = path.to_string_lossy().to_string();
+            if checked.contains(&path_text) || hints.contains(&path_text) {
+                continue;
+            }
+            hints.push(path_text);
+        }
+    }
+    hints.sort();
+    hints.truncate(12);
+    hints
 }
 
 fn pixydust_readiness(comfyui_root: &Path, object_info: Option<&Value>) -> ComfyUiReadinessCheck {
@@ -461,10 +526,20 @@ fn summarize_readiness(checks: &[ComfyUiReadinessCheck]) -> (String, String) {
 }
 
 fn readiness_check(name: &str, state: &str, detail: &str) -> ComfyUiReadinessCheck {
+    readiness_check_with_hints(name, state, detail, Vec::new())
+}
+
+fn readiness_check_with_hints(
+    name: &str,
+    state: &str,
+    detail: &str,
+    hints: Vec<String>,
+) -> ComfyUiReadinessCheck {
     ComfyUiReadinessCheck {
         name: name.to_string(),
         state: state.to_string(),
         detail: detail.to_string(),
+        hints,
     }
 }
 
@@ -628,6 +703,26 @@ mod tests {
 
         assert_eq!(state, "warning");
         assert_eq!(detail, "ComfyUI reachable, check Checkpoint");
+    }
+
+    #[test]
+    fn checkpoint_readiness_reports_nearby_hints_without_passing() {
+        let root = std::env::temp_dir().join(format!("drive16-comfyui-hints-{}", unix_timestamp()));
+        let checkpoints = root.join("models").join("checkpoints");
+        fs::create_dir_all(&checkpoints).expect("hint directory should be created");
+        fs::write(checkpoints.join("nearby.safetensors"), b"fixture")
+            .expect("hint checkpoint should be written");
+
+        let check = checkpoint_readiness(&root, "pixel-art-diffusion-xl.safetensors", None);
+
+        assert_eq!(check.name, "Checkpoint");
+        assert_eq!(check.state, "missing");
+        assert!(check
+            .hints
+            .iter()
+            .any(|hint| hint.ends_with("nearby.safetensors")));
+
+        fs::remove_dir_all(root).expect("hint fixture should be removed");
     }
 
     #[test]
