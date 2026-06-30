@@ -16,6 +16,11 @@ Drive16.
 Phase 2 agents should use this pack before any generated-asset pipeline exists.
 ComfyUI sprites and MML music are Phase 4 enhancements, not CORE dependencies.
 
+## Enhancement Assets
+
+`assets/enhancements/` contains optional Phase 4 generation contracts. These
+assets are not part of the CORE path and stay behind settings toggles.
+
 ## Phase 0 Assets
 
 `assets/phase0/` is kept as the original validation fixture for Phase 0

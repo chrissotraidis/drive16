@@ -1,0 +1,142 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "pixel-art-diffusion-xl.safetensors"
+    },
+    "_meta": {
+      "title": "Pixel Art Diffusion XL checkpoint"
+    }
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "1",
+        1
+      ],
+      "text": "single 32x32 Sega Genesis Mega Drive character sprite, full body, centered, clean pixel art silhouette, flat magenta background for transparency, limited 16 color game palette, readable at small size, crisp hard edges"
+    },
+    "_meta": {
+      "title": "Positive prompt"
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "1",
+        1
+      ],
+      "text": "blurry, antialiasing, smooth gradients, noisy background, text, watermark, signature, realistic lighting, tiny unreadable details, too many colors, cropped body, shadow"
+    },
+    "_meta": {
+      "title": "Negative prompt"
+    }
+  },
+  "4": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Model-friendly source size"
+    }
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "2",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "4",
+        0
+      ],
+      "seed": 16000000000016,
+      "steps": 28,
+      "cfg": 7,
+      "sampler_name": "dpmpp_2m_sde",
+      "scheduler": "karras",
+      "denoise": 1
+    },
+    "_meta": {
+      "title": "Pixel sprite sampler"
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "5",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Decode generated image"
+    }
+  },
+  "7": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "6",
+        0
+      ],
+      "upscale_method": "nearest-exact",
+      "width": 32,
+      "height": 32,
+      "crop": "center"
+    },
+    "_meta": {
+      "title": "Nearest-neighbor 32x32 downscale"
+    }
+  },
+  "8": {
+    "class_type": "Quantizer",
+    "inputs": {
+      "reduced_image": [
+        "7",
+        0
+      ],
+      "fixed_colors": 16,
+      "reduction_method": "K-Means",
+      "dither_pattern": "None",
+      "color_distance_threshold": 2,
+      "batch_mode": "All Batches",
+      "batch_index": 0,
+      "max_batch_size": 1
+    },
+    "_meta": {
+      "title": "Pixydust 16-color quantization"
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "drive16/generated/drive16_genesis_sprite"
+    },
+    "_meta": {
+      "title": "Save Drive16 generated sprite"
+    }
+  }
+}

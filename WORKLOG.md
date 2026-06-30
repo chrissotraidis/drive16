@@ -1,5 +1,49 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 37 - ComfyUI Genesis sprite workflow
+
+Plan:
+
+- Task: ship the tuned Genesis palette ComfyUI workflow contract.
+- Files: `assets/enhancements/comfyui/manifest.json`,
+  `assets/enhancements/comfyui/drive16-genesis-sprite.workflow.json`,
+  `assets/enhancements/comfyui/README.md`,
+  `assets/enhancements/README.md`, `scripts/validate-comfyui-workflow.py`,
+  `docs/phase4-comfyui-workflow.md`, `assets/README.md`,
+  `scripts/README.md`, `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: structural workflow validator, Markdown punctuation check,
+  secret scan, and `git diff --check`.
+
+Did:
+
+- Added a ComfyUI API-format workflow for a local Pixel Art Diffusion XL style
+  checkpoint, 32x32 nearest-neighbor output, and Pixydust 16-color
+  quantization.
+- Added a manifest that records the MCP tool, local-only runtime, output size,
+  palette limit, transparency reservation, and SGDK `SPRITE` resource shape.
+- Added a local validator that checks the workflow contract without requiring
+  a live GPU or ComfyUI process.
+
+Evidence:
+
+- `scripts/validate-comfyui-workflow.py` passed and reported `ComfyUI workflow
+  ok: 9 nodes, 32x32, 16 colors`.
+- The validator confirmed the graph is ComfyUI API format for
+  `enqueue_workflow`, not UI format.
+- The validator confirmed `ImageScale` uses nearest-neighbor 32x32 output and
+  Pixydust `Quantizer` uses 16 colors with dithering off.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+
+Gate:
+
+None. Live generated-sprite validation remains the next Phase 4 unit.
+
+Next:
+
+- Validate generated sprites as palette-legal SGDK `SPRITE` resources.
+
 ## 2026-06-30 - ITERATION 36 - ComfyUI MCP wrapper
 
 Plan:

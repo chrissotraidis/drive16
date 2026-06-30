@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "packId": "drive16-comfyui-genesis-sprite",
+  "description": "Phase 4 ComfyUI workflow contract for optional Genesis sprite generation.",
+  "license": "Drive16 project workflow metadata. External ComfyUI nodes and checkpoints keep their own licenses and run as a separate local process.",
+  "runtime": {
+    "mcpServer": "drive16-comfyui",
+    "tool": "enqueue_workflow",
+    "format": "comfyui-api-prompt",
+    "localOnly": true
+  },
+  "workflow": {
+    "path": "assets/enhancements/comfyui/drive16-genesis-sprite.workflow.json",
+    "nodeCount": 9,
+    "outputPrefix": "drive16/generated/drive16_genesis_sprite"
+  },
+  "model": {
+    "checkpoint": "pixel-art-diffusion-xl.safetensors",
+    "role": "dedicated pixel checkpoint",
+    "install": "Install a Pixel Art Diffusion XL compatible checkpoint under the local ComfyUI checkpoints folder and update ckpt_name if the filename differs."
+  },
+  "customNodes": [
+    {
+      "classType": "Quantizer",
+      "source": "ComfyUI-PixydustQuantizer",
+      "role": "16 color palette quantization"
+    }
+  ],
+  "generation": {
+    "sourceSize": {
+      "width": 512,
+      "height": 512
+    },
+    "outputSize": {
+      "width": 32,
+      "height": 32
+    },
+    "tilesWide": 4,
+    "tilesHigh": 4,
+    "downscale": "nearest-exact",
+    "palette": {
+      "maxColors": 16,
+      "transparentIndex": 0,
+      "transparentSource": "Reserve a flat background color for the next SGDK sprite validator to map to palette index 0."
+    },
+    "rescomp": "SPRITE <symbol> \"<generated-png>\" 4 4 NONE 0"
+  },
+  "constraints": [
+    "Generate above 32x32 before final downscale.",
+    "Use nearest-neighbor scaling for the final 32x32 sprite.",
+    "Quantize to one Genesis palette line with no more than 16 colors.",
+    "Keep the output inside a 4x4 tile, 32x32 hardware sprite boundary.",
+    "Do not use hosted API nodes or paid image APIs."
+  ]
+}

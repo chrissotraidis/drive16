@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ComfyUI sprite workflow is an API prompt contract
+
+Context:
+
+Phase 4 needs a tuned Genesis palette ComfyUI workflow before generated sprite
+outputs can be validated as SGDK resources. Live ComfyUI generation may require
+GPU setup and checkpoint installation, but the workflow shape can be committed
+and checked locally first.
+
+Decision:
+
+Ship the Drive16 sprite workflow as a ComfyUI API-format prompt under
+`assets/enhancements/comfyui/`, paired with a manifest and structural validator.
+The graph uses standard ComfyUI generation nodes, nearest-neighbor 32x32
+scaling, and Pixydust `Quantizer` with 16 colors. It targets the optional
+`drive16-comfyui` MCP server through `enqueue_workflow`.
+
+Consequence:
+
+Drive16 now has a concrete, versioned AI sprite workflow contract without
+committing model weights or generated PNGs. Actual generated-output quality,
+palette-index transparency, and SGDK `SPRITE` legality remain separate
+validation work in the next Phase 4 unit.
+
 ## 2026-06-30 - ComfyUI MCP wrapper uses the external MIT package
 
 Context:

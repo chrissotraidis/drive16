@@ -17,6 +17,8 @@ Toolchain and validation scripts live here.
   ignored artifacts for the Phase 4 AI sprite path.
 - `validate-comfyui-mcp-wrapper.py`: verifies the `comfyui-mcp` wrapper can
   initialize and expose the expected ComfyUI tools.
+- `validate-comfyui-workflow.py`: verifies the Phase 4 ComfyUI Genesis sprite
+  workflow contract before live generated-sprite validation.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.
