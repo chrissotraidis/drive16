@@ -1,9 +1,25 @@
 # Drive16 Progress
 
-Current phase: Phase 5, hardening and local path
+Current phase: Phase 6, interactive ROM player
 
-Exit criterion: the full loop runs locally with no paid service on a documented
-hardware target, and the hosted BYOK path is stable enough to share.
+Exit criterion: imported and Drive16-generated Genesis ROMs can be played
+interactively inside the app with real keyboard input, while the existing
+Genteel proof path remains available and distinct.
+
+## Phase 6 Checklist
+
+- [x] Read Phase 6 goal objective.
+- [x] Evaluate embedded emulator core options and license posture.
+- [ ] Add player architecture boundary.
+- [ ] Clean up UI language so Play and Verify/Capture Proof are distinct.
+- [ ] Wire imported ROMs into the interactive player.
+- [ ] Wire keyboard input into the running interactive player.
+- [ ] Add player controls without crowding the ROM viewport.
+- [ ] Add or honestly gate audio.
+- [ ] Add controller-ready input foundation.
+- [ ] Wire Drive16-generated ROMs into the same player.
+- [ ] Run full polish, regression, and evidence pass.
+- [ ] Assemble Phase 6 evidence packet for human review.
 
 ## Phase 5 Checklist
 
@@ -21,16 +37,27 @@ hardware target, and the hosted BYOK path is stable enough to share.
 
 ## Current Task
 
-Phase 5 is open and ready for human review. The evidence packet summarizes the
-provider cleanup, conversation truthfulness, project actions, ROM import, ROM
-controls, ROM-first layout, enhancement readiness, action feedback, and local
-path validation work.
+Phase 6 is open. Unit 1 selected an adapter-based interactive player direction
+after checking browser emulator options and Genesis core licensing. Nostalgist
+is the first browser adapter target, but core binaries remain uncommitted and
+core delivery must stay configurable because common Mega Drive cores have
+non-commercial or copyleft licensing constraints.
 
-Evidence is recorded in `docs/phase5-evidence.md`.
+Evidence is recorded in `docs/phase6-emulator-core-selection.md`.
 
 ## Next Up
 
-Human review and sign-off for Phase 5.
+Unit 2: add the player architecture boundary and active ROM source model.
+
+## Completed Phase 6 Work
+
+- [x] Phase 6 goal objective read from the attached prompt.
+- [x] Nostalgist, EmulatorJS, romdevtools, retroemu, and direct Genteel
+  approaches reviewed.
+- [x] Decision recorded to keep interactive play behind a provider adapter.
+- [x] Genteel remains the Verify/Capture Proof path.
+- [x] Emulator core binaries remain outside git until licensing and delivery
+  are explicit.
 
 ## Completed Phase 5 Work
 

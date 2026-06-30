@@ -24,13 +24,13 @@ Evidence:
 - Current ledger: `PROGRESS.md`
 - Iteration journal: `WORKLOG.md`
 
-The active work is Phase 5 hardening and local-path polish. Phase 4 was
+The active work is Phase 6 interactive ROM play. Phase 4 was
 approved after the live generated-assets proof passed locally: default-off
 settings toggles, ComfyUI readiness checks, the `comfyui-mcp` wrapper, the
 tuned Genesis sprite workflow, generated sprite validation, MML music
 generation, and the combined generated-assets proof harness are all in place.
 
-Phase 5 has started with provider settings cleanup, conversation truthfulness,
+Phase 5 completed provider settings cleanup, conversation truthfulness,
 project menu hardening, local ROM import, ROM controls, ROM-first layout, and
 enhancement/action feedback clarity. Agent Settings now switches cleanly
 between OpenRouter and Ollama, hides hosted key/model fields when the local
@@ -48,9 +48,17 @@ compact status. Enhancement toggles now show explicit readiness labels instead
 of ambiguous On/Off state. Run, Save, Export, and Import actions now report
 near the ROM viewport and preserve recent action paths.
 
+Phase 6 has started by selecting the interactive player architecture direction.
+Drive16 will keep Genteel as the deterministic Verify/Capture Proof path and
+add a separate interactive Play path behind a provider adapter. Nostalgist plus
+RetroArch Emscripten is the first browser adapter target, but Genesis core
+delivery remains explicit and configurable because common Mega Drive cores have
+non-commercial or copyleft licensing constraints.
+
 ## What to do next
 
-Current Phase 5 next step: human review of `docs/phase5-evidence.md`.
+Current Phase 6 next step: add the player architecture boundary and active ROM
+source model.
 
 Current local validation:
 
@@ -166,6 +174,7 @@ scripts/validate-phase4-live-generated-assets.sh
 - Phase 4: optional AI sprites and generated MML music, proof passed locally
   and approved.
 - Phase 5: hardening and fully local path, ready for human review.
+- Phase 6: interactive imported/generated ROM player, in progress.
 
 ## Model stance
 

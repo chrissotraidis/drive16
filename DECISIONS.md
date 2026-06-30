@@ -1,5 +1,33 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Interactive play uses an adapter boundary
+
+Context:
+
+Phase 6 needs imported and generated Genesis ROMs to become playable inside
+Drive16, but the current app only performs finite Genteel proof captures.
+Browser emulator wrappers exist, but the Genesis core license must not be
+blurred into the app's permissive distribution posture. Nostalgist is MIT and
+browser-friendly, but its default Mega Drive path uses Genesis Plus GX.
+Genesis Plus GX is documented as non-commercial. EmulatorJS is a heavier
+GPL-3.0 frontend. romdevtools and retroemu are useful local references, but do
+not provide the embedded Drive16 playfield requested for this phase.
+
+Decision:
+
+Add Phase 6 around an interactive player provider boundary. Target a
+Nostalgist/RetroArch adapter for the first browser-hosted interactive player,
+but do not commit Genesis Plus GX core binaries or treat that core as a settled
+commercial distribution dependency. Keep Genteel as the Verify/Capture Proof
+path, not the human Play path.
+
+Consequence:
+
+Drive16 can build the player UI, input model, and generated/imported ROM play
+flows without locking the product into a questionable emulator-core license.
+Future builds can swap the provider, use user-supplied cores, or make an
+explicit licensing decision before distribution.
+
 ## 2026-06-30 - Local and hosted setup paths stay separate
 
 Context:

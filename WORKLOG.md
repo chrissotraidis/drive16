@@ -1,5 +1,48 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 85 - Phase 6 emulator core selection
+
+Plan:
+
+- Task: start Phase 6 by evaluating embedded Genesis player options and
+  recording a licensing-safe direction before UI or runtime integration.
+- Files: `docs/phase6-emulator-core-selection.md`, `DECISIONS.md`,
+  `PROGRESS.md`, `README.md`, and `WORKLOG.md`.
+- Verification: inspect candidate package metadata and current project ledgers.
+
+Did:
+
+- Read the Phase 6 objective from the attached goal prompt.
+- Inspected the current clean `main` worktree and Phase 5 evidence state.
+- Reviewed Nostalgist, EmulatorJS, romdevtools, retroemu, and direct Genteel
+  options.
+- Selected an adapter-based player direction with Nostalgist/RetroArch as the
+  first browser adapter target.
+- Kept Genesis core binaries out of git and documented the unresolved
+  non-commercial/copyleft core-license boundary.
+- Updated the phase ledger from Phase 5 review to Phase 6 active work.
+
+Evidence:
+
+- `nostalgist@0.21.1` package metadata reports MIT and its README describes
+  browser emulation including Sega Genesis.
+- Nostalgist package declarations expose `Nostalgist.megadrive(...)` and note
+  the default `genesis_plus_gx` core.
+- `romdev-core-gpgx@0.12.0` metadata reports Genesis Plus GX as
+  non-commercial.
+- `@emulatorjs/emulatorjs@4.2.3` metadata reports GPL-3.0.
+- `retroemu@0.3.0` metadata reports MIT and documents keyboard/controller
+  concepts, but as a terminal/native player rather than an embedded Drive16
+  webview.
+
+Gate:
+
+Phase 6 Unit 1 is complete. Phase 6 remains open.
+
+Next:
+
+- Add the player architecture boundary and active ROM source model.
+
 ## 2026-06-30 - ITERATION 84 - Phase 5 evidence packet
 
 Plan:
