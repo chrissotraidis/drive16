@@ -52,7 +52,8 @@ is the compatible checkpoint. The likely Civitai Pixel Art Diffusion XL source
 has also been audited, and its current metadata conflicts with the
 architecture appendix's open CreativeML assumption, so Drive16 continues to
 require an explicit user-selected checkpoint source instead of auto-downloading
-model weights.
+model weights. The readiness report now also surfaces nearby local checkpoint
+hints without accepting them automatically.
 
 ## Next Up
 
@@ -154,6 +155,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   Pixydust without masking the missing checkpoint.
 - [x] Pixel Art Diffusion XL source metadata audited without auto-downloading
   model weights.
+- [x] ComfyUI readiness report now includes nearby checkpoint hints without
+  relaxing the real Pixel Art checkpoint gate.
 
 ## Completed Phase 3 Work
 

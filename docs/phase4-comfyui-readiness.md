@@ -28,6 +28,9 @@ API is not reachable.
   Pixydust node is missing.
 - The script records the selected checkpoint name, the manifest default, and
   whether a runtime override is active.
+- When the selected checkpoint is missing, the script records nearby local
+  checkpoint hints from common local image-generation folders without accepting
+  them automatically.
 - Documented the script in `scripts/README.md`.
 - The app's native `check_comfyui_endpoint` command now mirrors the same
   readiness concepts in the settings drawer: API, checkpoint, Pixydust, and
@@ -106,6 +109,11 @@ Result: exit `68`. Pixydust was found under the local ComfyUI custom node
 directory, but the API was not reachable on `127.0.0.1:8188`, the default
 checkpoint was not found under the local ComfyUI model paths, and workflow
 classes could not be inspected without the API.
+
+The readiness check was later refreshed to include nearby checkpoint hints
+without treating them as compatible Pixel Art Diffusion XL proof. On this
+machine it reports general image checkpoint hints from Fooocus and
+DiffusionBee, while the default checkpoint remains missing.
 
 The settings drawer readiness rows were verified in the in-app browser at
 `http://127.0.0.1:1420/`:

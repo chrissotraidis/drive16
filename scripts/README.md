@@ -33,7 +33,8 @@ Toolchain and validation scripts live here.
   committed workflow classes, Pixel Art Diffusion XL checkpoint, and Pixydust
   Quantizer node before live sprite generation. Set
   `DRIVE16_COMFYUI_CHECKPOINT` when the compatible checkpoint uses a different
-  local filename.
+  local filename. When the required checkpoint is missing, the report includes
+  nearby local checkpoint hints without accepting them automatically.
 - `launch-phase4-comfyui-api.sh`: fetches a pinned ComfyUI source checkout
   into ignored artifacts and launches it against the local ComfyUI data folder.
 - `validate-phase4-comfyui-api-smoke.sh`: starts the local ComfyUI API

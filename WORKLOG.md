@@ -1,5 +1,55 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 63 - ComfyUI readiness checkpoint hints
+
+Plan:
+
+- Task: make the ComfyUI readiness report show nearby local checkpoint hints
+  while still requiring the selected compatible checkpoint.
+- Files: `scripts/check-phase4-comfyui-readiness.py`, `scripts/README.md`,
+  `docs/phase4-comfyui-readiness.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: compile the Python script, rerun readiness without the
+  checkpoint, inspect the report, run hygiene checks, and confirm the gate
+  stays open.
+
+Did:
+
+- Added a nearby checkpoint hint scan to the readiness checker.
+- The scan looks in local ComfyUI, Fooocus, and DiffusionBee model folders.
+- The selected checkpoint still must be present or available through ComfyUI
+  API before the checkpoint check can pass.
+- Updated docs and progress with the stricter hint behavior.
+
+Evidence:
+
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py` passed.
+- `scripts/check-phase4-comfyui-readiness.py` exited `68`, preserving the
+  validation request.
+- The readiness output still reports the API refused on `127.0.0.1:8188` and
+  the selected checkpoint missing from the checked local ComfyUI paths.
+- The readiness output now lists nearby hints:
+  `juggernautXL_version6Rundiffusion.safetensors`,
+  `CyberRealistic__v3.1_CyberRealistic__v3.1.safetensors`, and
+  `ReV_Animated_1.2.2_ReV_Animated_1.2.2.safetensors`.
+- The readiness JSON records `ok: false`, `checkpoint.ok: false`, three
+  `nearbyCandidates`, and `nearbyCandidatesAreHintsOnly: true`.
+- `scripts/validate-phase4-comfyui-api-smoke.sh` passed after the hint change,
+  proving the live API smoke still starts ComfyUI, sees workflow classes and
+  Pixydust, and keeps only the checkpoint as the remaining gate.
+- `git diff --check` passed.
+- Markdown punctuation and secret scans found no matches in the diff.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live ComfyUI sprite workflow and the
+real generated-assets ROM proof.
+
+Next:
+
+- Install the compatible checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 62 - ComfyUI checkpoint source audit
 
 Plan:

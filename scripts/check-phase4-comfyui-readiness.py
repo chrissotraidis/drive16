@@ -17,6 +17,7 @@ MANIFEST = ROOT / "assets" / "enhancements" / "comfyui" / "manifest.json"
 WORKFLOW = ROOT / "assets" / "enhancements" / "comfyui" / "drive16-genesis-sprite.workflow.json"
 ARTIFACT_DIR = ROOT / "artifacts" / "phase4" / "comfyui-readiness"
 REPORT = ARTIFACT_DIR / "latest.json"
+CHECKPOINT_SUFFIXES = {".safetensors", ".ckpt", ".pt"}
 
 
 def load_json(path: Path) -> Any:
@@ -37,6 +38,33 @@ def checkpoint_candidates(comfyui_root: Path, checkpoint: str) -> list[Path]:
         comfyui_root / "models" / "checkpoints" / checkpoint,
         comfyui_root / "models" / checkpoint,
     ]
+
+
+def checkpoint_hint_directories(comfyui_root: Path) -> list[Path]:
+    return [
+        comfyui_root / "models" / "checkpoints",
+        comfyui_root / "models",
+        Path.home() / "Documents" / "GitHub" / "Fooocus" / "models" / "checkpoints",
+        Path.home() / ".diffusionbee" / "downloaded_assets",
+    ]
+
+
+def nearby_checkpoint_hints(comfyui_root: Path, checked_paths: list[Path]) -> list[dict[str, str]]:
+    checked = {str(path.expanduser()) for path in checked_paths}
+    seen: set[str] = set()
+    hints: list[dict[str, str]] = []
+    for directory in checkpoint_hint_directories(comfyui_root):
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.iterdir(), key=lambda item: item.name.lower()):
+            if not path.is_file() or path.suffix.lower() not in CHECKPOINT_SUFFIXES:
+                continue
+            path_text = str(path.expanduser())
+            if path_text in checked or path_text in seen:
+                continue
+            seen.add(path_text)
+            hints.append({"name": path.name, "path": path_text})
+    return hints
 
 
 def find_pixydust_candidates(comfyui_root: Path, source: str) -> list[Path]:
@@ -168,10 +196,13 @@ def main() -> int:
     if not checks["checkpoint"]["ok"]:
         candidates = checkpoint_candidates(comfyui_root, checkpoint)
         existing = [path for path in candidates if path.is_file()]
+        hints = nearby_checkpoint_hints(comfyui_root, candidates)
         checks["checkpoint"].update(
             {
                 "ok": bool(existing),
                 "checkedPaths": [str(path) for path in candidates],
+                "nearbyCandidates": hints[:12],
+                "nearbyCandidatesAreHintsOnly": True,
             }
         )
         if existing:
@@ -225,6 +256,10 @@ def main() -> int:
                 or check.get("checkedDirectory")
             )
             print(f"- {name}: {reason}")
+            if name == "checkpoint" and check.get("nearbyCandidates"):
+                print("  Nearby checkpoint hints, not accepted automatically:")
+                for candidate in check["nearbyCandidates"][:5]:
+                    print(f"  - {candidate['name']}: {candidate['path']}")
     print(
         "Expected: local ComfyUI API on 127.0.0.1:8188, "
         "Pixel Art Diffusion XL checkpoint, and Pixydust Quantizer node."
