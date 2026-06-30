@@ -23,6 +23,9 @@ Toolchain and validation scripts live here.
   workflow contract before live generated-sprite validation.
 - `validate-generated-sprite.py`: checks a generated ComfyUI PNG against the
   Phase 4 SGDK sprite limits and reports its `SPRITE` resource line.
+- `validate-generated-sprite-sgdk-resource.sh`: feeds a validator-accepted
+  synthetic generated sprite into an ignored SGDK project, builds it through
+  `rescomp`, and captures a Genteel screenshot.
 - `run-comfyui-sprite-workflow.py`: enqueues the Phase 4 ComfyUI workflow
   through `drive16-comfyui`, downloads the PNG output, and runs the generated
   sprite validator.

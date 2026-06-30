@@ -1,5 +1,67 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 57 - Generated sprite SGDK resource proof
+
+Plan:
+
+- Task: prove a validator-accepted generated-sprite PNG can be consumed by
+  SGDK `rescomp` as a `SPRITE` resource and rendered by a ROM.
+- Files: `scripts/validate-generated-sprite-sgdk-resource.sh`,
+  `scripts/README.md`, `docs/phase4-generated-sprite-sgdk-resource.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run the new SGDK resource harness, inspect the Genteel
+  screenshot, run script syntax checks, run focused generated-sprite tests,
+  rerun the generated-assets gate, run hygiene scans, and check ignored
+  artifact coverage.
+
+Did:
+
+- Added a validation harness that creates an ignored SGDK project from the
+  generated-sprite validator's accepted synthetic PNG fixture.
+- Wrote a `SPRITE drive16_player "generated-sprite.png" 4 4 NONE 0` resource
+  entry and minimal SGDK display program into ignored artifacts.
+- Built the project through the pinned Docker SGDK path, which runs `rescomp`.
+- Ran the resulting ROM through Genteel and captured a screenshot.
+- Recorded the evidence and kept the main live generated-sprite gate open.
+
+Evidence:
+
+- `scripts/validate-generated-sprite-sgdk-resource.sh` passed.
+- The generated-sprite validator accepted the synthetic 32x32 indexed PNG with
+  4 palette slots and 704 transparent pixels.
+- SGDK `rescomp` accepted the sprite resource and reported 1 VDP sprite and 6
+  tiles.
+- `scripts/build-sgdk.sh` built
+  `artifacts/phase4/generated-sprite-sgdk-resource/project/out/rom.bin`.
+- Genteel captured
+  `artifacts/phase4/generated-sprite-sgdk-resource/generated-sprite-resource.png`.
+- Visual sanity check: the screenshot shows `Drive16 Phase 4`,
+  `Generated SPRITE`, and the generated sprite on screen.
+- `bash -n scripts/validate-generated-sprite-sgdk-resource.sh` passed.
+- `scripts/validate-generated-sprite.py --self-test` passed.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` at the expected live ComfyUI sprite
+  gate.
+- `scripts/check-phase4-comfyui-readiness.py` exited `68`: ComfyUI API was not
+  reachable on `127.0.0.1:8188`, the default checkpoint was not found under
+  local model paths, and workflow classes could not be inspected without the
+  API.
+- `git diff --check` passed.
+- Secret scan and Markdown punctuation scan found no matches.
+- Generated SGDK project, ROM, screenshot, reports, and sample PNG artifacts
+  are ignored by git.
+
+Gate:
+
+VALIDATION REQUEST remains: place a Pixel Art Diffusion XL compatible
+checkpoint, start local ComfyUI, pass `scripts/check-phase4-comfyui-readiness.py`,
+run the live sprite workflow, then rerun the combined generated-assets proof.
+
+Next:
+
+- Place the checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof.
+
 ## 2026-06-30 - ITERATION 56 - Settings checkpoint override
 
 Plan:

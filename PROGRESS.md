@@ -36,6 +36,9 @@ now returns the same readiness sequence before asking the user to retry the
 prompt. The settings drawer now surfaces the same ComfyUI readiness checks
 behind the `AI sprites` toggle, accepts a checkpoint filename before testing,
 and the browser-preview failure path renders an API readiness row for local QA.
+A validator-accepted synthetic generated-sprite PNG has also been proven
+through SGDK `rescomp`, a ROM build, and a Genteel screenshot. Live ComfyUI
+output is still required before the generated-sprite checklist item can close.
 
 ## Next Up
 
@@ -121,6 +124,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   has been checked at desktop and mobile widths.
 - [x] Settings ComfyUI test now accepts a checkpoint filename and sends it to
   native readiness before the environment or manifest fallback is used.
+- [x] Validator-accepted generated-sprite PNGs now have an SGDK `SPRITE`
+  resource harness with ROM build and Genteel screenshot evidence.
 
 ## Completed Phase 3 Work
 
