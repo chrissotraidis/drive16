@@ -45,7 +45,9 @@ Evidence is recorded in `docs/phase6-ui-language.md`.
 
 ## Next Up
 
-Unit 4: wire imported ROMs into the interactive player adapter path.
+Unit 4 is in progress: active ROM bytes can now be prepared for the future
+interactive player adapter, but live emulator playback still waits on the
+configured core.
 
 ## Completed Phase 6 Work
 
@@ -63,6 +65,11 @@ Unit 4: wire imported ROMs into the interactive player adapter path.
 - [x] Top-level ROM action now says Verify instead of Run.
 - [x] Captured-frame toolbar labels now say proof preview and capture.
 - [x] Scripted movement proof now says Verify Right.
+- [x] Native `read_rom_bytes` command added for safe repo-local ROM payloads.
+- [x] `Play ROM` action added and wired to prepare the active ROM for the
+  interactive player path.
+- [x] Missing-core and browser-preview read failures surface as visible Play
+  feedback instead of pretending playback started.
 
 ## Completed Phase 5 Work
 

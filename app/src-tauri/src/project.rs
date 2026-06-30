@@ -95,6 +95,19 @@ pub struct RomImportResult {
     pub accepted_extensions: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RomReadResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub rom_path: String,
+    pub source_name: String,
+    pub bytes: u64,
+    pub data_base64: String,
+    pub accepted_extensions: Vec<String>,
+}
+
 struct ProjectPaths {
     repo_root: PathBuf,
     project_path: PathBuf,
@@ -135,6 +148,10 @@ pub fn import_test_rom() -> Result<RomImportResult, String> {
 
 pub fn export_rom_path(source_rom_path: String) -> Result<RomExportResult, String> {
     export_rom_path_for_repo(repo_root(), source_rom_path)
+}
+
+pub fn read_rom_bytes(rom_path: String) -> Result<RomReadResult, String> {
+    read_rom_bytes_for_repo(repo_root(), rom_path)
 }
 
 fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
@@ -194,6 +211,42 @@ fn export_rom_path_for_repo(
     let paths = ProjectPaths::new(repo_root);
     let source_path = resolve_repo_path(&paths.repo_root, &source_rom_path)?;
     export_rom_file(&paths, &source_path)
+}
+
+fn read_rom_bytes_for_repo(repo_root: PathBuf, rom_path: String) -> Result<RomReadResult, String> {
+    let paths = ProjectPaths::new(repo_root);
+    let source_path = resolve_repo_path(&paths.repo_root, &rom_path)?;
+    if !source_path.is_file() {
+        return Err(format!("ROM is missing: {}", source_path.display()));
+    }
+    let source_name = source_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| format!("ROM path has no file name: {}", source_path.display()))?;
+    accepted_rom_extension(source_name).ok_or_else(|| {
+        format!(
+            "Unsupported ROM extension for {}. Accepted: {}",
+            source_name,
+            accepted_extensions().join(", ")
+        )
+    })?;
+
+    let data = fs::read(&source_path)
+        .map_err(|error| format!("Could not read ROM {}: {}", source_path.display(), error))?;
+    if data.is_empty() {
+        return Err(format!("ROM file was empty: {}", source_path.display()));
+    }
+
+    Ok(RomReadResult {
+        generated_at: unix_timestamp(),
+        status: "ready".to_string(),
+        detail: "ROM bytes ready for interactive player".to_string(),
+        rom_path: repo_relative(&paths.repo_root, &source_path),
+        source_name: source_name.to_string(),
+        bytes: data.len() as u64,
+        data_base64: general_purpose::STANDARD.encode(data),
+        accepted_extensions: accepted_extensions(),
+    })
 }
 
 fn export_rom_file(paths: &ProjectPaths, source_path: &Path) -> Result<RomExportResult, String> {
@@ -888,6 +941,55 @@ mod tests {
         let temp_dir = temp_repo("export-reject");
         fs::create_dir_all(&temp_dir).unwrap();
         let result = export_rom_path_for_repo(temp_dir.clone(), "../outside.bin".to_string());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_rom_bytes_returns_repo_local_rom_payload() {
+        let temp_dir = temp_repo("read-rom");
+        let rom_path = temp_dir.join(ROM_IMPORT_DIRECTORY).join("playable-test.md");
+        fs::create_dir_all(rom_path.parent().unwrap()).unwrap();
+        fs::write(&rom_path, b"PLAYABLE ROM").unwrap();
+
+        let result = read_rom_bytes_for_repo(
+            temp_dir.clone(),
+            "artifacts/phase5/imports/playable-test.md".to_string(),
+        )
+        .expect("ROM bytes should be readable for player");
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.rom_path, "artifacts/phase5/imports/playable-test.md");
+        assert_eq!(result.source_name, "playable-test.md");
+        assert_eq!(result.bytes, 12);
+        assert_eq!(
+            general_purpose::STANDARD
+                .decode(result.data_base64)
+                .unwrap(),
+            b"PLAYABLE ROM"
+        );
+    }
+
+    #[test]
+    fn read_rom_bytes_rejects_paths_outside_repo() {
+        let temp_dir = temp_repo("read-outside");
+        fs::create_dir_all(&temp_dir).unwrap();
+        let result = read_rom_bytes_for_repo(temp_dir.clone(), "../outside.bin".to_string());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_rom_bytes_rejects_unsupported_extensions() {
+        let temp_dir = temp_repo("read-extension");
+        let text_path = temp_dir.join("notes.txt");
+        fs::create_dir_all(&temp_dir).unwrap();
+        fs::write(&text_path, b"not a rom").unwrap();
+
+        let result = read_rom_bytes_for_repo(temp_dir.clone(), "notes.txt".to_string());
         fs::remove_dir_all(temp_dir).unwrap();
 
         assert!(result.is_err());

@@ -99,6 +99,13 @@ async fn export_rom_path(source_rom_path: String) -> Result<project::RomExportRe
 }
 
 #[tauri::command]
+async fn read_rom_bytes(rom_path: String) -> Result<project::RomReadResult, String> {
+    tauri::async_runtime::spawn_blocking(move || project::read_rom_bytes(rom_path))
+        .await
+        .map_err(|error| format!("ROM read task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn save_current_project() -> Result<project::ProjectSaveResult, String> {
     tauri::async_runtime::spawn_blocking(project::save_current_project)
         .await
@@ -171,6 +178,7 @@ fn main() {
             import_test_rom,
             export_current_rom,
             export_rom_path,
+            read_rom_bytes,
             save_current_project,
             run_v1_prompt,
             run_phase4_music_prompt,

@@ -1079,6 +1079,14 @@ kbd {
   white-space: nowrap;
 }
 
+.rom-player-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .status-compact {
   display: flex;
   align-items: center;

@@ -1,5 +1,48 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 88 - Phase 6 interactive loading prep
+
+Plan:
+
+- Task: start wiring active ROMs into the interactive player path without
+  overclaiming playback before a core is configured.
+- Files: `app/src-tauri/src/project.rs`, `app/src-tauri/src/main.rs`,
+  `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase6-interactive-loading.md`, `PROGRESS.md`, `README.md`, and
+  `WORKLOG.md`.
+- Verification: native tests, frontend build, browser Play feedback check, and
+  diff whitespace check.
+
+Did:
+
+- Added native `read_rom_bytes` for safe repo-local ROM byte reads.
+- Added tests for successful ROM reads, outside-repo rejection, and
+  unsupported-extension rejection.
+- Added `Play ROM` to the ROM controls.
+- Preserved imported file bytes as a temporary player blob in the browser
+  session.
+- Wired desktop Play prep to native `read_rom_bytes`.
+- Added visible `Player core needed` and `Play setup failed` feedback states.
+
+Evidence:
+
+- `docs/phase6-interactive-loading.md`.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 44 passed
+  and 4 ignored.
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+- Browser QA confirmed `Play ROM` exists and reports an honest preview read
+  failure without console warnings/errors.
+
+Gate:
+
+Phase 6 Unit 4 is partially complete. Active ROM payload prep is wired, but
+live interactive playback still requires the configured emulator core adapter.
+
+Next:
+
+- Configure the player adapter core and pass the prepared ROM blob URL into it.
+
 ## 2026-06-30 - ITERATION 87 - Phase 6 UI language cleanup
 
 Plan:

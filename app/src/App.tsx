@@ -45,6 +45,7 @@ import {
   visibleKeyboardMappings,
   type ActiveRomSource,
   type InteractivePlayerSession,
+  type LoadedPlayerRom,
   type PlayerAudioState,
   type PlayerInputAction,
   type PlayerProvider,
@@ -174,6 +175,17 @@ type RomImportResult = {
   sourceName: string;
   importPath: string;
   bytes: number;
+  acceptedExtensions: string[];
+};
+
+type RomReadResult = {
+  generatedAt: string;
+  status: HealthState;
+  detail: string;
+  romPath: string;
+  sourceName: string;
+  bytes: number;
+  dataBase64: string;
   acceptedExtensions: string[];
 };
 
@@ -532,7 +544,8 @@ function App() {
   const [romInputFocused, setRomInputFocused] = useState(false);
   const [lastInputAction, setLastInputAction] = useState("No local input yet");
   const [lastPlayerInput, setLastPlayerInput] = useState<PlayerInputAction | undefined>();
-  const [playerState] = useState<PlayerSessionState>("idle");
+  const [loadedPlayerRom, setLoadedPlayerRom] = useState<LoadedPlayerRom | undefined>();
+  const [playerState, setPlayerState] = useState<PlayerSessionState>("idle");
   const [playerAudio] = useState<PlayerAudioState>("unavailable");
   const [interactiveProvider] = useState<PlayerProvider>(nostalgistProviderPending);
   const [inputProofBusy, setInputProofBusy] = useState(false);
@@ -621,6 +634,14 @@ function App() {
     element.scrollTop = element.scrollHeight;
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      if (loadedPlayerRom?.objectUrl) {
+        URL.revokeObjectURL(loadedPlayerRom.objectUrl);
+      }
+    };
+  }, [loadedPlayerRom?.objectUrl]);
+
   const buildLabel = useMemo(() => {
     if (buildState === "building") return "Verifying";
     if (buildState === "running") return "Ready";
@@ -694,6 +715,27 @@ function App() {
         detail: actionDetail,
       };
     }
+    if (playerState === "loading") {
+      return {
+        state: "warning",
+        label: "Preparing Play",
+        detail: actionDetail,
+      };
+    }
+    if (playerState === "error") {
+      return {
+        state: "missing",
+        label: "Play setup failed",
+        detail: actionDetail,
+      };
+    }
+    if (projectActionNotice.label === "Player core needed") {
+      return {
+        state: "warning",
+        label: projectActionNotice.label,
+        detail: projectActionNotice.detail,
+      };
+    }
     if (starterBusy || buildState === "building") {
       return {
         state: "warning",
@@ -706,7 +748,16 @@ function App() {
       label: "Ready",
       detail: actionDetail,
     };
-  }, [actionDetail, buildState, exportBusy, importBusy, saveBusy, starterBusy]);
+  }, [
+    actionDetail,
+    buildState,
+    exportBusy,
+    importBusy,
+    playerState,
+    projectActionNotice,
+    saveBusy,
+    starterBusy,
+  ]);
 
   const conversationMode = useMemo(
     () =>
@@ -731,6 +782,7 @@ function App() {
       state: playerState,
       audio: playerAudio,
       rom: activeRomSource,
+      loadedRom: loadedPlayerRom?.sourcePath === activeRomSource.path ? loadedPlayerRom : undefined,
       input: {
         focused: romInputFocused,
         keyboardReady: true,
@@ -741,6 +793,7 @@ function App() {
     [
       activeRomSource,
       interactiveProvider,
+      loadedPlayerRom,
       lastPlayerInput,
       playerAudio,
       playerState,
@@ -1720,8 +1773,8 @@ function App() {
     return invoke<RomImportReadiness>("prepare_rom_import");
   }
 
-  async function importSelectedRomInTauri(file: File) {
-    const dataBase64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+  async function importSelectedRomInTauri(file: File, bytes: Uint8Array) {
+    const dataBase64 = bytesToBase64(bytes);
     return invoke<RomImportResult>("import_rom_bytes", {
       request: {
         fileName: file.name,
@@ -1799,10 +1852,12 @@ function App() {
         );
       }
 
+      const selectedBytes = new Uint8Array(await selectedFile.arrayBuffer());
       const result = isTauriRuntime()
-        ? await importSelectedRomInTauri(selectedFile)
+        ? await importSelectedRomInTauri(selectedFile, selectedBytes)
         : previewImportForFile(selectedFile, readiness);
       activateImportedRom(result);
+      setLoadedPlayerRom(playerRomFromBytes(result.importPath, result.sourceName, selectedBytes));
       appendOpenCodeEvent("rom.imported", result.importPath);
       void launchRom(result.importPath, "Imported ROM proof captured.");
     } catch (error) {
@@ -1851,6 +1906,72 @@ function App() {
     void launchRom(
       importResult?.importPath,
       importResult ? "Imported ROM proof captured." : "Current starter ROM proof captured.",
+    );
+  }
+
+  async function playActiveRom() {
+    setPlayerState("loading");
+    noteAction(`Preparing ${activeRomSource.label} for interactive Play.`);
+    appendOpenCodeEvent("player.prepare.started", activeRomSource.path);
+
+    try {
+      const payload = await readActiveRomForPlayer(activeRomSource);
+      setLoadedPlayerRom(payload);
+
+      if (interactiveProvider.state !== "available") {
+        setPlayerState("stopped");
+        const detail = `${payload.sourceName} (${formatBytes(
+          payload.bytes,
+        )}) is ready for Play, but ${interactiveProvider.detail}`;
+        setProjectActionNotice({
+          state: "warning",
+          label: "Player core needed",
+          detail,
+        });
+        noteAction(detail);
+        appendOpenCodeEvent("player.needs_core", detail);
+        return;
+      }
+
+      setPlayerState("playing");
+      setProjectActionNotice({
+        state: "ready",
+        label: "Interactive player started",
+        detail: payload.sourcePath,
+      });
+      noteAction(`Playing ${payload.sourceName}.`);
+      appendOpenCodeEvent("player.playing", payload.sourcePath);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Interactive Play setup failed";
+      setPlayerState("error");
+      setProjectActionNotice({
+        state: "missing",
+        label: "Play setup failed",
+        detail,
+      });
+      noteAction(detail);
+      appendOpenCodeEvent("player.failed", detail);
+    }
+  }
+
+  async function readActiveRomForPlayer(source: ActiveRomSource): Promise<LoadedPlayerRom> {
+    if (loadedPlayerRom?.sourcePath === source.path) {
+      return loadedPlayerRom;
+    }
+
+    if (!isTauriRuntime()) {
+      throw new Error(
+        "Browser preview cannot read that ROM from disk. Import a local ROM in this browser session or use the desktop app.",
+      );
+    }
+
+    const result = await invoke<RomReadResult>("read_rom_bytes", {
+      romPath: source.path,
+    });
+    return playerRomFromBytes(
+      result.romPath,
+      result.sourceName,
+      base64ToBytes(result.dataBase64),
     );
   }
 
@@ -2345,16 +2466,29 @@ function App() {
             </div>
             <div className="rom-input-proof">
               <span data-testid="rom-last-input">{lastInputAction}</span>
-              <button
-                type="button"
-                data-testid="rom-right-proof"
-                onClick={() => {
-                  void runScriptedRightInputProof();
-                }}
-                disabled={inputProofBusy || openCodeBusy}
-              >
-                {inputProofBusy ? "Verifying Right" : "Verify Right"}
-              </button>
+              <div className="rom-player-actions">
+                <button
+                  type="button"
+                  data-testid="play-active-rom"
+                  onClick={() => {
+                    void playActiveRom();
+                  }}
+                  disabled={playerState === "loading"}
+                >
+                  <Play size={14} />
+                  {playerState === "loading" ? "Preparing" : "Play ROM"}
+                </button>
+                <button
+                  type="button"
+                  data-testid="rom-right-proof"
+                  onClick={() => {
+                    void runScriptedRightInputProof();
+                  }}
+                  disabled={inputProofBusy || openCodeBusy}
+                >
+                  {inputProofBusy ? "Verifying Right" : "Verify Right"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2759,7 +2893,11 @@ function PlayerSessionStrip({
       <span className="player-session-primary" title={session.rom.path}>
         <Gamepad2 size={15} />
         <strong>{session.rom.label}</strong>
-        <small>{shortPath(session.rom.path)}</small>
+        <small>
+          {session.loadedRom
+            ? `${formatBytes(session.loadedRom.bytes)} loaded`
+            : shortPath(session.rom.path)}
+        </small>
       </span>
       <span title={session.provider.detail}>
         {connectionIcon(providerHealthToConnection(providerState))}
@@ -3055,6 +3193,23 @@ function base64ToBytes(value: string) {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
+}
+
+function playerRomFromBytes(
+  sourcePath: string,
+  sourceName: string,
+  bytes: Uint8Array,
+): LoadedPlayerRom {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  const blob = new Blob([buffer], { type: "application/octet-stream" });
+  return {
+    loadedAt: new Date().toISOString(),
+    sourcePath,
+    sourceName,
+    objectUrl: URL.createObjectURL(blob),
+    bytes: bytes.byteLength,
+  };
 }
 
 function makePreviewStarterRom(romPath?: string): StarterRomPreview {

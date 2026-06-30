@@ -59,8 +59,8 @@ adapter and labels the current Genteel path as Verify/Proof Preview.
 
 ## What to do next
 
-Current Phase 6 next step: wire imported ROMs into the interactive player
-adapter path.
+Current Phase 6 next step: configure the interactive player adapter core and
+pass the prepared active-ROM blob URL into it.
 
 Current local validation:
 

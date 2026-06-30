@@ -9,6 +9,14 @@ export type ActiveRomSource = {
   canVerify: boolean;
 };
 
+export type LoadedPlayerRom = {
+  loadedAt: string;
+  sourcePath: string;
+  sourceName: string;
+  objectUrl: string;
+  bytes: number;
+};
+
 export type PlayerProviderKind = "proof-preview" | "nostalgist-retroarch";
 
 export type PlayerProviderState = "available" | "unconfigured" | "loading" | "error";
@@ -55,6 +63,7 @@ export type InteractivePlayerSession = {
   state: PlayerSessionState;
   audio: PlayerAudioState;
   rom: ActiveRomSource;
+  loadedRom?: LoadedPlayerRom;
   input: PlayerInputState;
 };
 
