@@ -20,6 +20,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / "scripts" / "comfyui-mcp.sh"
+READINESS = ROOT / "scripts" / "check-phase4-comfyui-readiness.py"
 VALIDATOR = ROOT / "scripts" / "validate-generated-sprite.py"
 MANIFEST = ROOT / "assets" / "enhancements" / "comfyui" / "manifest.json"
 WORKFLOW = ROOT / "assets" / "enhancements" / "comfyui" / "drive16-genesis-sprite.workflow.json"
@@ -214,7 +215,30 @@ def run_validator(png: Path, symbol: str) -> str:
     return result.stdout.strip()
 
 
-def validation_request(message: str, args: argparse.Namespace) -> int:
+def run_readiness(args: argparse.Namespace) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(READINESS),
+            "--comfyui-url",
+            args.comfyui_url,
+            "--checkpoint",
+            args.checkpoint,
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def validation_request(
+    message: str,
+    args: argparse.Namespace,
+    *,
+    readiness: subprocess.CompletedProcess[str] | None = None,
+) -> int:
     command = (
         f"COMFYUI_URL={shlex.quote(args.comfyui_url)} "
         f"DRIVE16_COMFYUI_CHECKPOINT={shlex.quote(args.checkpoint)} "
@@ -230,9 +254,23 @@ def validation_request(message: str, args: argparse.Namespace) -> int:
             "expected": "The command enqueues through drive16-comfyui, downloads a PNG, and prints Generated sprite ok.",
         },
     }
+    if readiness is not None:
+        payload["readiness"] = {
+            "exitCode": readiness.returncode,
+            "report": "artifacts/phase4/comfyui-readiness/latest.json",
+            "stdout": readiness.stdout.strip(),
+            "stderr": readiness.stderr.strip(),
+        }
     RUN_LOG.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print("VALIDATION REQUEST: local ComfyUI is required for live generated sprite validation.")
     print(message)
+    if readiness is not None:
+        if readiness.stdout.strip():
+            print()
+            print(readiness.stdout.strip())
+        if readiness.stderr.strip():
+            print()
+            print(readiness.stderr.strip(), file=sys.stderr)
     print(f"Run after ComfyUI is available: {command}")
     return 2
 
@@ -264,6 +302,14 @@ def main() -> int:
     env = os.environ.copy()
     env["COMFYUI_URL"] = args.comfyui_url
     env.setdefault("COMFYUI_MCP_AUTOUPDATE", "0")
+
+    readiness = run_readiness(args)
+    if readiness.returncode != 0:
+        return validation_request(
+            "Phase 4 ComfyUI readiness did not pass, so the live sprite workflow was not enqueued.",
+            args,
+            readiness=readiness,
+        )
 
     try:
         mcp_call("get_system_stats", {}, timeout=args.mcp_timeout, env=env)

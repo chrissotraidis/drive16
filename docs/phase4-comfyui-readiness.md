@@ -187,3 +187,7 @@ Then run:
 COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
 scripts/validate-phase4-generated-assets-prompt.sh
 ```
+
+The live sprite runner now invokes this readiness check before enqueueing the
+ComfyUI workflow. If readiness fails, the live-run record stays `ok: false` and
+links back to `artifacts/phase4/comfyui-readiness/latest.json`.

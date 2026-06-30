@@ -1,5 +1,54 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 66 - Live sprite runner readiness preflight
+
+Plan:
+
+- Task: make the live ComfyUI sprite runner reuse the Phase 4 readiness gate
+  before enqueueing a generation workflow.
+- Files: `scripts/run-comfyui-sprite-workflow.py`, `scripts/README.md`,
+  `docs/phase4-live-comfyui-runner.md`,
+  `docs/phase4-comfyui-readiness.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: compile the Python scripts, run the live runner without
+  ComfyUI/checkpoint, inspect the live-run record, and run hygiene scans.
+
+Did:
+
+- Added a readiness preflight to `scripts/run-comfyui-sprite-workflow.py`.
+- The runner now invokes `scripts/check-phase4-comfyui-readiness.py` with the
+  selected ComfyUI URL and checkpoint before it calls `drive16-comfyui`.
+- If readiness fails, the runner writes a validation-request record with the
+  readiness exit code, report path, stdout, and stderr.
+- The runner does not enqueue the ComfyUI workflow until readiness passes.
+
+Evidence:
+
+- `python3 -m py_compile scripts/run-comfyui-sprite-workflow.py scripts/check-phase4-comfyui-readiness.py` passed.
+- `scripts/run-comfyui-sprite-workflow.py` exited `2` with a validation
+  request because Phase 4 readiness did not pass.
+- The runner output included the readiness report path and nearby checkpoint
+  hints.
+- `artifacts/phase4/live-comfyui-sprite/last-run.json` recorded `ok: false`,
+  reason `Phase 4 ComfyUI readiness did not pass, so the live sprite workflow
+  was not enqueued.`, readiness exit code `68`, readiness report
+  `artifacts/phase4/comfyui-readiness/latest.json`, and readiness stdout with
+  nearby checkpoint hints.
+- `scripts/validate-phase4-generated-assets-prompt.sh` exited `66` at the
+  expected live ComfyUI sprite gate after focused Phase 4 prompt tests passed.
+- `git diff --check` passed.
+- Markdown punctuation and secret scans found no matches in the diff.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live ComfyUI sprite workflow and the
+real generated-assets ROM proof.
+
+Next:
+
+- Install the compatible checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 65 - App readiness checkpoint hints
 
 Plan:

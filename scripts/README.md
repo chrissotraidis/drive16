@@ -28,7 +28,8 @@ Toolchain and validation scripts live here.
   `rescomp`, and captures a Genteel screenshot.
 - `run-comfyui-sprite-workflow.py`: enqueues the Phase 4 ComfyUI workflow
   through `drive16-comfyui`, downloads the PNG output, and runs the generated
-  sprite validator.
+  sprite validator. It first runs the Phase 4 readiness check so missing API,
+  checkpoint, Pixydust, or workflow-class prerequisites stop before enqueueing.
 - `check-phase4-comfyui-readiness.py`: checks the local ComfyUI API,
   committed workflow classes, Pixel Art Diffusion XL checkpoint, and Pixydust
   Quantizer node before live sprite generation. Set

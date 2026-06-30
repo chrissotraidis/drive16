@@ -23,6 +23,9 @@ Implemented behavior:
 - It accepts `DRIVE16_COMFYUI_CHECKPOINT` or `--checkpoint` to use a
   compatible local checkpoint filename without editing the committed workflow
   JSON.
+- It runs `scripts/check-phase4-comfyui-readiness.py` before enqueueing so
+  missing API, checkpoint, Pixydust, or workflow-class prerequisites produce a
+  checkpoint-aware validation request instead of a failed generation attempt.
 
 ## Verification
 
@@ -38,6 +41,22 @@ Result:
   available on `http://127.0.0.1:8188`.
 - Validation request artifact:
   `artifacts/phase4/live-comfyui-sprite/last-run.json`.
+
+After the readiness preflight was added, the offline behavior was rerun:
+
+```sh
+scripts/run-comfyui-sprite-workflow.py
+```
+
+Result:
+
+- The runner exited `2` with a `VALIDATION REQUEST`.
+- It did not enqueue the ComfyUI workflow.
+- The output included the Phase 4 readiness report and nearby checkpoint hints.
+- `artifacts/phase4/live-comfyui-sprite/last-run.json` recorded `ok: false`,
+  readiness exit code `68`, readiness report
+  `artifacts/phase4/comfyui-readiness/latest.json`, and the readiness stdout
+  with nearby checkpoint hints.
 
 Wrapper determinism:
 
