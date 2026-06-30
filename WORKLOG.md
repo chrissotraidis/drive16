@@ -1,5 +1,48 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 70 - README project state refresh
+
+Plan:
+
+- Task: update the README so the current project state and next action are
+  obvious before pushing `main` to GitHub.
+- Files: `README.md` and `WORKLOG.md`.
+- Verification: inspect the README diff, check whitespace, scan the diff for
+  repo-style punctuation and secret-shaped text, and confirm local `main` is
+  not behind `origin/main`.
+
+Did:
+
+- Rewrote the README's current-state section.
+- Marked core v1 as complete and evidenced through the Phase 3 app flow.
+- Clarified that Phase 4 is optional enhancement work and remains open only on
+  live ComfyUI sprite output from a user-selected compatible checkpoint.
+- Added the next recommended command sequence for the checkpoint install helper
+  and live Phase 4 proof wrapper.
+- Added local app preview and validation commands.
+- Added asset and model hygiene notes for ROMs, keys, large artifacts, and
+  model weights.
+
+Evidence:
+
+- `git diff -- README.md` showed the README now points to
+  `docs/phase3-evidence.md`, `docs/phase3-v1-prompt.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- `git diff --check` passed.
+- Markdown punctuation and secret scans found no matches in the diff.
+- `git rev-list --left-right --count origin/main...HEAD` returned `0 69`
+  before this commit, so the local branch was ahead of GitHub and not behind.
+
+Gate:
+
+No new Phase 4 gate. The existing validation request remains: provide or
+install a compatible Pixel Art Diffusion XL checkpoint, then run
+`scripts/validate-phase4-live-generated-assets.sh`.
+
+Next:
+
+- Commit the README refresh and push `main` to GitHub.
+
 ## 2026-06-30 - ITERATION 69 - Live proof wrapper API launch
 
 Plan:
