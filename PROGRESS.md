@@ -15,23 +15,22 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Add visible ROM controls and keyboard/controller mapping.
 - [x] Add collapsible or resizable ROM-first layout.
 - [x] Clarify AI sprites and MML music readiness states.
-- [ ] Improve Run, Save, Export, Import, and tool-health feedback.
+- [x] Improve Run, Save, Export, Import, and tool-health feedback.
 - [ ] Validate and document the fully local Ollama plus local ComfyUI path.
 - [ ] Assemble Phase 5 evidence packet for human review.
 
 ## Current Task
 
-Phase 5 is open. Unit 7 clarified enhancement readiness. AI sprites now show
-Disabled, Needs setup, Running, Ready, or Failed with a next action and readable
-checkpoint/LoRA state. MML music now shows Disabled or Ready instead of an
-ambiguous On/Off label.
+Phase 5 is open. Unit 8 added a near-ROM action feedback strip. Run, Save,
+Export, and Import now update visible status next to the emulator and show
+recent save/export/import paths where applicable.
 
-Evidence is recorded in `docs/phase5-enhancement-readiness.md`.
+Evidence is recorded in `docs/phase5-action-feedback.md`.
 
 ## Next Up
 
-Unit 8: improve Run, Save, Export, Import, and tool-health feedback so every
-action has local, immediate, visible results and clear next steps on error.
+Unit 9: validate and document the fully local Ollama plus local ComfyUI path
+without mixing it with the hosted OpenRouter BYOK path.
 
 ## Completed Phase 5 Work
 
@@ -73,6 +72,10 @@ action has local, immediate, visible results and clear next steps on error.
 - [x] AI sprite readiness shows the selected SDXL checkpoint and Pixel Art LoRA.
 - [x] MML music shows Disabled or Ready with a generated-MML prompt path note.
 - [x] Enhancement readiness rows include a next action when setup is incomplete.
+- [x] Run, Save, Export, and Import feedback appears near the ROM viewport.
+- [x] Save feedback shows the latest snapshot path.
+- [x] Export feedback shows the latest exported ROM path.
+- [x] Import feedback shows the active imported ROM path.
 
 ## Completed Phase 4 Work
 

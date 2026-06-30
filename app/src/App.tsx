@@ -656,6 +656,49 @@ function App() {
     ];
   }, [openCode, openCodeEvents, openCodeSessionId, v1PromptResult]);
 
+  const actionFeedback = useMemo<ProjectActionNotice>(() => {
+    if (buildState === "error") {
+      return {
+        state: "missing",
+        label: "Action needs attention",
+        detail: actionDetail,
+      };
+    }
+    if (importBusy) {
+      return {
+        state: "warning",
+        label: "Importing ROM",
+        detail: actionDetail,
+      };
+    }
+    if (exportBusy) {
+      return {
+        state: "warning",
+        label: "Exporting ROM",
+        detail: actionDetail,
+      };
+    }
+    if (saveBusy) {
+      return {
+        state: "warning",
+        label: "Saving project",
+        detail: actionDetail,
+      };
+    }
+    if (starterBusy || buildState === "building") {
+      return {
+        state: "warning",
+        label: "Running ROM",
+        detail: actionDetail,
+      };
+    }
+    return {
+      state: "ready",
+      label: "Ready",
+      detail: actionDetail,
+    };
+  }, [actionDetail, buildState, exportBusy, importBusy, saveBusy, starterBusy]);
+
   const conversationMode = useMemo(
     () =>
       getConversationMode(
@@ -2282,6 +2325,37 @@ function App() {
               >
                 {inputProofBusy ? "Testing Right" : "Run Right Proof"}
               </button>
+            </div>
+          </div>
+
+          <div
+            className={`rom-action-feedback ${actionFeedback.state}`}
+            data-testid="rom-action-feedback"
+          >
+            {healthIcon(actionFeedback.state)}
+            <span>
+              <strong>{actionFeedback.label}</strong>
+              <small>{actionFeedback.detail}</small>
+            </span>
+            <div className="feedback-paths" aria-label="Recent action paths">
+              {importResult ? (
+                <span title={importResult.importPath}>
+                  <Upload size={13} />
+                  {shortPath(importResult.importPath)}
+                </span>
+              ) : null}
+              {saveResult ? (
+                <span title={saveResult.snapshotPath}>
+                  <Save size={13} />
+                  {shortPath(saveResult.snapshotPath)}
+                </span>
+              ) : null}
+              {exportResult ? (
+                <span title={exportResult.exportPath}>
+                  <Download size={13} />
+                  {shortPath(exportResult.exportPath)}
+                </span>
+              ) : null}
             </div>
           </div>
 

@@ -32,9 +32,9 @@ generation, and the combined generated-assets proof harness are all in place.
 
 Phase 5 has started with provider settings cleanup, conversation truthfulness,
 project menu hardening, local ROM import, ROM controls, ROM-first layout, and
-enhancement readiness clarity. Agent Settings now switches cleanly between
-OpenRouter and Ollama, hides hosted key/model fields when the local provider is
-active, and adds a native local Ollama `/api/tags` check. The
+enhancement/action feedback clarity. Agent Settings now switches cleanly
+between OpenRouter and Ollama, hides hosted key/model fields when the local
+provider is active, and adds a native local Ollama `/api/tags` check. The
 conversation pane now labels local proof responses, gates freeform prompts when
 the selected provider is not tested, and avoids implying live model replies are
 streaming. The project menu now surfaces New, Save, Open, Import, Export, and
@@ -45,13 +45,13 @@ The ROM viewport now shows a keyboard mapping, focus state, local input
 feedback, and a scripted Right-input proof action. The conversation rail and
 ROM detail panels can collapse so the emulator can take priority without losing
 compact status. Enhancement toggles now show explicit readiness labels instead
-of ambiguous On/Off state.
+of ambiguous On/Off state. Run, Save, Export, and Import actions now report
+near the ROM viewport and preserve recent action paths.
 
 ## What to do next
 
-Current Phase 5 next step: improve Run, Save, Export, Import, and tool-health
-feedback so every action has local, immediate, visible results and clear next
-steps on error.
+Current Phase 5 next step: validate and document the fully local Ollama plus
+local ComfyUI path without mixing it with the hosted OpenRouter BYOK path.
 
 To reproduce the Phase 4 live generated-assets proof after reviewing and
 accepting the upstream model licenses:

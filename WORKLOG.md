@@ -1,5 +1,49 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 82 - Phase 5 action feedback polish
+
+Plan:
+
+- Task: implement Phase 5 Unit 8 so Run, Save, Export, and Import feedback is
+  visible near the ROM viewport.
+- Files: `app/src/App.tsx`, `app/src/styles.css`, `DECISIONS.md`,
+  `PROGRESS.md`, `README.md`, `WORKLOG.md`, and
+  `docs/phase5-action-feedback.md`.
+- Verification: build frontend, run native tests, click Run, Save, Export, and
+  Import Test ROM in browser preview, and inspect the near-ROM feedback strip.
+
+Did:
+
+- Added a computed action feedback model for Running, Saving, Exporting,
+  Importing, Ready, and Error states.
+- Added a ROM action feedback strip below the controls.
+- Added compact chips for the active imported ROM path, latest save snapshot,
+  and latest export path.
+- Tuned feedback strip wrapping for narrow layouts.
+
+Evidence:
+
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 41 tests
+  and 4 live-environment tests ignored.
+- `pnpm --dir app build` passed.
+- Browser proof at `http://127.0.0.1:1420/`:
+  - Initial feedback showed `Ready` and the starter ROM run detail.
+  - Clicking Run updated feedback to the current starter ROM run detail.
+  - Clicking Save added `artifacts/phase3/projects/drive16-starter-preview`.
+  - Clicking Export added `artifacts/phase3/exports/drive16-starter-preview.bin`.
+  - Clicking Import Test ROM added
+    `artifacts/phase5/imports/drive16-import-preview-starter-test-rom.bin`.
+  - Project menu status still showed the full imported ROM copy detail.
+
+Gate:
+
+Phase 5 Unit 8 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 9: validate and document the fully local Ollama plus local ComfyUI path.
+
 ## 2026-06-30 - ITERATION 81 - Phase 5 enhancement readiness clarity
 
 Plan:

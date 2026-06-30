@@ -1,5 +1,25 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Primary action feedback belongs near the ROM viewport
+
+Context:
+
+Phase 5 user testing showed that Run, Save, Export, and Import could update
+state without feeling obvious. The top bar and project menu had feedback, but a
+user watching the ROM viewport could still miss what changed.
+
+Decision:
+
+Add a near-ROM action feedback strip under the controls. It reports the current
+action state and keeps recent import, save, and export paths visible as compact
+chips. The top bar and project menu remain, but the emulator area becomes the
+primary feedback surface while testing a ROM.
+
+Consequence:
+
+Actions no longer look dead when the user is focused on the viewport. Save,
+Export, and Import leave path evidence in the same area as Run feedback.
+
 ## 2026-06-30 - Enhancement toggles report readiness, not generic On/Off
 
 Context:

@@ -1060,6 +1060,98 @@ kbd {
   white-space: nowrap;
 }
 
+.rom-action-feedback {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(180px, auto);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 18px 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(244, 238, 230, 0.035);
+}
+
+.rom-action-feedback.ready {
+  border-color: rgba(143, 207, 136, 0.24);
+}
+
+.rom-action-feedback.warning {
+  border-color: rgba(255, 171, 82, 0.26);
+}
+
+.rom-action-feedback.missing {
+  border-color: rgba(255, 115, 106, 0.34);
+}
+
+.rom-action-feedback.ready > svg {
+  color: var(--green);
+}
+
+.rom-action-feedback.warning > svg {
+  color: var(--accent-2);
+}
+
+.rom-action-feedback.missing > svg {
+  color: #ff736a;
+}
+
+.rom-action-feedback > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rom-action-feedback strong,
+.rom-action-feedback small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rom-action-feedback strong {
+  color: #eaded1;
+  font-size: 12px;
+}
+
+.rom-action-feedback small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.feedback-paths {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.feedback-paths span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 190px;
+  min-height: 26px;
+  padding: 0 7px;
+  border: 1px solid rgba(244, 238, 230, 0.12);
+  border-radius: 999px;
+  color: #d8c6b5;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 11px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-paths svg {
+  flex: 0 0 auto;
+  color: var(--accent-2);
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: 0.85fr 1.15fr;
@@ -2050,6 +2142,15 @@ kbd {
     flex-wrap: wrap;
   }
 
+  .rom-action-feedback {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .feedback-paths {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
   .tool-stream {
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -2123,6 +2224,10 @@ kbd {
 
   .status-compact {
     align-items: stretch;
+    margin: 0 12px 12px;
+  }
+
+  .rom-action-feedback {
     margin: 0 12px 12px;
   }
 
