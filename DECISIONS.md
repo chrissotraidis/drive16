@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ComfyUI API launch uses pinned source artifacts
+
+Context:
+
+Phase 4 needs a reachable local ComfyUI API on Drive16's expected port before
+the generated-sprite workflow can run. Comfy Desktop is installed locally, but
+its bundle layout changed and a prior launch log referenced
+`/Applications/ComfyUI.app`, which no longer exists. The remaining workflow
+should not depend on a moving desktop-app internal path.
+
+Decision:
+
+Add `scripts/launch-phase4-comfyui-api.sh`. The script fetches a pinned
+ComfyUI source checkout into ignored `artifacts/` storage, uses the existing
+`~/Documents/ComfyUI` data folder, generates a clean Drive16 extra-models
+config, and serves `127.0.0.1:8188` by default. Python requirement installs
+remain explicit through `--install-requirements`.
+
+Consequence:
+
+The Phase 4 live sprite gate can be prepared from repeatable repo commands
+without relying on Comfy Desktop internals or pulling model weights. ComfyUI
+still runs as a separate local process, preserving the license boundary.
+
 ## 2026-06-30 - ComfyUI prerequisite setup stays explicit
 
 Context:

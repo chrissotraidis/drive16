@@ -1,5 +1,110 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 50 - ComfyUI API launcher
+
+Plan:
+
+- Task: add a repeatable launcher for the local ComfyUI API so Phase 4 no
+  longer depends on Comfy Desktop bundle internals.
+- Files: `scripts/launch-phase4-comfyui-api.sh`,
+  `scripts/setup-phase4-comfyui-prereqs.sh`, `scripts/README.md`,
+  `docs/phase4-comfyui-api-launch.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: inspect local ComfyUI paths and logs, prepare pinned ComfyUI
+  source, install explicit requirements, start the API, run readiness while
+  the API is live, run native tests, frontend build, secret scan, Markdown
+  punctuation check, ignored artifact check, and `git diff --check`.
+
+Did:
+
+- Confirmed `~/Documents/ComfyUI` is a data folder, not a runnable source
+  checkout.
+- Confirmed Comfy Desktop exists, but the old Desktop log referenced a stale
+  `/Applications/ComfyUI.app` path that is no longer present.
+- Added `scripts/launch-phase4-comfyui-api.sh`.
+- The launcher clones ComfyUI source into ignored `artifacts/` storage and
+  pins it to `785141051163612f0e471a242c1f33341f60b9bd`.
+- The launcher generates a clean Drive16 extra-models config under ignored
+  artifacts so stale Desktop paths do not break startup.
+- Added explicit Pixydust requirements installation to
+  `scripts/setup-phase4-comfyui-prereqs.sh`.
+- Installed the ComfyUI runtime requirements and Pixydust requirements into
+  the local ComfyUI Python environment.
+- Started the local API on `127.0.0.1:8188`, proved `/system_stats` responds,
+  ran readiness while the API was live, and then stopped the server.
+
+Evidence:
+
+- `find /Users/chrissotraidis/Documents/ComfyUI -maxdepth 2` showed a data
+  folder with `.venv`, `models`, `custom_nodes`, `input`, `output`, and `user`
+  but no `main.py`.
+- `tail` of the Comfy Desktop log showed the Desktop command had used
+  `/Applications/ComfyUI.app/Contents/Resources/ComfyUI/main.py` and failed in
+  ComfyUI Manager; that path no longer exists locally.
+- `git ls-remote https://github.com/comfyanonymous/ComfyUI.git HEAD` returned
+  `785141051163612f0e471a242c1f33341f60b9bd`.
+- `bash -n scripts/launch-phase4-comfyui-api.sh` passed.
+- `scripts/launch-phase4-comfyui-api.sh --prepare-only` cloned the pinned
+  source into
+  `artifacts/phase4/comfyui-api/src-785141051163612f0e471a242c1f33341f60b9bd`.
+- A first launch attempt failed because the old Desktop extra-models config
+  referenced missing `/Applications/ComfyUI.app/.../custom_nodes`.
+- After the launcher generated its own config, the next launch reached ComfyUI
+  startup but Pixydust failed to import because `sklearn` was missing.
+- `scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust-requirements --check`
+  installed Pixydust dependencies, including `scikit-learn` and
+  `scikit-image`.
+- A final short launch probe returned ComfyUI `/system_stats` from
+  `http://127.0.0.1:8188`.
+- The live readiness report recorded `api.ok: true`,
+  `pixydustQuantizer.ok: true`, and `workflowClasses.ok: true`.
+- The live readiness report still recorded `checkpoint.ok: false`.
+- `bash -n scripts/launch-phase4-comfyui-api.sh
+  scripts/setup-phase4-comfyui-prereqs.sh` passed.
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py
+  scripts/run-comfyui-sprite-workflow.py scripts/validate-comfyui-workflow.py`
+  passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture`
+  passed: 20 passed, 4 ignored.
+- `npm run build` in `app/` passed.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` with the live ComfyUI validation
+  request because no live generated sprite has completed successfully.
+- Secret scan returned no matches for OpenRouter key patterns.
+- Markdown punctuation and emoji guard returned no matches.
+- Ignored-artifact checks confirmed `app/dist/`,
+  `artifacts/phase4/comfyui-api`,
+  `artifacts/phase4/comfyui-readiness/latest.json`, and
+  `artifacts/phase4/live-comfyui-sprite/last-run.json` are ignored.
+- `git diff --check` passed.
+
+Gate:
+
+VALIDATION REQUEST: place a Pixel Art Diffusion XL compatible checkpoint at:
+
+```text
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+Then run:
+
+```sh
+scripts/launch-phase4-comfyui-api.sh
+```
+
+In another shell, run:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Next:
+
+- Place the checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof.
+
 ## 2026-06-30 - ITERATION 49 - Local Pixydust prerequisite
 
 Plan:

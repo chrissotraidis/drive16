@@ -9,21 +9,35 @@ PIXYDUST_DIR="$COMFYUI_ROOT/custom_nodes/ComfyUI-PixydustQuantizer"
 CHECKPOINT_NAME="pixel-art-diffusion-xl.safetensors"
 CHECKPOINT_PATH="$COMFYUI_ROOT/models/checkpoints/$CHECKPOINT_NAME"
 INSTALL_PIXYDUST=0
+INSTALL_PIXYDUST_REQUIREMENTS=0
 RUN_CHECK=0
+
+if [ -n "${DRIVE16_COMFYUI_PYTHON:-}" ]; then
+  PYTHON_BIN="$DRIVE16_COMFYUI_PYTHON"
+elif [ -x "$COMFYUI_ROOT/.venv/bin/python" ]; then
+  PYTHON_BIN="$COMFYUI_ROOT/.venv/bin/python"
+else
+  PYTHON_BIN="$(command -v python3 || true)"
+fi
 
 usage() {
   cat <<EOF
-Usage: scripts/setup-phase4-comfyui-prereqs.sh [--install-pixydust] [--check]
+Usage: scripts/setup-phase4-comfyui-prereqs.sh [--install-pixydust] [--install-pixydust-requirements] [--check]
 
 Dry-run by default. Prints the local ComfyUI prerequisites for the Phase 4
 generated-sprite workflow.
 
 Options:
   --install-pixydust   Clone the Pixydust Quantizer node into COMFYUI_ROOT.
+  --install-pixydust-requirements
+                       Install Pixydust Python requirements into the selected
+                       ComfyUI Python environment.
   --check              Run scripts/check-phase4-comfyui-readiness.py afterward.
 
 Environment:
   COMFYUI_ROOT         Local ComfyUI data folder. Default: $HOME/Documents/ComfyUI
+  DRIVE16_COMFYUI_PYTHON
+                       Python executable. Default: COMFYUI_ROOT/.venv/bin/python
   DRIVE16_PIXYDUST_REPO
   DRIVE16_PIXYDUST_REV
 EOF
@@ -33,6 +47,10 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --install-pixydust)
       INSTALL_PIXYDUST=1
+      shift
+      ;;
+    --install-pixydust-requirements)
+      INSTALL_PIXYDUST_REQUIREMENTS=1
       shift
       ;;
     --check)
@@ -82,13 +100,37 @@ if [ "$INSTALL_PIXYDUST" -eq 1 ]; then
     git -C "$PIXYDUST_DIR" checkout "$PIXYDUST_REV"
   fi
 else
-  cat <<EOF
+  if [ -d "$PIXYDUST_DIR" ]; then
+    echo "Pixydust directory present:"
+    echo "$PIXYDUST_DIR"
+  else
+    cat <<EOF
 Dry run: Pixydust was not installed.
 
 To install the required Pixydust Quantizer custom node:
 
 scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust
 EOF
+  fi
+fi
+
+if [ "$INSTALL_PIXYDUST_REQUIREMENTS" -eq 1 ]; then
+  if [ -z "$PYTHON_BIN" ] || [ ! -x "$PYTHON_BIN" ]; then
+    echo "Python is required to install Pixydust requirements." >&2
+    exit 127
+  fi
+  REQUIREMENTS="$PIXYDUST_DIR/requirements.txt"
+  if [ ! -f "$REQUIREMENTS" ]; then
+    echo "Pixydust requirements were not found at $REQUIREMENTS." >&2
+    echo "Run with --install-pixydust first if the node is not installed." >&2
+    exit 68
+  fi
+  if command -v uv >/dev/null 2>&1; then
+    uv pip install --python "$PYTHON_BIN" -r "$REQUIREMENTS" >&2
+  else
+    "$PYTHON_BIN" -m pip install -r "$REQUIREMENTS" >&2
+  fi
+  echo "Pixydust requirements installed with: $PYTHON_BIN"
 fi
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
