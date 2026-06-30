@@ -1,5 +1,83 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 55 - Browser readiness-row QA
+
+Plan:
+
+- Task: verify the new ComfyUI readiness rows in the rendered settings drawer
+  and keep the browser-preview failure path useful for local QA.
+- Files: `app/src/App.tsx`, `docs/phase4-comfyui-endpoint.md`,
+  `docs/phase4-comfyui-readiness.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: in-app browser desktop flow, in-app browser mobile-width flow,
+  frontend build, focused native ComfyUI tests, full native tests,
+  generated-assets validation harness, live ComfyUI readiness check, secret
+  scan, Markdown punctuation check, ignored artifact check, and
+  `git diff --check`.
+
+Did:
+
+- Added a browser-preview API readiness row when ComfyUI endpoint testing fails
+  before the native Tauri command is available.
+- Cleared stale ComfyUI readiness rows when the `AI sprites` toggle is turned
+  off.
+- Verified the settings drawer flow in the in-app browser at default and mobile
+  widths.
+- Updated Phase 4 endpoint/readiness evidence and the progress ledger.
+
+Evidence:
+
+- In-app browser at `http://127.0.0.1:1420/` loaded with title `Drive16`.
+- Default viewport: Agent Settings opened, `AI sprites` enabled, `Test`
+  clicked, failed ComfyUI status and `API` readiness row rendered. Console
+  warnings/errors: 0. Horizontal overflow: false.
+- Mobile viewport `390x844`: same failed ComfyUI status and `API` readiness row
+  rendered. Console warnings/errors: 0. Horizontal overflow: false. The
+  temporary viewport override was reset.
+- `npm run build` in `app/` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture`
+  passed: 11 passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture` passed:
+  24 passed, 4 ignored.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` at the expected live ComfyUI sprite
+  gate.
+- `scripts/check-phase4-comfyui-readiness.py` exited `68` with the current
+  local gate: ComfyUI API was not reachable on `127.0.0.1:8188`, and the
+  default `pixel-art-diffusion-xl.safetensors` checkpoint was not found.
+
+Gate:
+
+VALIDATION REQUEST: place a Pixel Art Diffusion XL compatible checkpoint at:
+
+```text
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+If the filename differs, set:
+
+```sh
+export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+```
+
+Then run:
+
+```sh
+scripts/launch-phase4-comfyui-api.sh
+```
+
+In another shell, run:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Next:
+
+- Place the checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof.
+
 ## 2026-06-30 - ITERATION 54 - In-app ComfyUI readiness rows
 
 Plan:

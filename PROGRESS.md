@@ -34,7 +34,8 @@ generated-assets validation harness now prints this checkpoint-aware readiness
 sequence when live sprite output is absent. The app-side AI-sprite prompt gate
 now returns the same readiness sequence before asking the user to retry the
 prompt. The settings drawer now surfaces the same ComfyUI readiness checks
-behind the `AI sprites` toggle.
+behind the `AI sprites` toggle, and the browser-preview failure path renders
+an API readiness row for local QA.
 
 ## Next Up
 
@@ -115,6 +116,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   ComfyUI readiness sequence.
 - [x] Settings ComfyUI test now reports API, checkpoint, Pixydust, and workflow
   readiness behind the `AI sprites` toggle.
+- [x] Browser-preview ComfyUI failure state renders the readiness-row UI and
+  has been checked at desktop and mobile widths.
 
 ## Completed Phase 3 Work
 

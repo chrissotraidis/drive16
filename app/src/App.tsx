@@ -1056,6 +1056,13 @@ function App() {
         ...current,
         state: "missing",
         detail,
+        checks: [
+          {
+            name: "API",
+            state: "missing",
+            detail,
+          },
+        ],
       }));
       appendOpenCodeEvent("comfyui.failed", detail);
     }
@@ -1098,6 +1105,7 @@ function App() {
         ...current,
         state: "idle",
         detail: "Not tested",
+        checks: [],
       }));
     }
 

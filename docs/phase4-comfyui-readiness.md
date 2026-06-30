@@ -66,6 +66,16 @@ npm run build
 
 Result: passed.
 
+The settings drawer readiness rows were verified in the in-app browser at
+`http://127.0.0.1:1420/`:
+
+- Default viewport: `AI sprites` enabled, `Test` clicked, failed API status and
+  `API` readiness row rendered, no console warnings or errors, no horizontal
+  overflow.
+- Mobile viewport `390x844`: same failed API status and `API` readiness row
+  rendered, no console warnings or errors, no horizontal overflow.
+- The temporary mobile viewport override was reset after validation.
+
 ## Validation Request
 
 Install or start local ComfyUI so this passes:

@@ -83,6 +83,25 @@ Rendered browser check at `http://127.0.0.1:1420/`:
 - Browser console warnings and errors were empty.
 - Browser viewport had no horizontal overflow.
 
+Rendered browser check after adding readiness rows:
+
+- Page identity: `http://127.0.0.1:1420/`, title `Drive16`.
+- App content was not blank and no Vite or framework error overlay appeared.
+- Agent Settings opened from the settings button.
+- Enabling `AI sprites` revealed the ComfyUI endpoint field and `Test` button.
+- Clicking `Test` with no local ComfyUI server rendered a failed ComfyUI
+  status and an `API` readiness row.
+- Browser console warnings and errors were empty.
+- Default viewport had no horizontal overflow.
+- Mobile viewport `390x844` rendered the same failed status and `API`
+  readiness row with no horizontal overflow.
+- The temporary mobile viewport override was reset after the check.
+
+The browser-preview path can only prove endpoint/API rendering. The native
+Tauri command remains responsible for checkpoint, Pixydust, and workflow-class
+checks because those use local filesystem and ComfyUI `/object_info` access.
+
 ## Next
 
-Wrap ComfyUI through `comfyui-mcp` behind the enabled endpoint.
+Place the compatible checkpoint, pass ComfyUI readiness, then run the live
+generated-sprite workflow and combined generated-assets proof.
