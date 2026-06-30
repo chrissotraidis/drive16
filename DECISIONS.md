@@ -1,5 +1,30 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Generated sprite prompt path consumes only live validated output
+
+Context:
+
+Phase 4 has self-test PNG fixtures for the generated-sprite validator, but
+those fixtures are not live ComfyUI output. The generated-assets prompt path
+must not treat synthetic or stale local artifacts as evidence that AI sprite
+generation works.
+
+Decision:
+
+When `AI sprites` is enabled for the generated-MML prompt path, require the
+live ComfyUI runner record at
+`artifacts/phase4/live-comfyui-sprite/last-run.json` to report `ok: true`.
+Resolve the recorded `downloadedPng` inside the repo, rerun
+`scripts/validate-generated-sprite.py --symbol drive16_player`, and only then
+write that PNG into the generated SGDK `resources.res`.
+
+Consequence:
+
+The app can wire the combined generated sprite and generated music path without
+claiming Phase 4 sprite validation is complete. If live ComfyUI has not
+produced a validated PNG, the command returns a validation request instead of
+building from a self-test artifact.
+
 ## 2026-06-30 - Generated music prompt path stays separate from CORE
 
 Context:

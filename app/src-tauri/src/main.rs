@@ -63,8 +63,10 @@ async fn run_v1_prompt(prompt: String) -> Result<v1_prompt::V1PromptResult, Stri
 }
 
 #[tauri::command]
-async fn run_phase4_music_prompt(prompt: String) -> Result<v1_prompt::V1PromptResult, String> {
-    tauri::async_runtime::spawn_blocking(move || phase4_prompt::run_phase4_music_prompt(prompt))
+async fn run_phase4_music_prompt(
+    request: phase4_prompt::Phase4PromptRequest,
+) -> Result<v1_prompt::V1PromptResult, String> {
+    tauri::async_runtime::spawn_blocking(move || phase4_prompt::run_phase4_music_prompt(request))
         .await
         .map_err(|error| format!("Phase 4 music prompt task failed: {}", error))?
 }

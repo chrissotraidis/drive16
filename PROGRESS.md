@@ -23,13 +23,15 @@ still builds a working ROM.
 
 ## Current Task
 
-The `MML music` toggle now selects a generated-MML prompt path in the app.
-Full generated-music ROM proof is awaiting Docker Desktop, and live ComfyUI
-sprite validation is still awaiting local ComfyUI.
+The generated-MML prompt path now has a generated-sprite artifact gate. Full
+generated-asset ROM proof is awaiting Docker Desktop, and live ComfyUI sprite
+validation is still awaiting local ComfyUI.
 
 ## Next Up
 
-VALIDATION REQUEST: start Docker Desktop and run
+VALIDATION REQUEST: start local ComfyUI and run
+`COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
+then start Docker Desktop and run
 `scripts/validate-phase4-generated-music-prompt.sh`.
 
 ## Completed Phase 4 Work
@@ -72,6 +74,10 @@ VALIDATION REQUEST: start Docker Desktop and run
 - [x] App prompt path calls generated-MML music when `MML music` is enabled.
 - [x] Phase 4 generated-music prompt evidence and validation request recorded
   in `docs/phase4-generated-music-prompt.md`.
+- [x] Generated-MML prompt path requires a live validated ComfyUI PNG before
+  using generated sprite assets.
+- [x] Phase 4 generated-sprite prompt gate evidence recorded in
+  `docs/phase4-generated-sprite-prompt-gate.md`.
 
 ## Completed Phase 3 Work
 

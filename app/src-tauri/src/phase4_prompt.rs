@@ -1,5 +1,6 @@
 use crate::v1_prompt::{V1FramebufferFrame, V1PromptResult};
 use base64::{engine::general_purpose, Engine as _};
+use serde::Deserialize;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -13,6 +14,7 @@ const FRAMES: u32 = 180;
 const STREAM_EVERY: u32 = 30;
 const FRAME_HEADER_BYTES: usize = 24;
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+const BUNDLED_SPRITE_RESOURCE: &str = "../../../../../assets/core/player.png";
 
 struct Phase4MusicPaths {
     repo_root: PathBuf,
@@ -34,19 +36,64 @@ struct Phase4MusicPaths {
     build_ctrmml_script: PathBuf,
     local_genteel_bin: PathBuf,
     sprite_movement_validator: PathBuf,
+    sprite_validator: PathBuf,
     fm_presets_path: PathBuf,
+    live_sprite_run_log: PathBuf,
 }
 
-pub fn run_phase4_music_prompt(prompt: String) -> Result<V1PromptResult, String> {
-    run_phase4_music_prompt_for_repo(repo_root(), prompt)
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Phase4PromptRequest {
+    pub prompt: String,
+    #[serde(default)]
+    pub use_generated_sprite: bool,
+}
+
+#[derive(Debug)]
+struct SpriteAsset {
+    resource_path: String,
+    generated: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LiveSpriteRunLog {
+    #[serde(default)]
+    ok: bool,
+    downloaded_png: Option<String>,
+}
+
+impl SpriteAsset {
+    fn bundled() -> Self {
+        Self {
+            resource_path: BUNDLED_SPRITE_RESOURCE.to_string(),
+            generated: false,
+        }
+    }
+
+    fn generated(resource_path: String) -> Self {
+        Self {
+            resource_path,
+            generated: true,
+        }
+    }
+}
+
+pub fn run_phase4_music_prompt(request: Phase4PromptRequest) -> Result<V1PromptResult, String> {
+    run_phase4_music_prompt_for_repo(repo_root(), request)
 }
 
 fn run_phase4_music_prompt_for_repo(
     repo_root: PathBuf,
-    prompt: String,
+    request: Phase4PromptRequest,
 ) -> Result<V1PromptResult, String> {
     let paths = Phase4MusicPaths::new(repo_root);
-    paths.prepare_project()?;
+    let sprite_asset = if request.use_generated_sprite {
+        generated_sprite_asset(&paths)?
+    } else {
+        SpriteAsset::bundled()
+    };
+    paths.prepare_project(&sprite_asset)?;
     compile_generated_music(&paths)?;
     build_rom(&paths)?;
     let genteel_bin = find_genteel_bin(&paths)?;
@@ -120,9 +167,13 @@ fn run_phase4_music_prompt_for_repo(
 
     Ok(V1PromptResult {
         status: "ready".to_string(),
-        detail: "Generated MML music and bundled sprite ROM verified".to_string(),
+        detail: if sprite_asset.generated {
+            "Generated sprite and generated MML music ROM verified".to_string()
+        } else {
+            "Generated MML music and bundled sprite ROM verified".to_string()
+        },
         generated_at: unix_timestamp(),
-        prompt,
+        prompt: request.prompt,
         project_path: PROJECT_RELATIVE.to_string(),
         rom_path: repo_relative(&paths.repo_root, &paths.rom_path),
         neutral_screenshot_path: repo_relative(&paths.repo_root, &paths.neutral_screenshot_path),
@@ -163,7 +214,10 @@ impl Phase4MusicPaths {
             local_genteel_bin: repo_root
                 .join("artifacts/phase0/genteel-src/target/release/genteel"),
             sprite_movement_validator: repo_root.join("scripts/validate-sprite-movement.py"),
+            sprite_validator: repo_root.join("scripts/validate-generated-sprite.py"),
             fm_presets_path: repo_root.join("assets/enhancements/mml/fm-presets.mml"),
+            live_sprite_run_log: repo_root
+                .join("artifacts/phase4/live-comfyui-sprite/last-run.json"),
             artifact_dir,
             project_path,
             res_dir,
@@ -172,7 +226,7 @@ impl Phase4MusicPaths {
         }
     }
 
-    fn prepare_project(&self) -> Result<(), String> {
+    fn prepare_project(&self, sprite_asset: &SpriteAsset) -> Result<(), String> {
         if self.project_path.exists() {
             fs::remove_dir_all(&self.project_path).map_err(|error| {
                 format!(
@@ -210,7 +264,7 @@ impl Phase4MusicPaths {
                 error
             )
         })?;
-        fs::write(self.src_dir.join("main.c"), main_c()).map_err(|error| {
+        fs::write(self.src_dir.join("main.c"), main_c(sprite_asset)).map_err(|error| {
             format!(
                 "Could not write Phase 4 main.c in {}: {}",
                 self.src_dir.display(),
@@ -224,7 +278,11 @@ impl Phase4MusicPaths {
                 error
             )
         })?;
-        fs::write(self.res_dir.join("resources.res"), resources_res()).map_err(|error| {
+        fs::write(
+            self.res_dir.join("resources.res"),
+            resources_res(sprite_asset),
+        )
+        .map_err(|error| {
             format!(
                 "Could not write Phase 4 resources.res in {}: {}",
                 self.res_dir.display(),
@@ -238,10 +296,10 @@ fn makefile() -> &'static str {
     "GDK ?= /sgdk\n\ninclude $(GDK)/makefile.gen\n"
 }
 
-fn resources_res() -> &'static str {
-    concat!(
-        "SPRITE drive16_player \"../../../../../assets/core/player.png\" 4 4 NONE 0\n",
-        "XGM drive16_generated_music \"generated_music.vgm\"\n",
+fn resources_res(sprite_asset: &SpriteAsset) -> String {
+    format!(
+        "SPRITE drive16_player \"{}\" 4 4 NONE 0\nXGM drive16_generated_music \"generated_music.vgm\"\n",
+        sprite_asset.resource_path
     )
 }
 
@@ -256,7 +314,12 @@ fn resources_h() -> &'static str {
     )
 }
 
-fn main_c() -> &'static str {
+fn main_c(sprite_asset: &SpriteAsset) -> String {
+    let sprite_label = if sprite_asset.generated {
+        "Generated sprite"
+    } else {
+        "Bundled sprite"
+    };
     concat!(
         "#include <genesis.h>\n",
         "#include \"resources.h\"\n\n",
@@ -290,7 +353,7 @@ fn main_c() -> &'static str {
         "    PAL_setPalette(PAL1, drive16_player.palette->data, DMA);\n",
         "    VDP_setTextPalette(PAL1);\n",
         "    VDP_drawText(\"Drive16 Phase 4\", 9, 3);\n",
-        "    VDP_drawText(\"Bundled sprite\", 5, 5);\n",
+        "    VDP_drawText(\"__DRIVE16_SPRITE_LABEL__\", 5, 5);\n",
         "    VDP_drawText(\"Generated MML music\", 5, 24);\n\n",
         "    player = SPR_addSprite(&drive16_player, playerX, playerY, TILE_ATTR(PAL1, TRUE, FALSE, FALSE));\n",
         "    if (player == NULL)\n",
@@ -303,8 +366,104 @@ fn main_c() -> &'static str {
         "        SYS_doVBlankProcess();\n",
         "    }\n\n",
         "    return 0;\n",
-        "}\n",
+        "}\n"
     )
+    .replace("__DRIVE16_SPRITE_LABEL__", sprite_label)
+}
+
+fn generated_sprite_asset(paths: &Phase4MusicPaths) -> Result<SpriteAsset, String> {
+    if !paths.live_sprite_run_log.is_file() {
+        return Err(generated_sprite_validation_request(
+            "Live ComfyUI sprite run has not produced a validation record.",
+        ));
+    }
+    let run_log = fs::read_to_string(&paths.live_sprite_run_log).map_err(|error| {
+        format!(
+            "Could not read live ComfyUI sprite run log {}: {}",
+            paths.live_sprite_run_log.display(),
+            error
+        )
+    })?;
+    let run_json: LiveSpriteRunLog = serde_json::from_str(&run_log).map_err(|error| {
+        format!(
+            "Live ComfyUI sprite run log was not JSON {}: {}",
+            paths.live_sprite_run_log.display(),
+            error
+        )
+    })?;
+    if !run_json.ok {
+        return Err(generated_sprite_validation_request(
+            "Live ComfyUI sprite run has not completed successfully.",
+        ));
+    }
+    let downloaded = run_json.downloaded_png.ok_or_else(|| {
+        generated_sprite_validation_request(
+            "Live ComfyUI sprite run did not record a downloaded PNG.",
+        )
+    })?;
+    let canonical_repo_root = paths.repo_root.canonicalize().map_err(|error| {
+        format!(
+            "Could not resolve Drive16 repo root {}: {}",
+            paths.repo_root.display(),
+            error
+        )
+    })?;
+    let source = paths
+        .repo_root
+        .join(&downloaded)
+        .canonicalize()
+        .map_err(|error| {
+            format!(
+                "Could not resolve generated sprite PNG {}: {}",
+                downloaded, error
+            )
+        })?;
+    source.strip_prefix(&canonical_repo_root).map_err(|_| {
+        format!(
+            "Generated sprite PNG must stay inside the Drive16 repo: {}",
+            source.display()
+        )
+    })?;
+    validate_generated_sprite(paths, &source)?;
+    Ok(SpriteAsset::generated(repo_relative_resource_path(
+        &canonical_repo_root,
+        &source,
+    )?))
+}
+
+fn validate_generated_sprite(paths: &Phase4MusicPaths, source: &Path) -> Result<(), String> {
+    if !paths.sprite_validator.is_file() {
+        return Err(format!(
+            "Generated sprite validator is missing: {}",
+            paths.sprite_validator.display()
+        ));
+    }
+    let mut command = Command::new("python3");
+    command
+        .current_dir(&paths.repo_root)
+        .arg(&paths.sprite_validator)
+        .arg(source)
+        .arg("--symbol")
+        .arg("drive16_player");
+    run_command(&mut command, "Phase 4 generated sprite validation").map(|_| ())
+}
+
+fn generated_sprite_validation_request(reason: &str) -> String {
+    format!(
+        "{} Run COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py, then retry the prompt with AI sprites enabled.",
+        reason
+    )
+}
+
+fn repo_relative_resource_path(repo_root: &Path, path: &Path) -> Result<String, String> {
+    let relative = path.strip_prefix(repo_root).map_err(|_| {
+        format!(
+            "Generated sprite path must be inside the Drive16 repo: {}",
+            path.display()
+        )
+    })?;
+    let relative = relative.to_string_lossy().replace('\\', "/");
+    Ok(format!("../../../../../{}", relative))
 }
 
 fn compile_generated_music(paths: &Phase4MusicPaths) -> Result<(), String> {
@@ -705,12 +864,25 @@ mod tests {
 
     #[test]
     fn phase4_music_project_contract_uses_generated_music() {
-        assert!(resources_res().contains("SPRITE drive16_player"));
-        assert!(resources_res().contains("XGM drive16_generated_music"));
-        assert!(main_c().contains("Drive16 Phase 4"));
-        assert!(main_c().contains("Generated MML music"));
-        assert!(main_c().contains("XGM_startPlay(drive16_generated_music)"));
-        assert!(!resources_res().contains("drive16_loop"));
+        let sprite = SpriteAsset::bundled();
+
+        assert!(resources_res(&sprite).contains("SPRITE drive16_player"));
+        assert!(resources_res(&sprite).contains("XGM drive16_generated_music"));
+        assert!(main_c(&sprite).contains("Drive16 Phase 4"));
+        assert!(main_c(&sprite).contains("Bundled sprite"));
+        assert!(main_c(&sprite).contains("Generated MML music"));
+        assert!(main_c(&sprite).contains("XGM_startPlay(drive16_generated_music)"));
+        assert!(!resources_res(&sprite).contains("drive16_loop"));
+    }
+
+    #[test]
+    fn phase4_music_project_can_reference_generated_sprite() {
+        let sprite = SpriteAsset::generated(
+            "../../../../../artifacts/phase4/live-comfyui-sprite/test.png".to_string(),
+        );
+
+        assert!(resources_res(&sprite).contains("artifacts/phase4/live-comfyui-sprite/test.png"));
+        assert!(main_c(&sprite).contains("Generated sprite"));
     }
 
     #[test]
@@ -723,11 +895,43 @@ mod tests {
     }
 
     #[test]
+    fn generated_sprite_asset_requires_live_comfyui_success() {
+        let temp_dir = temp_dir("missing-sprite");
+        let paths = Phase4MusicPaths::new(temp_dir.clone());
+
+        let error = generated_sprite_asset(&paths).expect_err("missing live run should gate");
+        fs::remove_dir_all(temp_dir).ok();
+
+        assert!(error.contains("Live ComfyUI sprite run"));
+        assert!(error.contains("scripts/run-comfyui-sprite-workflow.py"));
+    }
+
+    #[test]
+    fn generated_sprite_asset_rejects_failed_live_comfyui_record() {
+        let temp_dir = temp_dir("failed-sprite");
+        let paths = Phase4MusicPaths::new(temp_dir.clone());
+        fs::create_dir_all(paths.live_sprite_run_log.parent().expect("log parent"))
+            .expect("live sprite artifact directory should be writable");
+        fs::write(
+            &paths.live_sprite_run_log,
+            r#"{"ok": false, "downloadedPng": "artifacts/phase4/live-comfyui-sprite/output.png"}"#,
+        )
+        .expect("live sprite run log should be writable");
+
+        let error = generated_sprite_asset(&paths).expect_err("failed live run should gate");
+        fs::remove_dir_all(temp_dir).ok();
+
+        assert!(error.contains("has not completed successfully"));
+        assert!(error.contains("scripts/run-comfyui-sprite-workflow.py"));
+    }
+
+    #[test]
     #[ignore = "builds a generated-MML ROM and runs Genteel with screenshots and audio"]
     fn phase4_music_prompt_runs_when_tools_are_available() {
-        let result = run_phase4_music_prompt(
-            "make a sprite I can move left and right with music".to_string(),
-        )
+        let result = run_phase4_music_prompt(Phase4PromptRequest {
+            prompt: "make a sprite I can move left and right with music".to_string(),
+            use_generated_sprite: false,
+        })
         .expect("Phase 4 music prompt should run");
 
         assert_eq!(result.status, "ready");
@@ -739,5 +943,14 @@ mod tests {
         assert!(result
             .rom_path
             .ends_with("artifacts/phase4/generated-music-prompt/project/out/rom.bin"));
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "drive16-phase4-{}-{}-{}",
+            label,
+            unix_timestamp(),
+            std::process::id()
+        ))
     }
 }

@@ -1,5 +1,79 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 44 - Generated sprite prompt artifact gate
+
+Plan:
+
+- Task: teach the generated-MML prompt path to consume a generated sprite only
+  after live ComfyUI output has been validated.
+- Files: `app/src-tauri/src/phase4_prompt.rs`, `app/src-tauri/src/main.rs`,
+  `app/src/App.tsx`, `docs/phase4-generated-sprite-prompt-gate.md`,
+  `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: focused Phase 4 native tests, full native test suite,
+  frontend build, generated-music validation script gate check, secret scan,
+  Markdown punctuation check, and `git diff --check`.
+
+Did:
+
+- Changed `run_phase4_music_prompt` to accept a structured request with
+  `prompt` and `useGeneratedSprite`.
+- Kept the bundled sprite path unchanged when `AI sprites` is off.
+- Added a generated-sprite gate that requires the live ComfyUI runner record to
+  report `ok: true`, resolves the downloaded PNG inside the repo, and reruns
+  the generated-sprite validator before writing `resources.res`.
+- Updated the React prompt path so the combined generated sprite and generated
+  MML path is selected only when both Phase 4 toggles are enabled.
+- Updated project summary labels so generated music remains visible in the
+  combined generated-assets path.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml phase4_prompt --
+  --nocapture` passed: 5 passed, 1 ignored.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture`
+  passed: 20 passed, 3 ignored.
+- `npm run build` in `app/` passed.
+- `scripts/validate-phase4-generated-music-prompt.sh` reran the focused tests,
+  then exited `65` with the Docker Desktop validation request below.
+- The ignored full-system generated-MML test reached the SGDK build step but
+  failed because Docker was installed and the Docker daemon was not reachable.
+- Secret scan returned no matches for OpenRouter key patterns.
+- Markdown punctuation and emoji guard returned no matches.
+- Ignored-artifact checks confirmed `app/dist/`,
+  `artifacts/phase4/generated-music-prompt/project/res/generated_music.vgm`,
+  and `artifacts/phase4/live-comfyui-sprite/last-run.json` are ignored.
+- `git diff --check` passed.
+
+Gate:
+
+VALIDATION REQUEST: start local ComfyUI on `http://127.0.0.1:8188`, then run:
+
+```sh
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+```
+
+Expected result: the live runner records `ok: true` and a downloaded PNG under
+`artifacts/phase4/live-comfyui-sprite/` that passes
+`scripts/validate-generated-sprite.py --symbol drive16_player`.
+
+VALIDATION REQUEST: start Docker Desktop, then run:
+
+```sh
+scripts/validate-phase4-generated-music-prompt.sh
+```
+
+Expected result: the ignored native test builds the generated SGDK project,
+runs it in Genteel, captures neutral and Right-input screenshots, proves
+Right-input sprite movement, and verifies non-silent audio.
+
+The generated-sprite validation, broad prompt-path, and generated-ROM checklist
+items remain open until both validation requests pass.
+
+Next:
+
+- Run the live ComfyUI sprite workflow when local ComfyUI is available, then
+  rerun the generated-ROM proof after Docker Desktop is available.
+
 ## 2026-06-30 - ITERATION 43 - Generated MML music prompt path
 
 Plan:
