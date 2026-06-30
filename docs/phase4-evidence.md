@@ -41,7 +41,9 @@ The remaining live gate is the real ComfyUI sprite output:
 
 - `scripts/validate-phase4-comfyui-api-smoke.sh` passes and records
   `apiOk: true`, `workflowClassesOk: true`, and `pixydustOk: true`, while
-  keeping `checkpointOk: false`.
+  keeping `checkpointOk: false`. The smoke was rerun on 2026-06-30 and
+  confirmed the API, workflow classes, and Pixydust are ready in the current
+  local setup.
 - `scripts/check-phase4-comfyui-readiness.py` exits `68` when ComfyUI is not
   already running or when the compatible checkpoint is missing.
 - `scripts/validate-phase4-generated-assets-prompt.sh` exits `66` because

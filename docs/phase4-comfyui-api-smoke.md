@@ -48,10 +48,21 @@ Result:
 - After the smoke test, `http://127.0.0.1:8188/system_stats` was no longer
   reachable, confirming the script stopped the process it launched.
 
+Current refresh on 2026-06-30:
+
+- `scripts/validate-phase4-comfyui-api-smoke.sh` exited `0`.
+- `artifacts/phase4/comfyui-api-smoke/latest.json` recorded `ok: true`,
+  `apiOk: true`, `workflowClassesOk: true`, `pixydustOk: true`, and
+  `checkpointOk: false`.
+- `artifacts/phase4/comfyui-readiness/latest.json` recorded `api.ok: true`,
+  `workflowClasses.ok: true`, and `pixydustQuantizer.ok: true`.
+- The only remaining readiness miss was the selected compatible checkpoint,
+  `pixel-art-diffusion-xl.safetensors`.
+
 ## Remaining Gate
 
-Install the compatible checkpoint, start local ComfyUI, and run the live
-sprite workflow:
+Install the compatible checkpoint, then run the full live generated-assets
+proof:
 
 ```sh
 scripts/install-phase4-comfyui-checkpoint.sh \
@@ -59,13 +70,10 @@ scripts/install-phase4-comfyui-checkpoint.sh \
   --checkpoint pixel-art-diffusion-xl.safetensors \
   --sha256 <optional-known-hash> \
   --check
-scripts/launch-phase4-comfyui-api.sh
 ```
 
-In another shell:
+The wrapper will start by checking readiness:
 
 ```sh
-scripts/check-phase4-comfyui-readiness.py
-COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
-scripts/validate-phase4-generated-assets-prompt.sh
+scripts/validate-phase4-live-generated-assets.sh
 ```

@@ -1,5 +1,48 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 68 - Current ComfyUI API smoke refresh
+
+Plan:
+
+- Task: refresh the Phase 4 evidence for the current local ComfyUI API smoke
+  state.
+- Files: `PROGRESS.md`, `WORKLOG.md`, `docs/phase4-evidence.md`, and
+  `docs/phase4-comfyui-api-smoke.md`.
+- Verification: rerun the API smoke, inspect the readiness JSON, and run
+  hygiene scans on the docs-only change.
+
+Did:
+
+- Reran `scripts/validate-phase4-comfyui-api-smoke.sh`.
+- Confirmed the script can start local ComfyUI from the pinned source checkout,
+  run readiness while the API is live, and stop the process it launched.
+- Recorded that API, workflow classes, and Pixydust are ready in the current
+  setup.
+- Narrowed the remaining validation request to the compatible checkpoint.
+
+Evidence:
+
+- `scripts/validate-phase4-comfyui-api-smoke.sh` exited `0`.
+- `artifacts/phase4/comfyui-api-smoke/latest.json` recorded `ok: true`,
+  `apiOk: true`, `workflowClassesOk: true`, `pixydustOk: true`,
+  `checkpointOk: false`, and remaining gate `Pixel Art Diffusion XL compatible
+  checkpoint`.
+- `artifacts/phase4/comfyui-readiness/latest.json` recorded `api.ok: true`,
+  `workflowClasses.ok: true`, and `pixydustQuantizer.ok: true`.
+- The readiness report still recorded `checkpoint.ok: false` for
+  `pixel-art-diffusion-xl.safetensors`.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live generated-assets proof wrapper.
+
+Next:
+
+- Install the compatible checkpoint, run
+  `scripts/validate-phase4-live-generated-assets.sh`, and use its output as the
+  Phase 4 gate evidence.
+
 ## 2026-06-30 - ITERATION 67 - Live generated-assets proof wrapper
 
 Plan:

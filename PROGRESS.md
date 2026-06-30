@@ -46,10 +46,11 @@ places a user-provided compatible checkpoint file or URL into the local ComfyUI
 checkpoints folder with optional SHA-256 verification.
 The current Phase 4 evidence packet is recorded in `docs/phase4-evidence.md`;
 it keeps Phase 4 open on the real live ComfyUI sprite gate. The repeatable
-ComfyUI API smoke now confirms the API can start, the committed workflow
-classes are present, and Pixydust is loaded. The remaining ComfyUI prerequisite
-is the compatible checkpoint. The likely Civitai Pixel Art Diffusion XL source
-has also been audited, and its current metadata conflicts with the
+ComfyUI API smoke was rerun on 2026-06-30 and confirms the API can start, the
+committed workflow classes are present, and Pixydust is loaded. The remaining
+ComfyUI prerequisite is the compatible checkpoint. The likely Civitai Pixel Art
+Diffusion XL source has also been audited, and its current metadata conflicts
+with the
 architecture appendix's open CreativeML assumption, so Drive16 continues to
 require an explicit user-selected checkpoint source instead of auto-downloading
 model weights. The readiness report now also surfaces nearby local checkpoint
@@ -65,7 +66,9 @@ checkpoint is available.
 
 ## Next Up
 
-VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint, set
+VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint. The
+ComfyUI API, Pixydust Quantizer, and workflow classes have been smoke-tested as
+ready in the current local setup; `checkpointOk` is the remaining miss. Set
 `DRIVE16_COMFYUI_CHECKPOINT` if the filename differs from the default, or type
 the compatible filename into the app's `Checkpoint` field before testing the
 endpoint. You can use
