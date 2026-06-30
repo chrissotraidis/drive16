@@ -19,7 +19,7 @@ Genteel proof path remains available and distinct.
 - [x] Add controller-ready input foundation.
 - [x] Wire Drive16-generated ROMs into the same player.
 - [ ] Run full polish, regression, and evidence pass.
-- [ ] Assemble Phase 6 evidence packet for human review.
+- [x] Assemble Phase 6 evidence packet for human review.
 
 ## Phase 5 Checklist
 
@@ -52,8 +52,8 @@ Evidence is recorded in:
 
 ## Next Up
 
-Unit 9: verify a Drive16-generated ROM artifact through the same interactive
-player path, then run the final Phase 6 regression/evidence pass.
+Final Phase 6 review is pending one native-window click-through. Automated
+browser and native command evidence is assembled in `docs/phase6-evidence.md`.
 
 ## Completed Phase 6 Work
 

@@ -19,6 +19,7 @@ non-silent audio.
 
 Evidence:
 
+- Phase 6 packet: `docs/phase6-evidence.md`
 - Phase 3 packet: `docs/phase3-evidence.md`
 - Core prompt proof: `docs/phase3-v1-prompt.md`
 - Current ledger: `PROGRESS.md`
@@ -59,9 +60,8 @@ core as a settled commercial distribution dependency.
 
 ## What to do next
 
-Current Phase 6 next step: run the final Phase 6 regression/evidence pass,
-including a native-window click-through when Accessibility automation or a human
-tester is available.
+Current Phase 6 next step: human-review the native-window click-through listed
+in `docs/phase6-evidence.md`.
 
 Current local validation:
 

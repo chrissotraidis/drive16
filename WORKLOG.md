@@ -1,5 +1,38 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 91 - Phase 6 evidence packet
+
+Plan:
+
+- Task: assemble Phase 6 evidence without overclaiming native-window automation.
+- Files: `docs/phase6-evidence.md`, `PROGRESS.md`, `README.md`, and
+  `WORKLOG.md`.
+- Verification: tracked-file hygiene scan, branch parity, and evidence review.
+
+Did:
+
+- Added the Phase 6 evidence packet.
+- Recorded imported-ROM player smoke, generated CORE fixture smoke, keyboard
+  input, player controls, and command verification.
+- Recorded the native-window click-through as the remaining human review item.
+- Confirmed `main` matched `origin/main` before this evidence commit.
+- Confirmed tracked files did not include Genesis cores, WASM cores, model
+  weights, OpenRouter keys, or obvious secrets.
+
+Evidence:
+
+- `docs/phase6-evidence.md`.
+
+Gate:
+
+Phase 6 is ready for human review, but not marked fully complete until the
+native-window click-through passes.
+
+Next:
+
+- Human-review native Drive16 window: generated CORE ROM -> Play ROM ->
+  ArrowRight -> Pause/Resume/Stop.
+
 ## 2026-06-30 - ITERATION 90 - Phase 6 generated ROM play check
 
 Plan:
