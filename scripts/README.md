@@ -46,7 +46,7 @@ Toolchain and validation scripts live here.
   requirements explicitly and accepts the same checkpoint override.
 - `install-phase4-comfyui-checkpoint.sh`: places a user-provided compatible
   checkpoint file or URL into the local ComfyUI checkpoints folder, with an
-  optional SHA-256 check.
+  optional SHA-256 check and local-file symlink mode for large model weights.
 - `validate-mml-music-mcp.py`: verifies the Phase 4 `drive16-mml-music` MCP
   server by compiling a tiny Megadrive MML song to VGM.
 - `validate-mml-presets.py`: validates the Phase 4 FM preset manifest and

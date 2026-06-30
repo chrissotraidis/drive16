@@ -7,6 +7,7 @@ CHECKPOINT_NAME="${DRIVE16_COMFYUI_CHECKPOINT:-pixel-art-diffusion-xl.safetensor
 SOURCE=""
 SHA256_EXPECTED=""
 RUN_CHECK=0
+LINK_MODE=0
 
 usage() {
   cat <<EOF
@@ -21,6 +22,7 @@ Options:
   --checkpoint <name>     Destination checkpoint filename.
                          Default: $CHECKPOINT_NAME
   --sha256 <hash>         Optional SHA-256 to verify after copy/download.
+  --link                  Symlink a local source file instead of copying it.
   --check                 Run scripts/check-phase4-comfyui-readiness.py after.
   -h, --help              Show this help.
 
@@ -56,6 +58,10 @@ while [ "$#" -gt 0 ]; do
       fi
       SHA256_EXPECTED="$2"
       shift 2
+      ;;
+    --link)
+      LINK_MODE=1
+      shift
       ;;
     --check)
       RUN_CHECK=1
@@ -99,6 +105,9 @@ CHECKPOINT_DIR="$COMFYUI_ROOT/models/checkpoints"
 CHECKPOINT_PATH="$CHECKPOINT_DIR/$CHECKPOINT_NAME"
 mkdir -p "$CHECKPOINT_DIR"
 TMP_PATH="$CHECKPOINT_PATH.tmp.$$"
+SOURCE_PATH=""
+INSTALL_PATH="$TMP_PATH"
+INSTALL_MODE="installed"
 
 cleanup() {
   rm -f "$TMP_PATH"
@@ -107,6 +116,10 @@ trap cleanup EXIT
 
 case "$SOURCE" in
   http://*|https://*)
+    if [ "$LINK_MODE" -eq 1 ]; then
+      echo "--link requires a local source file, not a URL." >&2
+      exit 64
+    fi
     if ! command -v curl >/dev/null 2>&1; then
       echo "curl is required to download checkpoint URLs." >&2
       exit 127
@@ -118,17 +131,29 @@ case "$SOURCE" in
       echo "Checkpoint source file not found: $SOURCE" >&2
       exit 66
     fi
-    cp "$SOURCE" "$TMP_PATH"
+    SOURCE_DIR="$(cd "$(dirname "$SOURCE")" && pwd -P)"
+    SOURCE_PATH="$SOURCE_DIR/$(basename "$SOURCE")"
+    if [ "$LINK_MODE" -eq 1 ]; then
+      if [ "$SOURCE_PATH" = "$CHECKPOINT_PATH" ]; then
+        INSTALL_PATH="$CHECKPOINT_PATH"
+        INSTALL_MODE="already installed"
+      else
+        ln -s "$SOURCE_PATH" "$TMP_PATH"
+        INSTALL_MODE="linked"
+      fi
+    else
+      cp "$SOURCE_PATH" "$TMP_PATH"
+    fi
     ;;
 esac
 
-if [ ! -s "$TMP_PATH" ]; then
+if [ ! -s "$INSTALL_PATH" ]; then
   echo "Checkpoint source produced an empty file." >&2
   exit 66
 fi
 
 if [ -n "$SHA256_EXPECTED" ]; then
-  SHA256_ACTUAL="$(shasum -a 256 "$TMP_PATH" | awk '{print $1}')"
+  SHA256_ACTUAL="$(shasum -a 256 "$INSTALL_PATH" | awk '{print $1}')"
   if [ "$SHA256_ACTUAL" != "$SHA256_EXPECTED" ]; then
     echo "Checkpoint SHA-256 mismatch." >&2
     echo "Expected: $SHA256_EXPECTED" >&2
@@ -137,9 +162,21 @@ if [ -n "$SHA256_EXPECTED" ]; then
   fi
 fi
 
-mv "$TMP_PATH" "$CHECKPOINT_PATH"
+if [ "$INSTALL_PATH" != "$CHECKPOINT_PATH" ]; then
+  mv "$TMP_PATH" "$CHECKPOINT_PATH"
+fi
 
-echo "Checkpoint installed: $CHECKPOINT_PATH"
+case "$INSTALL_MODE" in
+  linked)
+    echo "Checkpoint linked: $CHECKPOINT_PATH -> $SOURCE_PATH"
+    ;;
+  "already installed")
+    echo "Checkpoint already installed: $CHECKPOINT_PATH"
+    ;;
+  *)
+    echo "Checkpoint installed: $CHECKPOINT_PATH"
+    ;;
+esac
 if [ -n "$SHA256_EXPECTED" ]; then
   echo "SHA-256 verified: $SHA256_EXPECTED"
 fi

@@ -1,5 +1,50 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 64 - Checkpoint installer symlink mode
+
+Plan:
+
+- Task: add an explicit local-file symlink mode to the Phase 4 checkpoint
+  installer so large user-selected model weights do not have to be copied.
+- Files: `scripts/install-phase4-comfyui-checkpoint.sh`,
+  `docs/phase4-comfyui-checkpoint-install.md`, `scripts/README.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run shell syntax checks, fixture copy install, fixture symlink
+  install, wrong-hash rejection, URL link rejection, and hygiene scans.
+
+Did:
+
+- Added `--link` to `scripts/install-phase4-comfyui-checkpoint.sh`.
+- The option only accepts explicit local source files.
+- SHA-256 verification works before a linked checkpoint is accepted.
+- Existing copy and URL download behavior stays default.
+
+Evidence:
+
+- `bash -n scripts/install-phase4-comfyui-checkpoint.sh scripts/setup-phase4-comfyui-prereqs.sh` passed.
+- Fixture copy install passed with SHA-256
+  `ece4f1f583d4a4d713808dfd9a31f3f885dbb2aff10cd58864bf17b7222b726c`.
+- Fixture symlink install passed with the same SHA-256.
+- The linked fixture at
+  `artifacts/phase4/checkpoint-install-link-test/comfyui-link/models/checkpoints/linked-pixel.safetensors`
+  is a symlink to the explicit local source fixture.
+- Wrong-hash symlink install exited nonzero with `Checkpoint SHA-256 mismatch`.
+- URL plus `--link` exited nonzero with
+  `--link requires a local source file, not a URL`.
+- `git diff --check` passed.
+- Markdown punctuation and secret scans found no matches in the diff.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live ComfyUI sprite workflow and the
+real generated-assets ROM proof.
+
+Next:
+
+- Install the compatible checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 63 - ComfyUI readiness checkpoint hints
 
 Plan:

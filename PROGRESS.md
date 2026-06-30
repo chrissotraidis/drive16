@@ -53,7 +53,8 @@ has also been audited, and its current metadata conflicts with the
 architecture appendix's open CreativeML assumption, so Drive16 continues to
 require an explicit user-selected checkpoint source instead of auto-downloading
 model weights. The readiness report now also surfaces nearby local checkpoint
-hints without accepting them automatically.
+hints without accepting them automatically. The checkpoint installer now also
+supports explicit local-file symlinks for large user-selected model weights.
 
 ## Next Up
 
@@ -157,6 +158,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   model weights.
 - [x] ComfyUI readiness report now includes nearby checkpoint hints without
   relaxing the real Pixel Art checkpoint gate.
+- [x] Checkpoint installer supports explicit local-file symlink mode for large
+  user-selected model weights.
 
 ## Completed Phase 3 Work
 

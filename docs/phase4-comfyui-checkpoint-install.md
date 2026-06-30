@@ -20,6 +20,8 @@ Implemented behavior:
   `DRIVE16_COMFYUI_CHECKPOINT`.
 - The helper writes to
   `COMFYUI_ROOT/models/checkpoints/<checkpoint-name>`.
+- The helper accepts `--link` for local source files so large user-selected
+  checkpoints can be symlinked instead of copied.
 - The helper rejects path-like checkpoint names.
 - The helper can verify an optional `--sha256 <hash>` before installing.
 - The helper can run `scripts/check-phase4-comfyui-readiness.py` with `--check`.
@@ -68,6 +70,38 @@ COMFYUI_ROOT="$PWD/artifacts/phase4/checkpoint-install-test/comfyui-bad" \
 
 Result: exited `66` with `Checkpoint SHA-256 mismatch`.
 
+Fixture symlink install with SHA-256 verification:
+
+```sh
+mkdir -p artifacts/phase4/checkpoint-install-link-test
+printf 'drive16 checkpoint symlink fixture\n' > artifacts/phase4/checkpoint-install-link-test/source.safetensors
+HASH_LINK=$(shasum -a 256 artifacts/phase4/checkpoint-install-link-test/source.safetensors | awk '{print $1}')
+COMFYUI_ROOT="$PWD/artifacts/phase4/checkpoint-install-link-test/comfyui-link" \
+  scripts/install-phase4-comfyui-checkpoint.sh \
+  --source artifacts/phase4/checkpoint-install-link-test/source.safetensors \
+  --checkpoint linked-pixel.safetensors \
+  --sha256 "$HASH_LINK" \
+  --link
+```
+
+Result:
+
+- Installed a symlink at
+  `artifacts/phase4/checkpoint-install-link-test/comfyui-link/models/checkpoints/linked-pixel.safetensors`.
+- The symlink points to the explicit local source fixture.
+- Verified the same SHA-256 before accepting the linked checkpoint.
+
+URL link rejection:
+
+```sh
+scripts/install-phase4-comfyui-checkpoint.sh \
+  --source https://example.invalid/model.safetensors \
+  --checkpoint linked-pixel.safetensors \
+  --link
+```
+
+Result: exited `64` with `--link requires a local source file, not a URL`.
+
 Current real readiness:
 
 ```sh
@@ -89,6 +123,9 @@ scripts/install-phase4-comfyui-checkpoint.sh \
   --sha256 <optional-known-hash> \
   --check
 ```
+
+For an already downloaded local model where you do not want another multi-GB
+copy, add `--link`.
 
 Then start local ComfyUI and run:
 
