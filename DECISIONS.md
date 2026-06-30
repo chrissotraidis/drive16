@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Nostalgist is integrated without vendoring Genesis cores
+
+Context:
+
+The Phase 6 adapter boundary is now ready to host a real browser player. The
+app needs imported ROMs to be playable inside the existing ROM viewport, but it
+must not quietly bundle emulator cores with non-commercial licensing terms.
+
+Decision:
+
+Add `nostalgist@0.21.1` as the browser player wrapper and launch imported ROM
+bytes into an embedded canvas with the `genesis_plus_gx` core selected at play
+time. Do not commit or vendor Genesis Plus GX core binaries. Keep this as a
+runtime delivery dependency until a release licensing/install decision is made.
+
+Consequence:
+
+Drive16 now has real interactive imported-ROM play while preserving the
+distribution boundary. Release packaging still needs an explicit core delivery
+policy before Phase 6 can be treated as distribution-complete.
+
 ## 2026-06-30 - Interactive play uses an adapter boundary
 
 Context:

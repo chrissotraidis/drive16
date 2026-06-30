@@ -1,5 +1,54 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 89 - Phase 6 embedded player adapter
+
+Plan:
+
+- Task: turn the prepared active-ROM payload into a real embedded interactive
+  player without crowding the ROM viewport or blurring Play versus Verify.
+- Files: `app/src/player/nostalgist.ts`, `app/src/App.tsx`,
+  `app/src/styles.css`, `app/index.html`, `app/package.json`,
+  `app/pnpm-lock.yaml`, Phase 6 evidence docs, `PROGRESS.md`, `README.md`,
+  `DECISIONS.md`, and `WORKLOG.md`.
+- Verification: frontend build, browser import/play smoke, keyboard input,
+  pause/resume/reset/stop controls, and console check.
+
+Did:
+
+- Added `nostalgist@0.21.1`.
+- Added a Nostalgist/RetroArch adapter behind the Drive16 player boundary.
+- Embedded the interactive player canvas inside the existing ROM viewport.
+- Wired imported ROM bytes into the player launch path.
+- Sent keyboard down/up events into the running adapter.
+- Added compact Pause/Resume, Reset, and Stop controls that only appear while a
+  player runtime exists.
+- Kept audio labeled as gated and controller support labeled as future.
+- Added a favicon data URL to avoid false browser 404 noise in QA.
+
+Evidence:
+
+- `docs/phase6-interactive-player-adapter.md`.
+- `docs/phase6-keyboard-input.md`.
+- `docs/phase6-player-controls.md`.
+- `docs/phase6-audio.md`.
+- `docs/phase6-controller-foundation.md`.
+- `pnpm --dir app build` passed.
+- Browser QA imported `examples/app-starter-blank/out/rom.bin`, clicked
+  `Play ROM`, confirmed `Interactive player started`, sent ArrowRight, paused,
+  resumed, stopped, and ended with zero console warnings/errors.
+
+Gate:
+
+Imported-ROM interactive play is working in browser preview. Phase 6 remains
+open until generated-ROM play, native app verification, and the final
+regression/evidence pass are complete.
+
+Next:
+
+- Verify a Drive16-generated ROM artifact through the same player path.
+- Run the native Tauri app path against the embedded player.
+- Assemble final Phase 6 evidence after the generated-ROM play path passes.
+
 ## 2026-06-30 - ITERATION 88 - Phase 6 interactive loading prep
 
 Plan:

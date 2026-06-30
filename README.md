@@ -48,19 +48,20 @@ compact status. Enhancement toggles now show explicit readiness labels instead
 of ambiguous On/Off state. Run, Save, Export, and Import actions now report
 near the ROM viewport and preserve recent action paths.
 
-Phase 6 has started by selecting the interactive player architecture direction
-and adding a Drive16-owned player boundary. Drive16 will keep Genteel as the
-deterministic Verify/Capture Proof path and add a separate interactive Play
-path behind a provider adapter. Nostalgist plus RetroArch Emscripten is the
-first browser adapter target, but Genesis core delivery remains explicit and
-configurable because common Mega Drive cores have non-commercial or copyleft
-licensing constraints. The app now reserves Play for the future interactive
-adapter and labels the current Genteel path as Verify/Proof Preview.
+Phase 6 has added the first embedded interactive Play path. Drive16 keeps
+Genteel as the deterministic Verify/Capture Proof path and uses a separate
+Nostalgist/RetroArch adapter for human play inside the ROM viewport. Imported
+ROM bytes can now be loaded into the embedded player, keyboard input reaches
+the running player, and compact Pause/Resume/Reset/Stop controls appear beside
+Play only while a player session exists. Genesis core delivery remains explicit:
+Drive16 does not commit Genesis Plus GX core binaries and does not treat that
+core as a settled commercial distribution dependency.
 
 ## What to do next
 
-Current Phase 6 next step: configure the interactive player adapter core and
-pass the prepared active-ROM blob URL into it.
+Current Phase 6 next step: verify a Drive16-generated ROM artifact through the
+same interactive player path, then run the final Phase 6 regression/evidence
+pass.
 
 Current local validation:
 
@@ -109,6 +110,13 @@ Useful checks:
 pnpm --dir app build
 cargo test --manifest-path app/src-tauri/Cargo.toml
 ```
+
+Interactive player smoke:
+
+1. Import a Genesis ROM through the project menu.
+2. Click Play ROM.
+3. Click the ROM viewport and use Arrow keys, `Z`, `X`, `C`, and Enter.
+4. Use Pause/Resume, Reset, or Stop from the compact player controls.
 
 The native Tauri app can be run with:
 

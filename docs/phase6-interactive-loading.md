@@ -1,8 +1,8 @@
 # Phase 6 Interactive Loading
 
-This slice starts Unit 4 by creating the active-ROM loading path that the
-interactive player adapter will use. It does not claim live emulator playback
-yet because the RetroArch/Nostalgist core is still unconfigured.
+This slice started Unit 4 by creating the active-ROM loading path that the
+interactive player adapter uses. The follow-up adapter slice now launches
+imported ROM bytes through Nostalgist/RetroArch in the ROM viewport.
 
 ## What Changed
 
@@ -22,10 +22,12 @@ Frontend:
   a ROM in the current browser session.
 - Existing repo-local ROM paths use the native `read_rom_bytes` command in the
   desktop app.
-- If the interactive provider is not configured, the app reports
+- If the interactive provider is unavailable, the app reports
   `Player core needed` instead of pretending playback started.
 - If the browser preview cannot read the active ROM from disk, the app reports
   a clear `Play setup failed` message.
+- When a browser-session import is active, `Play ROM` passes the prepared blob
+  into the embedded Nostalgist adapter.
 
 ## Safety Boundary
 
@@ -48,15 +50,14 @@ Desktop app path:
 2. User clicks `Play ROM`.
 3. The app reads the active repo-local ROM bytes through `read_rom_bytes`.
 4. The frontend creates a temporary `blob:` URL.
-5. The app stops at `Player core needed` until the interactive core adapter is
-   configured.
+5. The app launches Nostalgist against the prepared ROM payload.
 
 Browser preview path:
 
 1. User clicks `Play ROM` for a ROM that only exists on disk.
 2. The app reports that the browser preview cannot read that ROM from disk.
 3. If a user imports a ROM file in the browser session, those bytes are kept in
-   memory for the future adapter path.
+   memory and can be played immediately through the adapter path.
 
 ## Verification
 
@@ -78,11 +79,11 @@ Observed:
 - Browser QA confirmed one `Play ROM` control.
 - Clicking `Play ROM` in browser preview produced a visible
   `Play setup failed` state with no console warnings/errors.
+- Browser QA then imported `examples/app-starter-blank/out/rom.bin`, clicked
+  `Play ROM`, and confirmed the embedded player started with zero final console
+  warnings/errors.
 
 ## Remaining Unit 4 Work
 
-- Configure or supply a compatible interactive emulator core.
-- Pass the prepared `blob:` URL into the selected player adapter.
-- Show a real loaded/playing/paused/stopped state from the adapter.
 - Confirm imported ROM playback in the native app.
 - Confirm generated ROM playback through the same path.

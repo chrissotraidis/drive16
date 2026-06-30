@@ -39,13 +39,20 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  nostalgistProviderPending,
+  launchNostalgistMegadrivePlayer,
+  nostalgistProviderReady,
+  pauseNostalgistPlayer,
   playerInputActionFromKey,
   proofPreviewProvider,
+  resetNostalgistPlayer,
+  resumeNostalgistPlayer,
+  sendNostalgistInput,
+  stopNostalgistPlayer,
   visibleKeyboardMappings,
   type ActiveRomSource,
   type InteractivePlayerSession,
   type LoadedPlayerRom,
+  type NostalgistPlayerRuntime,
   type PlayerAudioState,
   type PlayerInputAction,
   type PlayerProvider,
@@ -546,8 +553,9 @@ function App() {
   const [lastPlayerInput, setLastPlayerInput] = useState<PlayerInputAction | undefined>();
   const [loadedPlayerRom, setLoadedPlayerRom] = useState<LoadedPlayerRom | undefined>();
   const [playerState, setPlayerState] = useState<PlayerSessionState>("idle");
+  const [playerCanvasActive, setPlayerCanvasActive] = useState(false);
   const [playerAudio] = useState<PlayerAudioState>("unavailable");
-  const [interactiveProvider] = useState<PlayerProvider>(nostalgistProviderPending);
+  const [interactiveProvider] = useState<PlayerProvider>(nostalgistProviderReady);
   const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
     "Starter template loaded. Verify the ROM or ask for sprite and music.",
@@ -582,6 +590,8 @@ function App() {
   });
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const romViewportRef = useRef<HTMLDivElement | null>(null);
+  const playerCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const playerRuntimeRef = useRef<NostalgistPlayerRuntime | undefined>();
   const romImportInputRef = useRef<HTMLInputElement | null>(null);
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
@@ -641,6 +651,12 @@ function App() {
       }
     };
   }, [loadedPlayerRom?.objectUrl]);
+
+  useEffect(() => {
+    return () => {
+      disposeInteractivePlayer();
+    };
+  }, []);
 
   const buildLabel = useMemo(() => {
     if (buildState === "building") return "Verifying";
@@ -735,6 +751,9 @@ function App() {
         label: projectActionNotice.label,
         detail: projectActionNotice.detail,
       };
+    }
+    if (projectActionNotice.label.startsWith("Interactive player")) {
+      return projectActionNotice;
     }
     if (starterBusy || buildState === "building") {
       return {
@@ -1911,6 +1930,7 @@ function App() {
 
   async function playActiveRom() {
     setPlayerState("loading");
+    setPlayerCanvasActive(true);
     noteAction(`Preparing ${activeRomSource.label} for interactive Play.`);
     appendOpenCodeEvent("player.prepare.started", activeRomSource.path);
 
@@ -1920,6 +1940,7 @@ function App() {
 
       if (interactiveProvider.state !== "available") {
         setPlayerState("stopped");
+        setPlayerCanvasActive(false);
         const detail = `${payload.sourceName} (${formatBytes(
           payload.bytes,
         )}) is ready for Play, but ${interactiveProvider.detail}`;
@@ -1933,16 +1954,29 @@ function App() {
         return;
       }
 
+      const canvas = playerCanvasRef.current;
+      if (!canvas) {
+        throw new Error("Interactive player canvas was not available.");
+      }
+
+      disposeInteractivePlayer();
+      const runtime = await launchNostalgistMegadrivePlayer({
+        canvas,
+        rom: payload,
+      });
+      playerRuntimeRef.current = runtime;
       setPlayerState("playing");
       setProjectActionNotice({
         state: "ready",
         label: "Interactive player started",
-        detail: payload.sourcePath,
+        detail: `${payload.sourceName} is running in the ROM viewport.`,
       });
       noteAction(`Playing ${payload.sourceName}.`);
       appendOpenCodeEvent("player.playing", payload.sourcePath);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Interactive Play setup failed";
+      disposeInteractivePlayer();
+      setPlayerCanvasActive(false);
       setPlayerState("error");
       setProjectActionNotice({
         state: "missing",
@@ -1973,6 +2007,102 @@ function App() {
       result.sourceName,
       base64ToBytes(result.dataBase64),
     );
+  }
+
+  function toggleInteractivePlayerPause() {
+    const runtime = playerRuntimeRef.current;
+    if (!runtime) {
+      noteAction("No interactive ROM is running yet.");
+      return;
+    }
+
+    if (playerState === "paused") {
+      setPlayerState("playing");
+      setProjectActionNotice({
+        state: "ready",
+        label: "Interactive player resumed",
+        detail: runtime.rom.sourceName,
+      });
+      noteAction("Interactive ROM resumed.");
+      appendOpenCodeEvent("player.resumed", runtime.rom.sourcePath);
+      window.setTimeout(() => {
+        try {
+          resumeNostalgistPlayer(runtime);
+        } catch (error) {
+          appendOpenCodeEvent(
+            "player.resume.warning",
+            error instanceof Error ? error.message : "Could not resume player cleanly",
+          );
+        }
+      }, 0);
+    } else {
+      setPlayerState("paused");
+      setProjectActionNotice({
+        state: "warning",
+        label: "Interactive player paused",
+        detail: runtime.rom.sourceName,
+      });
+      noteAction("Interactive ROM paused.");
+      appendOpenCodeEvent("player.paused", runtime.rom.sourcePath);
+      window.setTimeout(() => {
+        try {
+          pauseNostalgistPlayer(runtime);
+        } catch (error) {
+          appendOpenCodeEvent(
+            "player.pause.warning",
+            error instanceof Error ? error.message : "Could not pause player cleanly",
+          );
+        }
+      }, 0);
+    }
+  }
+
+  function resetInteractivePlayer() {
+    const runtime = playerRuntimeRef.current;
+    if (!runtime) {
+      noteAction("No interactive ROM is running yet.");
+      return;
+    }
+
+    resetNostalgistPlayer(runtime);
+    setPlayerState("playing");
+    setProjectActionNotice({
+      state: "ready",
+      label: "Interactive player reset",
+      detail: runtime.rom.sourceName,
+    });
+    noteAction("Interactive ROM reset.");
+    appendOpenCodeEvent("player.reset", runtime.rom.sourcePath);
+  }
+
+  function stopInteractivePlayer() {
+    const runtime = playerRuntimeRef.current;
+    disposeInteractivePlayer();
+    setPlayerCanvasActive(false);
+    setPlayerState("stopped");
+    setProjectActionNotice({
+      state: "ready",
+      label: "Interactive player stopped",
+      detail: runtime?.rom.sourceName ?? activeRomSource.label,
+    });
+    noteAction("Interactive ROM stopped.");
+    appendOpenCodeEvent("player.stopped", runtime?.rom.sourcePath ?? activeRomSource.path);
+  }
+
+  function disposeInteractivePlayer() {
+    const runtime = playerRuntimeRef.current;
+    if (!runtime) return;
+
+    try {
+      stopNostalgistPlayer(runtime);
+    } catch (error) {
+      appendOpenCodeEvent(
+        "player.dispose.warning",
+        error instanceof Error ? error.message : "Could not stop existing player cleanly",
+      );
+    } finally {
+      playerRuntimeRef.current = undefined;
+    }
   }
 
   function toggleEmulatorFocus() {
@@ -2016,17 +2146,45 @@ function App() {
     applyLocalRomInput(action);
   }
 
+  function handleRomKeyUp(event: KeyboardEvent<HTMLDivElement>) {
+    const action = playerInputActionFromKey(event.key);
+    if (!action) return;
+    event.preventDefault();
+    releaseLocalRomInput(action);
+  }
+
   function applyLocalRomInput(action: PlayerInputAction) {
     const spriteDelta = action.spriteDelta ?? 0;
     if (spriteDelta !== 0) {
       setSpriteX((current) => Math.min(88, Math.max(12, current + spriteDelta)));
     }
+    sendInteractivePlayerInput(action, "down");
     setLastPlayerInput(action);
     setLastInputAction(action.label);
     noteAction(
-      `${action.label} captured by the player input model. Interactive emulator input is next.`,
+      playerRuntimeRef.current
+        ? `${action.label} sent to the interactive player.`
+        : `${action.label} captured by the player input model. Press Play ROM to use it in the emulator.`,
     );
     appendOpenCodeEvent(action.event, action.detail);
+  }
+
+  function releaseLocalRomInput(action: PlayerInputAction) {
+    sendInteractivePlayerInput(action, "up");
+  }
+
+  function sendInteractivePlayerInput(action: PlayerInputAction, phase: "down" | "up") {
+    const runtime = playerRuntimeRef.current;
+    if (!runtime) return;
+
+    try {
+      sendNostalgistInput(runtime, action, phase);
+    } catch (error) {
+      appendOpenCodeEvent(
+        "player.input.failed",
+        error instanceof Error ? error.message : action.detail,
+      );
+    }
   }
 
   async function runScriptedRightInputProof() {
@@ -2391,7 +2549,9 @@ function App() {
             <div className="screen-bezel">
               <div
                 className={`genesis-screen ${transport} ${
-                  starterRom.framebufferFrames.length > 0
+                  playerCanvasActive || playerState === "loading"
+                    ? "interactive"
+                    : starterRom.framebufferFrames.length > 0
                     ? "framebuffer"
                     : starterRom.screenshotDataUrl
                       ? "captured"
@@ -2405,40 +2565,57 @@ function App() {
                 onClick={focusRomInput}
                 onFocus={() => setRomInputFocused(true)}
                 onKeyDown={handleRomKeyDown}
+                onKeyUp={handleRomKeyUp}
               >
-                <FramebufferCanvas
-                  fallback={
-                    starterRom.screenshotDataUrl ? (
-                      <img
-                        className="starter-frame"
-                        src={starterRom.screenshotDataUrl}
-                        alt="Starter project ROM frame"
-                      />
-                    ) : (
-                      <>
-                        <div className="scanlines" />
-                        <span className="screen-title">DRIVE16 BLANK ROM</span>
-                        <span className="screen-status">
-                          {starterBusy
-                            ? "LOADING"
-                            : transport === "running"
-                              ? "PREVIEW"
-                              : "PAUSED"}
-                        </span>
-                        <span
-                          className="sprite-cursor"
-                          style={{ left: `${spriteX}%` }}
-                          aria-hidden="true"
-                        />
-                      </>
-                    )
-                  }
-                  frames={starterRom.framebufferFrames}
-                  streamEvery={starterRom.streamEvery}
-                  transport={transport}
+                <canvas
+                  ref={playerCanvasRef}
+                  aria-label="Interactive Genesis player"
+                  className={`nostalgist-canvas ${
+                    playerCanvasActive || playerState === "loading" ? "active" : ""
+                  }`}
+                  data-testid="interactive-player-canvas"
                 />
+                {playerCanvasActive || playerState === "loading" ? (
+                  playerState === "loading" ? (
+                    <span className="player-loading">LOADING PLAYER</span>
+                  ) : null
+                ) : (
+                  <FramebufferCanvas
+                    fallback={
+                      starterRom.screenshotDataUrl ? (
+                        <img
+                          className="starter-frame"
+                          src={starterRom.screenshotDataUrl}
+                          alt="Starter project ROM frame"
+                        />
+                      ) : (
+                        <>
+                          <div className="scanlines" />
+                          <span className="screen-title">DRIVE16 BLANK ROM</span>
+                          <span className="screen-status">
+                            {starterBusy
+                              ? "LOADING"
+                              : transport === "running"
+                                ? "PREVIEW"
+                                : "PAUSED"}
+                          </span>
+                          <span
+                            className="sprite-cursor"
+                            style={{ left: `${spriteX}%` }}
+                            aria-hidden="true"
+                          />
+                        </>
+                      )
+                    }
+                    frames={starterRom.framebufferFrames}
+                    streamEvery={starterRom.streamEvery}
+                    transport={transport}
+                  />
+                )}
                 <span className={`screen-badge ${starterRom.status}`}>
-                  {starterBadge(starterRom, starterBusy, transport)}
+                  {playerCanvasActive
+                    ? playerState.toUpperCase()
+                    : starterBadge(starterRom, starterBusy, transport)}
                 </span>
               </div>
             </div>
@@ -2466,18 +2643,49 @@ function App() {
             </div>
             <div className="rom-input-proof">
               <span data-testid="rom-last-input">{lastInputAction}</span>
-              <div className="rom-player-actions">
+              <div
+                className="rom-player-actions"
+                onMouseDown={(event) => event.preventDefault()}
+              >
                 <button
                   type="button"
                   data-testid="play-active-rom"
                   onClick={() => {
                     void playActiveRom();
                   }}
-                  disabled={playerState === "loading"}
+                  disabled={playerState === "loading" || playerState === "playing"}
                 >
                   <Play size={14} />
                   {playerState === "loading" ? "Preparing" : "Play ROM"}
                 </button>
+                {playerRuntimeRef.current ? (
+                  <>
+                    <button
+                      type="button"
+                      data-testid="pause-player"
+                      onClick={toggleInteractivePlayerPause}
+                    >
+                      {playerState === "paused" ? <Play size={14} /> : <Pause size={14} />}
+                      {playerState === "paused" ? "Resume" : "Pause"}
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="reset-player"
+                      onClick={resetInteractivePlayer}
+                    >
+                      <RefreshCcw size={14} />
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="stop-player"
+                      onClick={stopInteractivePlayer}
+                    >
+                      <Square size={14} />
+                      Stop
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   data-testid="rom-right-proof"

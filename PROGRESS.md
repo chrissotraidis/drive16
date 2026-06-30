@@ -12,11 +12,11 @@ Genteel proof path remains available and distinct.
 - [x] Evaluate embedded emulator core options and license posture.
 - [x] Add player architecture boundary.
 - [x] Clean up UI language so Play and Verify/Capture Proof are distinct.
-- [ ] Wire imported ROMs into the interactive player.
-- [ ] Wire keyboard input into the running interactive player.
-- [ ] Add player controls without crowding the ROM viewport.
-- [ ] Add or honestly gate audio.
-- [ ] Add controller-ready input foundation.
+- [x] Wire imported ROMs into the interactive player.
+- [x] Wire keyboard input into the running interactive player.
+- [x] Add player controls without crowding the ROM viewport.
+- [x] Add or honestly gate audio.
+- [x] Add controller-ready input foundation.
 - [ ] Wire Drive16-generated ROMs into the same player.
 - [ ] Run full polish, regression, and evidence pass.
 - [ ] Assemble Phase 6 evidence packet for human review.
@@ -37,17 +37,23 @@ Genteel proof path remains available and distinct.
 
 ## Current Task
 
-Phase 6 is open. Unit 3 cleaned up visible UI language so Genteel capture is
-called Verify or Proof Preview, while Play remains reserved for the future
-interactive emulator adapter.
+Phase 6 is open. Imported ROMs can now be played through the embedded
+Nostalgist/RetroArch adapter in the ROM viewport, with keyboard input and
+compact player controls. Genteel remains the separate Verify/Proof Preview
+path.
 
-Evidence is recorded in `docs/phase6-ui-language.md`.
+Evidence is recorded in:
+
+- `docs/phase6-interactive-player-adapter.md`
+- `docs/phase6-keyboard-input.md`
+- `docs/phase6-player-controls.md`
+- `docs/phase6-audio.md`
+- `docs/phase6-controller-foundation.md`
 
 ## Next Up
 
-Unit 4 is in progress: active ROM bytes can now be prepared for the future
-interactive player adapter, but live emulator playback still waits on the
-configured core.
+Unit 9: verify a Drive16-generated ROM artifact through the same interactive
+player path, then run the final Phase 6 regression/evidence pass.
 
 ## Completed Phase 6 Work
 
@@ -70,6 +76,13 @@ configured core.
   interactive player path.
 - [x] Missing-core and browser-preview read failures surface as visible Play
   feedback instead of pretending playback started.
+- [x] Nostalgist adapter added behind the Drive16 player boundary.
+- [x] Imported repo ROM smoke test launched in the embedded player canvas.
+- [x] Keyboard ArrowRight sends input through the running player path.
+- [x] Pause, Resume, Reset, and Stop controls added next to Play.
+- [x] Audio remains explicitly gated until verified.
+- [x] Controller-ready input shape documented without claiming controller
+  support is finished.
 
 ## Completed Phase 5 Work
 
