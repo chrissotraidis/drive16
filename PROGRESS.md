@@ -31,7 +31,9 @@ prerequisite is a Pixel Art Diffusion XL compatible checkpoint. The default
 filename is `pixel-art-diffusion-xl.safetensors`, or
 `DRIVE16_COMFYUI_CHECKPOINT` can name a compatible local checkpoint. The
 generated-assets validation harness now prints this checkpoint-aware readiness
-sequence when live sprite output is absent.
+sequence when live sprite output is absent. The app-side AI-sprite prompt gate
+now returns the same readiness sequence before asking the user to retry the
+prompt.
 
 ## Next Up
 
@@ -107,6 +109,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
 - [x] Runtime checkpoint override added for compatible local checkpoint names
   and recorded in `docs/phase4-comfyui-checkpoint-override.md`.
 - [x] Generated-assets validation request refreshed to use the checkpoint-aware
+  ComfyUI readiness sequence.
+- [x] App-side AI-sprite prompt gate refreshed to use the checkpoint-aware
   ComfyUI readiness sequence.
 
 ## Completed Phase 3 Work

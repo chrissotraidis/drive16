@@ -450,7 +450,7 @@ fn validate_generated_sprite(paths: &Phase4MusicPaths, source: &Path) -> Result<
 
 fn generated_sprite_validation_request(reason: &str) -> String {
     format!(
-        "{} Run COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py, then retry the prompt with AI sprites enabled.",
+        "{} Place a Pixel Art Diffusion XL compatible checkpoint at ~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors, or set DRIVE16_COMFYUI_CHECKPOINT for a compatible local filename. Start ComfyUI with scripts/launch-phase4-comfyui-api.sh, run scripts/check-phase4-comfyui-readiness.py, then run COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py. Retry the prompt with AI sprites enabled after the live sprite run records ok: true.",
         reason
     )
 }
@@ -903,6 +903,9 @@ mod tests {
         fs::remove_dir_all(temp_dir).ok();
 
         assert!(error.contains("Live ComfyUI sprite run"));
+        assert!(error.contains("DRIVE16_COMFYUI_CHECKPOINT"));
+        assert!(error.contains("scripts/launch-phase4-comfyui-api.sh"));
+        assert!(error.contains("scripts/check-phase4-comfyui-readiness.py"));
         assert!(error.contains("scripts/run-comfyui-sprite-workflow.py"));
     }
 
@@ -922,6 +925,9 @@ mod tests {
         fs::remove_dir_all(temp_dir).ok();
 
         assert!(error.contains("has not completed successfully"));
+        assert!(error.contains("DRIVE16_COMFYUI_CHECKPOINT"));
+        assert!(error.contains("scripts/launch-phase4-comfyui-api.sh"));
+        assert!(error.contains("scripts/check-phase4-comfyui-readiness.py"));
         assert!(error.contains("scripts/run-comfyui-sprite-workflow.py"));
     }
 
