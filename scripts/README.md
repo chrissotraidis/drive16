@@ -34,6 +34,9 @@ Toolchain and validation scripts live here.
   the RAG corpus and retrievable with generated-music terms.
 - `validate-phase4-generated-music-prompt.sh`: runs the Phase 4 generated-MML
   prompt-path tests and, when Docker is running, builds and verifies the ROM.
+- `validate-phase4-generated-assets-prompt.sh`: runs the combined Phase 4
+  generated-sprite plus generated-MML prompt proof when live ComfyUI output and
+  Docker are available.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.

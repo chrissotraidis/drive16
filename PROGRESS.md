@@ -23,16 +23,16 @@ still builds a working ROM.
 
 ## Current Task
 
-The generated-MML prompt path now has a generated-sprite artifact gate. Full
-generated-asset ROM proof is awaiting Docker Desktop, and live ComfyUI sprite
-validation is still awaiting local ComfyUI.
+The combined generated-assets prompt validation harness is ready. Full
+generated-asset ROM proof is awaiting live ComfyUI sprite output and Docker
+Desktop.
 
 ## Next Up
 
 VALIDATION REQUEST: start local ComfyUI and run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
 then start Docker Desktop and run
-`scripts/validate-phase4-generated-music-prompt.sh`.
+`scripts/validate-phase4-generated-assets-prompt.sh`.
 
 ## Completed Phase 4 Work
 
@@ -78,6 +78,10 @@ then start Docker Desktop and run
   using generated sprite assets.
 - [x] Phase 4 generated-sprite prompt gate evidence recorded in
   `docs/phase4-generated-sprite-prompt-gate.md`.
+- [x] Combined generated-sprite plus generated-MML validation harness added at
+  `scripts/validate-phase4-generated-assets-prompt.sh`.
+- [x] Phase 4 generated-assets validation evidence recorded in
+  `docs/phase4-generated-assets-validation.md`.
 
 ## Completed Phase 3 Work
 

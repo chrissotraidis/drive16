@@ -1,5 +1,84 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 45 - Generated assets validation harness
+
+Plan:
+
+- Task: add a single validation command for the full generated sprite plus
+  generated MML prompt path.
+- Files: `app/src-tauri/src/phase4_prompt.rs`,
+  `scripts/validate-phase4-generated-assets-prompt.sh`,
+  `scripts/README.md`, `docs/phase4-generated-assets-validation.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: new generated-assets validation script, full native test
+  suite, frontend build, existing generated-music validation script gate
+  check, script syntax check, secret scan, Markdown punctuation check, ignored
+  artifact check, and `git diff --check`.
+
+Did:
+
+- Added ignored native test
+  `phase4_generated_assets_prompt_runs_when_tools_are_available`.
+- Added `scripts/validate-phase4-generated-assets-prompt.sh` as the final
+  generated-assets proof command.
+- The script runs focused Phase 4 prompt tests, then runs the ignored native
+  proof that requires a live validated ComfyUI sprite, generated MML music,
+  SGDK ROM build, Genteel screenshots, sprite movement proof, and non-silent
+  audio.
+- The script prints distinct validation requests for missing live ComfyUI
+  output, generated sprite validator rejection, and Docker Desktop not running.
+- Documented the script in `scripts/README.md` and
+  `docs/phase4-generated-assets-validation.md`.
+
+Evidence:
+
+- `bash -n scripts/validate-phase4-generated-assets-prompt.sh` passed.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` with the live ComfyUI validation
+  request because the latest live sprite run record is not successful.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture`
+  passed: 20 passed, 4 ignored.
+- `npm run build` in `app/` passed.
+- `scripts/validate-phase4-generated-music-prompt.sh` reran the focused tests,
+  then exited `65` with the Docker Desktop validation request.
+- Secret scan returned no matches for OpenRouter key patterns.
+- Markdown punctuation and emoji guard returned no matches.
+- Ignored-artifact checks confirmed `app/dist/`,
+  `artifacts/phase4/generated-music-prompt/project/res/generated_music.vgm`,
+  and `artifacts/phase4/live-comfyui-sprite/last-run.json` are ignored.
+- `git diff --check` passed.
+
+Gate:
+
+VALIDATION REQUEST: start local ComfyUI on `http://127.0.0.1:8188`, then run:
+
+```sh
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+```
+
+Expected result: the live runner records `ok: true` and a downloaded PNG under
+`artifacts/phase4/live-comfyui-sprite/` that passes
+`scripts/validate-generated-sprite.py --symbol drive16_player`.
+
+VALIDATION REQUEST: start Docker Desktop, then run:
+
+```sh
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Expected result: the ignored native test builds the generated-assets SGDK
+project, runs it in Genteel, captures neutral and Right-input screenshots,
+proves Right-input sprite movement, and verifies non-silent generated music.
+
+The generated-sprite validation, broad prompt-path, and generated-ROM checklist
+items remain open until this command passes with real ComfyUI and Docker.
+
+Next:
+
+- Run the live ComfyUI sprite workflow when local ComfyUI is available, then
+  run `scripts/validate-phase4-generated-assets-prompt.sh` after Docker Desktop
+  is available.
+
 ## 2026-06-30 - ITERATION 44 - Generated sprite prompt artifact gate
 
 Plan:

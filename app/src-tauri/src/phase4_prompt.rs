@@ -945,6 +945,29 @@ mod tests {
             .ends_with("artifacts/phase4/generated-music-prompt/project/out/rom.bin"));
     }
 
+    #[test]
+    #[ignore = "requires live ComfyUI sprite output, Docker SGDK, and Genteel"]
+    fn phase4_generated_assets_prompt_runs_when_tools_are_available() {
+        let result = run_phase4_music_prompt(Phase4PromptRequest {
+            prompt: "make a generated sprite I can move left and right with generated music"
+                .to_string(),
+            use_generated_sprite: true,
+        })
+        .expect("Phase 4 generated-assets prompt should run");
+
+        assert_eq!(result.status, "ready");
+        assert!(result.detail.contains("Generated sprite"));
+        assert!(result.detail.contains("generated MML music"));
+        assert!(result
+            .screenshot_data_url
+            .starts_with("data:image/png;base64,"));
+        assert!(result.streamed_frames >= 1);
+        assert!(result.audio_max_abs > 0);
+        assert!(result
+            .rom_path
+            .ends_with("artifacts/phase4/generated-music-prompt/project/out/rom.bin"));
+    }
+
     fn temp_dir(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "drive16-phase4-{}-{}-{}",
