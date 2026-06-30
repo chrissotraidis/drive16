@@ -1,5 +1,54 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 69 - Live proof wrapper API launch
+
+Plan:
+
+- Task: teach the live generated-assets proof wrapper to launch local ComfyUI
+  when the API is not already reachable.
+- Files: `scripts/validate-phase4-live-generated-assets.sh`,
+  `scripts/README.md`, `docs/phase4-live-generated-assets-proof.md`,
+  `docs/phase4-evidence.md`, related Phase 4 validation docs,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: syntax-check the wrapper, run it in the current
+  missing-checkpoint state, confirm it stops at the checkpoint gate, and run
+  hygiene scans.
+
+Did:
+
+- Added a Step 0 to `scripts/validate-phase4-live-generated-assets.sh`.
+- The wrapper now checks `/system_stats` before readiness.
+- If the local API is not reachable, it launches
+  `scripts/launch-phase4-comfyui-api.sh`, waits for the API, and stores the
+  launch log under ignored Phase 4 artifacts.
+- If the wrapper launches ComfyUI, it stops that process on exit.
+- Non-local unreachable endpoints remain an explicit validation request.
+
+Evidence:
+
+- `bash -n scripts/validate-phase4-live-generated-assets.sh` passed.
+- `scripts/validate-phase4-live-generated-assets.sh` exited `68` in the
+  current missing-checkpoint state.
+- The wrapper printed Step 0, launched local ComfyUI, and reached Step 1
+  readiness.
+- `artifacts/phase4/comfyui-readiness/latest.json` recorded `api.ok: true`,
+  `workflowClasses.ok: true`, and `pixydustQuantizer.ok: true`.
+- The same readiness report recorded `checkpoint.ok: false` for
+  `pixel-art-diffusion-xl.safetensors`.
+- After the wrapper exited, `http://127.0.0.1:8188/system_stats` was no longer
+  reachable, confirming the wrapper stopped the process it launched.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live generated-assets proof wrapper.
+
+Next:
+
+- Install the compatible checkpoint and run
+  `scripts/validate-phase4-live-generated-assets.sh`; this should now handle
+  local ComfyUI startup itself.
+
 ## 2026-06-30 - ITERATION 68 - Current ComfyUI API smoke refresh
 
 Plan:

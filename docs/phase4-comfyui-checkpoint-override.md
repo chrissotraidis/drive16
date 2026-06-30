@@ -104,13 +104,5 @@ export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
 Then run:
 
 ```sh
-scripts/launch-phase4-comfyui-api.sh
-```
-
-In another shell, run:
-
-```sh
-scripts/check-phase4-comfyui-readiness.py
-COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
-scripts/validate-phase4-generated-assets-prompt.sh
+scripts/validate-phase4-live-generated-assets.sh
 ```

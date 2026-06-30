@@ -101,27 +101,20 @@ If the compatible checkpoint uses a different local filename, set:
 export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
 ```
 
-Start local ComfyUI:
+Then run the live proof wrapper:
 
 ```sh
-scripts/launch-phase4-comfyui-api.sh
+scripts/validate-phase4-live-generated-assets.sh
 ```
 
-In another shell, confirm readiness and run the live sprite generator:
+Expected result: the wrapper launches local ComfyUI if needed,
+`artifacts/phase4/live-comfyui-sprite/last-run.json` records `ok: true`, and a
+downloaded PNG passes the Drive16 generated-sprite validator.
+
+The wrapper then continues into the generated-ROM proof:
 
 ```sh
-scripts/check-phase4-comfyui-readiness.py
-COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
-```
-
-Expected result: `artifacts/phase4/live-comfyui-sprite/last-run.json` records
-`ok: true` and a downloaded PNG that passes the Drive16 generated-sprite
-validator.
-
-Full generated-ROM proof is still required after Docker Desktop is running:
-
-```sh
-scripts/validate-phase4-generated-music-prompt.sh
+scripts/validate-phase4-generated-assets-prompt.sh
 ```
 
 Expected result: the ignored native test builds the generated SGDK project,

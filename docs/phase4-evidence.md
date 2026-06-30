@@ -44,8 +44,10 @@ The remaining live gate is the real ComfyUI sprite output:
   keeping `checkpointOk: false`. The smoke was rerun on 2026-06-30 and
   confirmed the API, workflow classes, and Pixydust are ready in the current
   local setup.
-- `scripts/check-phase4-comfyui-readiness.py` exits `68` when ComfyUI is not
-  already running or when the compatible checkpoint is missing.
+- `scripts/validate-phase4-live-generated-assets.sh` now launches local
+  ComfyUI if the API is not already reachable, reaches readiness with
+  `api.ok: true`, `workflowClasses.ok: true`, and `pixydustQuantizer.ok: true`,
+  then exits `68` because the compatible checkpoint is missing.
 - `scripts/validate-phase4-generated-assets-prompt.sh` exits `66` because
   `artifacts/phase4/live-comfyui-sprite/last-run.json` does not record a
   successful live sprite run.
@@ -70,21 +72,7 @@ If using the Civitai Pixel Art Diffusion XL checkpoint, treat it as a
 user-selected external model under its own license. Do not redistribute or
 commit the model weights.
 
-Start local ComfyUI:
-
-```sh
-scripts/launch-phase4-comfyui-api.sh
-```
-
-In another shell, run:
-
-```sh
-scripts/check-phase4-comfyui-readiness.py
-COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
-scripts/validate-phase4-generated-assets-prompt.sh
-```
-
-Or run the same gate sequence with:
+Then run the live gate sequence:
 
 ```sh
 scripts/validate-phase4-live-generated-assets.sh

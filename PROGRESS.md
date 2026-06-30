@@ -50,8 +50,7 @@ ComfyUI API smoke was rerun on 2026-06-30 and confirms the API can start, the
 committed workflow classes are present, and Pixydust is loaded. The remaining
 ComfyUI prerequisite is the compatible checkpoint. The likely Civitai Pixel Art
 Diffusion XL source has also been audited, and its current metadata conflicts
-with the
-architecture appendix's open CreativeML assumption, so Drive16 continues to
+with the architecture appendix's open CreativeML assumption, so Drive16 continues to
 require an explicit user-selected checkpoint source instead of auto-downloading
 model weights. The readiness report now also surfaces nearby local checkpoint
 hints without accepting them automatically. The checkpoint installer now also
@@ -61,8 +60,9 @@ keeps filesystem checks visible even when the ComfyUI API is not running.
 The live ComfyUI sprite runner now reuses the same readiness gate before
 enqueueing so missing checkpoint/API prerequisites stop with a checkpoint-aware
 validation request. A single live proof wrapper now runs readiness, live sprite
-generation, and the generated-assets ROM proof in order once the compatible
-checkpoint is available.
+generation, and the generated-assets ROM proof in order. It now launches the
+local ComfyUI API automatically when needed and stops the process it launched,
+leaving the compatible checkpoint as the remaining prerequisite.
 
 ## Next Up
 
@@ -75,11 +75,10 @@ endpoint. You can use
 `scripts/install-phase4-comfyui-checkpoint.sh --source /path-or-url/to/compatible-checkpoint.safetensors --checkpoint pixel-art-diffusion-xl.safetensors --check`
 to place an explicit user-provided checkpoint. If the source is the Civitai
 Pixel Art Diffusion XL checkpoint, treat it as a user-selected external model
-under its own license. Start ComfyUI with
-`scripts/launch-phase4-comfyui-api.sh`, make
-`scripts/check-phase4-comfyui-readiness.py` pass in another shell, then run
-`COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
-then run `scripts/validate-phase4-generated-assets-prompt.sh`.
+under its own license. Then run
+`scripts/validate-phase4-live-generated-assets.sh`; the wrapper will launch
+local ComfyUI if needed, run readiness, run the live sprite workflow, and run
+the generated-assets ROM proof.
 
 ## Completed Phase 4 Work
 
@@ -176,6 +175,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   the generation workflow.
 - [x] One-command live generated-assets proof wrapper added for the final
   checkpoint-to-ROM gate sequence.
+- [x] Live generated-assets proof wrapper now launches local ComfyUI if needed
+  and stops the process it owns.
 
 ## Completed Phase 3 Work
 

@@ -116,31 +116,14 @@ If the compatible checkpoint uses a different local filename, set:
 export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
 ```
 
-Start local ComfyUI:
-
-```sh
-scripts/launch-phase4-comfyui-api.sh
-```
-
-In another shell, confirm readiness and run the live sprite generator:
-
-```sh
-scripts/check-phase4-comfyui-readiness.py
-COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
-```
-
-Then run the combined generated-assets proof:
-
-```sh
-scripts/validate-phase4-generated-assets-prompt.sh
-```
-
-Or run the full live gate in one command:
+Then run the full live gate:
 
 ```sh
 scripts/validate-phase4-live-generated-assets.sh
 ```
 
-Expected result: the ignored native test builds the generated-assets SGDK
-project, runs it in Genteel, captures neutral and Right-input screenshots,
-proves Right-input sprite movement, and verifies non-silent generated music.
+Expected result: the wrapper launches local ComfyUI if needed, readiness
+passes, the live sprite workflow records `ok: true`, and the ignored native
+test builds the generated-assets SGDK project, runs it in Genteel, captures
+neutral and Right-input screenshots, proves Right-input sprite movement, and
+verifies non-silent generated music.

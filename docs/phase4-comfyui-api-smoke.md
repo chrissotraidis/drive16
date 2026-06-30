@@ -72,7 +72,7 @@ scripts/install-phase4-comfyui-checkpoint.sh \
   --check
 ```
 
-The wrapper will start by checking readiness:
+The wrapper will launch local ComfyUI if needed, then check readiness:
 
 ```sh
 scripts/validate-phase4-live-generated-assets.sh

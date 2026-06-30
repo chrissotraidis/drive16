@@ -127,10 +127,8 @@ scripts/install-phase4-comfyui-checkpoint.sh \
 For an already downloaded local model where you do not want another multi-GB
 copy, add `--link`.
 
-Then start local ComfyUI and run:
+Then run the full live gate:
 
 ```sh
-scripts/check-phase4-comfyui-readiness.py
-COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
-scripts/validate-phase4-generated-assets-prompt.sh
+scripts/validate-phase4-live-generated-assets.sh
 ```
