@@ -24,7 +24,7 @@ local ComfyUI produces a PNG that passes the generated-sprite validator.
 | Validator-accepted generated sprite can be consumed by SGDK `rescomp` | `docs/phase4-generated-sprite-sgdk-resource.md` |
 | Live ComfyUI sprite runner exists and validates downloaded PNGs | `docs/phase4-live-comfyui-runner.md` |
 | Pixydust Quantizer prerequisite can be installed and detected | `docs/phase4-comfyui-pixydust-local.md` |
-| ComfyUI API launch path exists | `docs/phase4-comfyui-api-launch.md` |
+| ComfyUI API launch and smoke path exists | `docs/phase4-comfyui-api-launch.md`, `docs/phase4-comfyui-api-smoke.md` |
 | Checkpoint override and install helper exist for local filenames and user-provided sources | `docs/phase4-comfyui-checkpoint-override.md`, `docs/phase4-comfyui-checkpoint-install.md` |
 | ctrmml MML music MCP wrapper exists | `docs/phase4-mml-music-mcp.md` |
 | FM preset library is committed | `docs/phase4-mml-presets.md` |
@@ -38,10 +38,11 @@ local ComfyUI produces a PNG that passes the generated-sprite validator.
 
 The remaining live gate is the real ComfyUI sprite output:
 
-- `scripts/check-phase4-comfyui-readiness.py` exits `68` because the local
-  ComfyUI API is not reachable on `127.0.0.1:8188`, the default checkpoint is
-  not present in the checked model paths, and workflow classes cannot be
-  inspected without the API.
+- `scripts/validate-phase4-comfyui-api-smoke.sh` passes and records
+  `apiOk: true`, `workflowClassesOk: true`, and `pixydustOk: true`, while
+  keeping `checkpointOk: false`.
+- `scripts/check-phase4-comfyui-readiness.py` exits `68` when ComfyUI is not
+  already running or when the compatible checkpoint is missing.
 - `scripts/validate-phase4-generated-assets-prompt.sh` exits `66` because
   `artifacts/phase4/live-comfyui-sprite/last-run.json` does not record a
   successful live sprite run.

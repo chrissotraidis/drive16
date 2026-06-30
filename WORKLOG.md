@@ -1,5 +1,65 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 61 - ComfyUI API smoke gate narrowing
+
+Plan:
+
+- Task: add a repeatable smoke test that starts local ComfyUI temporarily and
+  proves API, workflow classes, and Pixydust before the live checkpoint gate.
+- Files: `scripts/validate-phase4-comfyui-api-smoke.sh`,
+  `docs/phase4-comfyui-api-smoke.md`,
+  `docs/phase4-comfyui-api-launch.md`, `docs/phase4-evidence.md`,
+  `scripts/README.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run the new smoke script, inspect its report and readiness
+  output, confirm the launched process is stopped afterward, run the real
+  generated-assets gate, run hygiene scans, and confirm smoke artifacts are
+  ignored.
+
+Did:
+
+- Added `scripts/validate-phase4-comfyui-api-smoke.sh`.
+- The script starts ComfyUI only if `/system_stats` is not already reachable.
+- It runs the Phase 4 readiness check while the API is live.
+- It requires API, workflow classes, and Pixydust to pass, but allows the
+  checkpoint to remain the validation request.
+- It stops any ComfyUI process it starts.
+- Updated the Phase 4 docs and ledger with the narrower remaining gate.
+
+Evidence:
+
+- `scripts/validate-phase4-comfyui-api-smoke.sh` passed.
+- Smoke report:
+  `artifacts/phase4/comfyui-api-smoke/latest.json`.
+- The smoke report recorded `apiOk: true`, `workflowClassesOk: true`,
+  `pixydustOk: true`, and `checkpointOk: false`.
+- The readiness report recorded all required workflow classes available:
+  `CLIPTextEncode`, `CheckpointLoaderSimple`, `EmptyLatentImage`,
+  `ImageScale`, `KSampler`, `Quantizer`, `SaveImage`, and `VAEDecode`.
+- The smoke launch log recorded ComfyUI 0.26.0 serving
+  `http://127.0.0.1:8188` from the pinned source checkout and loading
+  `ComfyUI-PixydustQuantizer`.
+- After the smoke script exited, `http://127.0.0.1:8188/system_stats` was no
+  longer reachable, confirming the script stopped the process it launched.
+- `scripts/validate-phase4-generated-assets-prompt.sh` still exits `66` after
+  focused Phase 4 prompt tests pass, preserving the real live sprite gate.
+- `bash -n` passed for the API smoke, launch, and readiness scripts.
+- `git diff --check` passed.
+- Secret scan and Markdown punctuation scan found no matches.
+- Smoke logs, readiness output, and live-run records are ignored by git.
+- Local preview at `http://127.0.0.1:1420/` responded with HTTP 200.
+
+Gate:
+
+VALIDATION REQUEST remains: install a real Pixel Art Diffusion XL compatible
+checkpoint from an explicit source, start local ComfyUI, pass
+`scripts/check-phase4-comfyui-readiness.py`, run the live sprite workflow, then
+rerun the real generated-assets proof.
+
+Next:
+
+- Install the real checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 60 - Phase 4 evidence packet
 
 Plan:

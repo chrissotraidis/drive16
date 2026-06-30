@@ -84,6 +84,17 @@ If the compatible checkpoint has a different filename, set
 A later launcher probe also confirmed the explicit database URL removes the
 previous database initialization warning while still serving the API.
 
+The repeatable API smoke command was added and run:
+
+```sh
+scripts/validate-phase4-comfyui-api-smoke.sh
+```
+
+Result: the script started ComfyUI, ran the readiness check while the API was
+live, confirmed API, workflow classes, and Pixydust Quantizer, then stopped
+the ComfyUI process it launched. The remaining readiness miss was the
+compatible checkpoint.
+
 ## Validation Request
 
 Place a Pixel Art Diffusion XL compatible checkpoint at:

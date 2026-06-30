@@ -36,6 +36,9 @@ Toolchain and validation scripts live here.
   local filename.
 - `launch-phase4-comfyui-api.sh`: fetches a pinned ComfyUI source checkout
   into ignored artifacts and launches it against the local ComfyUI data folder.
+- `validate-phase4-comfyui-api-smoke.sh`: starts the local ComfyUI API
+  temporarily when needed, runs readiness, and proves API, workflow-class, and
+  Pixydust availability without requiring the checkpoint.
 - `setup-phase4-comfyui-prereqs.sh`: dry-run-first helper for installing the
   Pixydust Quantizer custom node and showing the required checkpoint path for
   the live Phase 4 sprite workflow. It can also install Pixydust's Python
