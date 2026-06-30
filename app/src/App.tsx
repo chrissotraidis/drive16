@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type BuildState = "idle" | "building" | "running" | "error";
@@ -59,6 +59,13 @@ type ToolStep = {
   label: string;
   detail: string;
   state: "done" | "active" | "queued";
+};
+
+type RomInputAction = {
+  label: string;
+  detail: string;
+  event: string;
+  spriteDelta?: number;
 };
 
 type HealthState = "ready" | "warning" | "missing";
@@ -502,6 +509,9 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [emulatorFocused, setEmulatorFocused] = useState(false);
+  const [romInputFocused, setRomInputFocused] = useState(false);
+  const [lastInputAction, setLastInputAction] = useState("No local input yet");
+  const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
     "Starter template loaded. Run the ROM or ask for sprite and music.",
   );
@@ -534,6 +544,7 @@ function App() {
     detail: "Not tested",
   });
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const romViewportRef = useRef<HTMLDivElement | null>(null);
   const romImportInputRef = useRef<HTMLInputElement | null>(null);
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
@@ -998,6 +1009,7 @@ function App() {
   }
 
   function applyV1PromptResult(result: V1PromptResult, assetMode: PromptAssetMode = "core") {
+    setImportResult(undefined);
     setV1PromptResult(result);
     setV1PromptSource(isTauriRuntime() ? "tauri" : "preview");
     setStarterSource(isTauriRuntime() ? "tauri" : "preview");
@@ -1756,6 +1768,69 @@ function App() {
     });
   }
 
+  function focusRomInput() {
+    setRomInputFocused(true);
+    romViewportRef.current?.focus();
+    noteAction("ROM input focus is on the viewport.");
+    appendOpenCodeEvent("input.focused", projectSummary.romPath);
+  }
+
+  function handleRomKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const action = romInputActionFromKey(event.key);
+    if (!action) return;
+    event.preventDefault();
+    applyLocalRomInput(action);
+  }
+
+  function applyLocalRomInput(action: RomInputAction) {
+    const spriteDelta = action.spriteDelta ?? 0;
+    if (spriteDelta !== 0) {
+      setSpriteX((current) => Math.min(88, Math.max(12, current + spriteDelta)));
+    }
+    setLastInputAction(action.label);
+    noteAction(`${action.label} captured locally. Run Right Proof verifies emulator input.`);
+    appendOpenCodeEvent(action.event, action.detail);
+  }
+
+  async function runScriptedRightInputProof() {
+    const prompt = "make a sprite I can move left and right with music";
+    setInputProofBusy(true);
+    setBuildState("building");
+    setV1PromptSource("running");
+    setLastInputAction("Right proof running");
+    noteAction("Running scripted Right-input proof.");
+    appendOpenCodeEvent("input.proof.started", "Scripted Right input");
+
+    try {
+      const promptResult = await runV1Prompt(prompt);
+      applyV1PromptResult(promptResult, "core");
+      setLastInputAction("Right proof passed");
+      setMessages((current) => [
+        ...current,
+        makeMessage(
+          "agent",
+          "Scripted Right-input proof passed. The CORE ROM moved the sprite right through the verified Genteel path.",
+          "local",
+        ),
+      ]);
+      noteAction("Scripted Right-input proof completed.");
+      appendOpenCodeEvent("input.proof.ready", promptResult.movementDetail);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Right-input proof failed";
+      setBuildState("error");
+      setV1PromptSource("error");
+      setLastInputAction("Right proof failed");
+      setMessages((current) => [
+        ...current,
+        makeMessage("agent", `Scripted Right-input proof failed. ${detail}`, "local"),
+      ]);
+      noteAction(`Right-input proof failed: ${detail}`);
+      appendOpenCodeEvent("input.proof.failed", detail);
+    } finally {
+      setInputProofBusy(false);
+    }
+  }
+
   async function refreshPreflight() {
     setPreflightSource("checking");
     noteAction("Checking tool health.");
@@ -2052,8 +2127,15 @@ function App() {
                     : starterRom.screenshotDataUrl
                       ? "captured"
                       : "fallback"
-                }`}
+                } ${romInputFocused ? "input-focused" : ""}`}
+                ref={romViewportRef}
+                role="application"
+                tabIndex={0}
                 data-testid="starter-rom-screen"
+                onBlur={() => setRomInputFocused(false)}
+                onClick={focusRomInput}
+                onFocus={() => setRomInputFocused(true)}
+                onKeyDown={handleRomKeyDown}
               >
                 <FramebufferCanvas
                   fallback={
@@ -2090,6 +2172,55 @@ function App() {
                   {starterBadge(starterRom, starterBusy, transport)}
                 </span>
               </div>
+            </div>
+          </div>
+
+          <div
+            className={`rom-controls ${romInputFocused ? "ready" : "warning"}`}
+            data-testid="rom-controls"
+          >
+            <button
+              type="button"
+              data-testid="rom-focus-control"
+              onClick={focusRomInput}
+            >
+              <Gamepad2 size={16} />
+              <span>{romInputFocused ? "Input focused" : "Click ROM to control"}</span>
+            </button>
+            <div className="rom-key-map" aria-label="Keyboard mapping">
+              <span>
+                <kbd>Arrows</kbd>
+                D-pad
+              </span>
+              <span>
+                <kbd>Z</kbd>
+                A
+              </span>
+              <span>
+                <kbd>X</kbd>
+                B
+              </span>
+              <span>
+                <kbd>C</kbd>
+                C
+              </span>
+              <span>
+                <kbd>Enter</kbd>
+                Start
+              </span>
+            </div>
+            <div className="rom-input-proof">
+              <span data-testid="rom-last-input">{lastInputAction}</span>
+              <button
+                type="button"
+                data-testid="rom-right-proof"
+                onClick={() => {
+                  void runScriptedRightInputProof();
+                }}
+                disabled={inputProofBusy || openCodeBusy}
+              >
+                {inputProofBusy ? "Testing Right" : "Run Right Proof"}
+              </button>
             </div>
           </div>
 
@@ -2365,6 +2496,66 @@ function stateLabel(state: HealthState) {
   if (state === "ready") return "Ready";
   if (state === "missing") return "Missing";
   return "Check";
+}
+
+function romInputActionFromKey(key: string): RomInputAction | undefined {
+  switch (key) {
+    case "ArrowLeft":
+      return {
+        label: "Left",
+        detail: "Local D-pad left",
+        event: "input.local.left",
+        spriteDelta: -6,
+      };
+    case "ArrowRight":
+      return {
+        label: "Right",
+        detail: "Local D-pad right",
+        event: "input.local.right",
+        spriteDelta: 6,
+      };
+    case "ArrowUp":
+      return {
+        label: "Up",
+        detail: "Local D-pad up",
+        event: "input.local.up",
+      };
+    case "ArrowDown":
+      return {
+        label: "Down",
+        detail: "Local D-pad down",
+        event: "input.local.down",
+      };
+    case "z":
+    case "Z":
+      return {
+        label: "A",
+        detail: "Local A button",
+        event: "input.local.a",
+      };
+    case "x":
+    case "X":
+      return {
+        label: "B",
+        detail: "Local B button",
+        event: "input.local.b",
+      };
+    case "c":
+    case "C":
+      return {
+        label: "C",
+        detail: "Local C button",
+        event: "input.local.c",
+      };
+    case "Enter":
+      return {
+        label: "Start",
+        detail: "Local Start button",
+        event: "input.local.start",
+      };
+    default:
+      return undefined;
+  }
 }
 
 function sourceLabel(source: string, nativeLabel = "Native preflight") {

@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ROM controls distinguish local input state from emulator proof
+
+Context:
+
+Phase 5 needs visible ROM controls and keyboard mapping, but the current app
+does not yet have continuous live keyboard/controller injection into the running
+emulator session. Drive16 already has a verified scripted Right-input proof
+through the CORE ROM and Genteel.
+
+Decision:
+
+Add a ROM controls strip that makes the viewport focusable, shows the keyboard
+mapping, records local key input state, and exposes `Run Right Proof` as the
+verified movement test. Treat manual key capture as local app control state
+until live emulator input is implemented and tested.
+
+Consequence:
+
+The app now feels controllable and shows what keys matter without overstating
+manual emulator support. The tested movement claim remains tied to the existing
+scripted Genteel proof path.
+
 ## 2026-06-30 - Imported ROMs are active local artifacts, not repo assets
 
 Context:

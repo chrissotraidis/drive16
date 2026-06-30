@@ -12,7 +12,7 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Clarify live agent inference versus local proof responses.
 - [x] Add project menu actions for load/open project and import ROM.
 - [x] Import a local Genesis ROM into ignored storage and run it in the app.
-- [ ] Add visible ROM controls and keyboard/controller mapping.
+- [x] Add visible ROM controls and keyboard/controller mapping.
 - [ ] Add collapsible or resizable ROM-first layout.
 - [ ] Clarify AI sprites and MML music readiness states.
 - [ ] Improve Run, Save, Export, Import, and tool-health feedback.
@@ -21,20 +21,17 @@ hardware target, and the hosted BYOK path is stable enough to share.
 
 ## Current Task
 
-Phase 5 is open. Unit 4 added a ROM import path that accepts `.bin`, `.gen`,
-`.md`, and `.smd`, stores imported ROM bytes under ignored
-`artifacts/phase5/imports`, switches the app to an Imported ROM state, and
-lets Run and Export operate on the active imported ROM. A repo-generated
-starter ROM was imported through the app preview and an ignored imported copy
-was launched through Genteel.
+Phase 5 is open. Unit 5 added a ROM controls strip with keyboard mapping,
+viewport focus state, local input feedback, and a `Run Right Proof` action that
+uses the verified CORE/Genteel movement proof path. Local key capture is labeled
+as local control state, not full manual emulator controller support.
 
-Evidence is recorded in `docs/phase5-rom-import-flow.md`.
+Evidence is recorded in `docs/phase5-rom-controls.md`.
 
 ## Next Up
 
-Unit 5: add visible ROM controls and keyboard/controller mapping, including
-clear focus state and honest labels for tested scripted input versus live
-manual input.
+Unit 6: add collapsible or resizable ROM-first layout so the emulator can take
+priority without permanently crowding it with conversation and tool panels.
 
 ## Completed Phase 5 Work
 
@@ -62,6 +59,11 @@ manual input.
 - [x] Export can copy the active imported ROM, not only the starter ROM.
 - [x] A repo-generated imported test ROM launched through Genteel with a PNG
   screenshot and RGB565 frame stream.
+- [x] ROM viewport is focusable and shows `Click ROM to control` versus
+  `Input focused`.
+- [x] Visible keyboard mapping shows Arrows, Z, X, C, and Enter.
+- [x] Local key capture updates the last input state and event feed.
+- [x] `Run Right Proof` reuses the verified CORE/Genteel movement proof path.
 
 ## Completed Phase 4 Work
 

@@ -775,6 +775,13 @@ h3 {
   background:
     radial-gradient(circle at 50% 42%, rgba(74, 134, 226, 0.3), transparent 42%),
     var(--blue-screen);
+  outline: none;
+}
+
+.genesis-screen.input-focused {
+  box-shadow:
+    0 0 0 2px rgba(255, 171, 82, 0.92),
+    0 0 0 6px rgba(255, 171, 82, 0.14);
 }
 
 .scanlines {
@@ -890,6 +897,98 @@ h3 {
 
 .screen-badge.missing {
   color: #ff736a;
+}
+
+.rom-controls {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 0 18px 14px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.rom-controls.ready {
+  border-color: rgba(115, 209, 123, 0.4);
+}
+
+.rom-controls.warning {
+  border-color: rgba(255, 171, 82, 0.32);
+}
+
+.rom-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--accent-2);
+  background: #17110d;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.rom-controls button:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.rom-key-map {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.rom-key-map span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(244, 238, 230, 0.12);
+  border-radius: 7px;
+  color: #d8c6b5;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+kbd {
+  min-width: 20px;
+  padding: 2px 5px;
+  border: 1px solid rgba(244, 238, 230, 0.22);
+  border-radius: 5px;
+  color: #f7f0df;
+  background: #0a0705;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.rom-input-proof {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rom-input-proof > span {
+  max-width: 150px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-grid {
@@ -1754,6 +1853,15 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+  .rom-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .rom-input-proof {
+    justify-content: space-between;
+  }
+
   .tool-stream {
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -1819,5 +1927,13 @@ h3 {
 
   .status-grid {
     padding: 0 12px 12px;
+  }
+
+  .rom-controls {
+    margin: 0 12px 12px;
+  }
+
+  .rom-key-map span {
+    flex: 1 1 96px;
   }
 }

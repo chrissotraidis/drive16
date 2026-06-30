@@ -1,5 +1,57 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 79 - Phase 5 ROM controls and input mapping
+
+Plan:
+
+- Task: implement Phase 5 Unit 5 so the ROM viewport has visible controls,
+  keyboard mapping, focus state, and an honest tested input path.
+- Files: `app/src/App.tsx`, `app/src/styles.css`, `DECISIONS.md`,
+  `PROGRESS.md`, `README.md`, `WORKLOG.md`, and
+  `docs/phase5-rom-controls.md`.
+- Verification: build frontend, run native tests, click the ROM viewport,
+  press mapped keys in the browser preview, click the Right proof action, and
+  run the native CORE Right-input proof test through Genteel.
+
+Did:
+
+- Added a ROM controls strip below the emulator viewport.
+- Added visible keyboard mapping for Arrows, Z, X, C, and Enter.
+- Made the ROM viewport focusable with `Click ROM to control` and
+  `Input focused` states.
+- Captured local key events and wrote the latest local input into the controls
+  strip and event feed.
+- Added `Run Right Proof`, which reuses the existing CORE prompt proof path
+  instead of claiming full live manual controller support.
+- Cleared imported-ROM active state when a generated CORE proof becomes the
+  active ROM.
+
+Evidence:
+
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 41 tests
+  and 4 live-environment tests ignored.
+- `pnpm --dir app build` passed.
+- Browser proof at `http://127.0.0.1:1420/`:
+  - ROM controls rendered under the viewport.
+  - Clicking the viewport changed controls to `Input focused`.
+  - Pressing ArrowRight logged `input.local.right` and updated local input.
+  - Pressing Z logged `input.local.a` and updated local input.
+  - Clicking `Run Right Proof` changed last input to `Right proof passed`.
+  - Runtime metadata showed `Right input verified` and non-silent audio.
+- Native scripted proof:
+  - `cargo test --manifest-path app/src-tauri/Cargo.toml
+    v1_prompt_runs_core_asset_rom_when_tools_are_available -- --ignored
+    --nocapture` passed.
+
+Gate:
+
+Phase 5 Unit 5 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 6: add collapsible or resizable ROM-first layout.
+
 ## 2026-06-30 - ITERATION 78 - Phase 5 imported ROM flow
 
 Plan:
