@@ -182,6 +182,9 @@ type ModelOption = {
 type ModelConnectionReport = {
   state: ConnectionState;
   detail: string;
+  baseUrl?: string;
+  model?: string;
+  models?: string[];
 };
 
 type EnhancementSettings = {
@@ -202,6 +205,16 @@ type ComfyUiEndpointStatus = {
   checks: HealthCheck[];
 };
 
+type OllamaEndpointStatus = {
+  generatedAt: string;
+  state: ConnectionState;
+  detail: string;
+  baseUrl: string;
+  tagsUrl: string;
+  model: string;
+  models: string[];
+};
+
 type DecodedFramebufferFrame = {
   frameIndex: number;
   width: number;
@@ -211,6 +224,8 @@ type DecodedFramebufferFrame = {
 
 const openRouterKeyUrl = "https://openrouter.ai/api/v1/key";
 const openRouterModelsUrl = "https://openrouter.ai/api/v1/models";
+const defaultOllamaEndpoint = "http://127.0.0.1:11434";
+const defaultOllamaModel = "qwen2.5-coder:7b";
 const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
 const defaultComfyUiCheckpoint = "sd_xl_base_1.0.safetensors";
 const defaultComfyUiLora = "pixel-art-xl.safetensors";
@@ -423,6 +438,8 @@ function App() {
   const [modelsSource, setModelsSource] = useState("fallback");
   const [openRouterKey, setOpenRouterKey] = useState("");
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
+  const [ollamaEndpoint, setOllamaEndpoint] = useState(defaultOllamaEndpoint);
+  const [ollamaModel, setOllamaModel] = useState(defaultOllamaModel);
   const [enhancements, setEnhancements] = useState<EnhancementSettings>({
     spriteGeneration: false,
     musicGeneration: false,
@@ -1025,10 +1042,15 @@ function App() {
   }
 
   async function testModelConnection() {
+    if (modelProvider === "ollama") {
+      await testOllamaConnection();
+      return;
+    }
+
     if (modelProvider !== "openrouter") {
       setModelConnection({
         state: "warning",
-        detail: "Local provider test is pending",
+        detail: "Provider test is not available",
       });
       return;
     }
@@ -1072,6 +1094,73 @@ function App() {
             : "OpenRouter rejected the key",
       });
       appendOpenCodeEvent("model.failed", "OpenRouter key test failed");
+    }
+  }
+
+  async function testOllamaConnection() {
+    const endpoint = ollamaEndpoint.trim();
+    const model = ollamaModel.trim();
+    if (!endpoint) {
+      setModelConnection({
+        state: "missing",
+        detail: "Ollama endpoint required",
+      });
+      return;
+    }
+    if (!model) {
+      setModelConnection({
+        state: "missing",
+        detail: "Ollama model required",
+      });
+      return;
+    }
+
+    setModelConnection({
+      state: "testing",
+      detail: "Checking Ollama",
+    });
+
+    try {
+      if (!isTauriRuntime()) {
+        const baseUrl = normalizeLocalEndpoint(endpoint, "11434");
+        const detail = "Native app checks Ollama locally";
+        setModelConnection({
+          state: "warning",
+          detail,
+          baseUrl,
+          model,
+          models: [],
+        });
+        appendOpenCodeEvent("model.warning", detail);
+        return;
+      }
+
+      const result = await invoke<OllamaEndpointStatus>("check_ollama_endpoint", {
+        request: { endpoint, model },
+      });
+
+      setModelConnection({
+        state: result.state,
+        detail: result.detail,
+        baseUrl: result.baseUrl,
+        model: result.model,
+        models: result.models,
+      });
+      appendOpenCodeEvent(
+        result.state === "ready" ? "model.ready" : "model.warning",
+        result.detail,
+      );
+    } catch (error) {
+      const detail =
+        error instanceof Error ? `Ollama check failed: ${error.message}` : "Ollama check failed";
+      setModelConnection({
+        state: "missing",
+        detail,
+        baseUrl: endpoint,
+        model,
+        models: [],
+      });
+      appendOpenCodeEvent("model.failed", detail);
     }
   }
 
@@ -1139,10 +1228,45 @@ function App() {
 
   function handleOpenRouterKeyChange(value: string) {
     setOpenRouterKey(value);
-    if (modelConnection.state === "ready" || modelConnection.state === "missing") {
+    resetModelConnectionIfChecked("OpenRouter not tested");
+  }
+
+  function handleProviderChange(value: ModelProvider) {
+    setModelProvider(value);
+    setModelConnection({
+      state: "idle",
+      detail: value === "openrouter" ? "OpenRouter not tested" : "Ollama not tested",
+    });
+    if (value === "ollama") {
+      setShowOpenRouterKey(false);
+    }
+    noteAction(
+      value === "openrouter"
+        ? "Model provider switched to OpenRouter."
+        : "Model provider switched to Ollama.",
+    );
+  }
+
+  function handleOpenRouterModelChange(value: string) {
+    setActiveModel(value);
+    resetModelConnectionIfChecked("OpenRouter not tested");
+  }
+
+  function handleOllamaEndpointChange(value: string) {
+    setOllamaEndpoint(value);
+    resetModelConnectionIfChecked("Ollama not tested");
+  }
+
+  function handleOllamaModelChange(value: string) {
+    setOllamaModel(value);
+    resetModelConnectionIfChecked("Ollama not tested");
+  }
+
+  function resetModelConnectionIfChecked(detail: string) {
+    if (modelConnection.state !== "idle" && modelConnection.state !== "testing") {
       setModelConnection({
         state: "idle",
-        detail: "Not tested",
+        detail,
       });
     }
   }
@@ -1400,12 +1524,10 @@ function App() {
           </div>
 
           <div className="agent-config-row" data-testid="agent-config-row">
-            <span title={modelProvider === "openrouter" ? activeModel : "Ollama"}>
+            <span title={providerTitle(modelProvider, activeModel, ollamaEndpoint, ollamaModel)}>
               <KeyRound size={15} />
               Inference
-              <strong>
-                {modelProvider === "openrouter" ? shortModelLabel(activeModel) : "Ollama"}
-              </strong>
+              <strong>{providerDisplayLabel(modelProvider, activeModel, ollamaModel)}</strong>
             </span>
             <button type="button" onClick={() => setSettingsOpen(true)}>
               Agent Settings
@@ -1690,6 +1812,8 @@ function App() {
           modelOptions={modelOptions}
           modelProvider={modelProvider}
           modelsSource={modelsSource}
+          ollamaEndpoint={ollamaEndpoint}
+          ollamaModel={ollamaModel}
           openRouterKey={openRouterKey}
           showOpenRouterKey={showOpenRouterKey}
           onClose={() => setSettingsOpen(false)}
@@ -1697,9 +1821,11 @@ function App() {
           onComfyUiEndpointChange={handleComfyUiEndpointChange}
           onComfyUiLoraChange={handleComfyUiLoraChange}
           onEnhancementChange={handleEnhancementChange}
-          onModelChange={setActiveModel}
+          onModelChange={handleOpenRouterModelChange}
+          onOllamaEndpointChange={handleOllamaEndpointChange}
+          onOllamaModelChange={handleOllamaModelChange}
           onOpenRouterKeyChange={handleOpenRouterKeyChange}
-          onProviderChange={setModelProvider}
+          onProviderChange={handleProviderChange}
           onRefreshModels={refreshOpenRouterModels}
           onShowOpenRouterKeyChange={setShowOpenRouterKey}
           onTestComfyUiConnection={testComfyUiConnection}
@@ -1712,6 +1838,8 @@ function App() {
           exportBusy={exportBusy}
           exportResult={exportResult}
           modelProvider={modelProvider}
+          ollamaEndpoint={ollamaEndpoint}
+          ollamaModel={ollamaModel}
           preflight={preflight}
           projectSummary={projectSummary}
           saveBusy={saveBusy}
@@ -1990,6 +2118,35 @@ function shortModelLabel(model: string) {
     .join(" ");
 }
 
+function shortOllamaLabel(model: string) {
+  const clean = model.trim();
+  if (!clean) return "Local model";
+  return clean
+    .split(/[-_:/]+/)
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
+}
+
+function providerDisplayLabel(
+  provider: ModelProvider,
+  activeModel: string,
+  ollamaModel: string,
+) {
+  if (provider === "openrouter") return shortModelLabel(activeModel);
+  return `Ollama ${shortOllamaLabel(ollamaModel)}`;
+}
+
+function providerTitle(
+  provider: ModelProvider,
+  activeModel: string,
+  ollamaEndpoint: string,
+  ollamaModel: string,
+) {
+  if (provider === "openrouter") return activeModel;
+  return `${ollamaModel || "Ollama model"} at ${ollamaEndpoint || defaultOllamaEndpoint}`;
+}
+
 function connectionIcon(state: ConnectionState) {
   if (state === "ready") return <CheckCircle2 size={15} />;
   if (state === "missing") return <AlertCircle size={15} />;
@@ -2052,6 +2209,10 @@ async function checkComfyUiEndpointInBrowser(
 }
 
 function normalizeComfyUiEndpoint(endpoint: string) {
+  return normalizeLocalEndpoint(endpoint, "8188");
+}
+
+function normalizeLocalEndpoint(endpoint: string, defaultPort: string) {
   const trimmed = endpoint.trim().replace(/\/+$/, "");
   if (!trimmed) {
     throw new Error("endpoint required");
@@ -2066,7 +2227,7 @@ function normalizeComfyUiEndpoint(endpoint: string) {
     throw new Error("endpoint must be local");
   }
 
-  const port = parsed.port || "8188";
+  const port = parsed.port || defaultPort;
   return `http://${parsed.hostname}:${port}`;
 }
 
@@ -2081,6 +2242,8 @@ function SettingsPanel({
   modelOptions,
   modelProvider,
   modelsSource,
+  ollamaEndpoint,
+  ollamaModel,
   openRouterKey,
   showOpenRouterKey,
   onClose,
@@ -2089,6 +2252,8 @@ function SettingsPanel({
   onComfyUiLoraChange,
   onEnhancementChange,
   onModelChange,
+  onOllamaEndpointChange,
+  onOllamaModelChange,
   onOpenRouterKeyChange,
   onProviderChange,
   onRefreshModels,
@@ -2106,6 +2271,8 @@ function SettingsPanel({
   modelOptions: ModelOption[];
   modelProvider: ModelProvider;
   modelsSource: string;
+  ollamaEndpoint: string;
+  ollamaModel: string;
   openRouterKey: string;
   showOpenRouterKey: boolean;
   onClose: () => void;
@@ -2114,6 +2281,8 @@ function SettingsPanel({
   onComfyUiLoraChange: (value: string) => void;
   onEnhancementChange: (key: keyof EnhancementSettings, enabled: boolean) => void;
   onModelChange: (value: string) => void;
+  onOllamaEndpointChange: (value: string) => void;
+  onOllamaModelChange: (value: string) => void;
   onOpenRouterKeyChange: (value: string) => void;
   onProviderChange: (value: ModelProvider) => void;
   onRefreshModels: () => void;
@@ -2163,73 +2332,135 @@ function SettingsPanel({
             </div>
           </section>
 
-          <section className="settings-section" aria-label="OpenRouter settings">
-            <div className="settings-section-title">
-              <SectionTitle icon={<KeyRound size={16} />} title="OpenRouter" />
-              <button
-                className="refresh-health"
-                type="button"
-                aria-label="Refresh OpenRouter models"
-                onClick={onRefreshModels}
-                disabled={modelsSource === "loading"}
-              >
-                <RefreshCcw size={14} />
-              </button>
-            </div>
-
-            <label className="field-row">
-              <span>Model</span>
-              <select
-                aria-label="OpenRouter model"
-                value={activeModel}
-                onChange={(event) => onModelChange(event.target.value)}
-                disabled={modelProvider !== "openrouter"}
-              >
-                {modelOptions.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field-row">
-              <span>API key</span>
-              <div className="secret-field">
-                <input
-                  aria-label="OpenRouter API key"
-                  autoComplete="off"
-                  disabled={modelProvider !== "openrouter"}
-                  onChange={(event) => onOpenRouterKeyChange(event.target.value)}
-                  spellCheck={false}
-                  type={showOpenRouterKey ? "text" : "password"}
-                  value={openRouterKey}
-                />
+          {modelProvider === "openrouter" ? (
+            <section
+              className="settings-section"
+              aria-label="OpenRouter settings"
+              data-testid="openrouter-settings"
+            >
+              <div className="settings-section-title">
+                <SectionTitle icon={<KeyRound size={16} />} title="OpenRouter" />
                 <button
-                  aria-label={showOpenRouterKey ? "Hide OpenRouter key" : "Show OpenRouter key"}
-                  disabled={!openRouterKey}
-                  onClick={() => onShowOpenRouterKeyChange(!showOpenRouterKey)}
+                  className="refresh-health"
                   type="button"
+                  aria-label="Refresh OpenRouter models"
+                  onClick={onRefreshModels}
+                  disabled={modelsSource === "loading"}
                 >
-                  {showOpenRouterKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  <RefreshCcw size={14} />
                 </button>
               </div>
-            </label>
 
-            <div
-              className={`connection-summary ${connection.state}`}
-              data-testid="model-connection-status"
+              <label className="field-row">
+                <span>Model</span>
+                <select
+                  aria-label="OpenRouter model"
+                  value={activeModel}
+                  onChange={(event) => onModelChange(event.target.value)}
+                >
+                  {modelOptions.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field-row">
+                <span>API key</span>
+                <div className="secret-field">
+                  <input
+                    aria-label="OpenRouter API key"
+                    autoComplete="off"
+                    onChange={(event) => onOpenRouterKeyChange(event.target.value)}
+                    spellCheck={false}
+                    type={showOpenRouterKey ? "text" : "password"}
+                    value={openRouterKey}
+                  />
+                  <button
+                    aria-label={showOpenRouterKey ? "Hide OpenRouter key" : "Show OpenRouter key"}
+                    disabled={!openRouterKey}
+                    onClick={() => onShowOpenRouterKeyChange(!showOpenRouterKey)}
+                    type="button"
+                  >
+                    {showOpenRouterKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </label>
+
+              <div
+                className={`connection-summary ${connection.state}`}
+                data-testid="model-connection-status"
+              >
+                {connectionIcon(connection.state)}
+                <span>{connectionLabel(connection.state)}</span>
+                <small>{connection.detail}</small>
+              </div>
+
+              <div className="settings-meta">
+                <span>{modelsSourceLabel(modelsSource)}</span>
+                <strong>{shortModelLabel(activeModel)}</strong>
+              </div>
+            </section>
+          ) : (
+            <section
+              className="settings-section"
+              aria-label="Ollama settings"
+              data-testid="ollama-settings"
             >
-              {connectionIcon(connection.state)}
-              <span>{connectionLabel(connection.state)}</span>
-              <small>{connection.detail}</small>
-            </div>
+              <div className="settings-section-title">
+                <SectionTitle icon={<TerminalSquare size={16} />} title="Ollama" />
+              </div>
 
-            <div className="settings-meta">
-              <span>{modelsSourceLabel(modelsSource)}</span>
-              <strong>{shortModelLabel(activeModel)}</strong>
-            </div>
-          </section>
+              <label className="field-row">
+                <span>Endpoint</span>
+                <input
+                  aria-label="Ollama endpoint"
+                  autoComplete="off"
+                  onChange={(event) => onOllamaEndpointChange(event.target.value)}
+                  spellCheck={false}
+                  type="url"
+                  value={ollamaEndpoint}
+                />
+              </label>
+
+              <label className="field-row">
+                <span>Model</span>
+                <input
+                  aria-label="Ollama model"
+                  autoComplete="off"
+                  onChange={(event) => onOllamaModelChange(event.target.value)}
+                  spellCheck={false}
+                  type="text"
+                  value={ollamaModel}
+                />
+              </label>
+
+              <div
+                className={`connection-summary ${connection.state}`}
+                data-testid="model-connection-status"
+              >
+                {connectionIcon(connection.state)}
+                <span>{connectionLabel(connection.state)}</span>
+                <small>{connection.detail}</small>
+              </div>
+
+              <div className="settings-meta">
+                <span>No API key required</span>
+                <strong title={connection.baseUrl ?? ollamaEndpoint}>
+                  {shortOllamaLabel(connection.model ?? ollamaModel)}
+                </strong>
+              </div>
+              {connection.models?.length ? (
+                <div className="provider-model-list" data-testid="ollama-models">
+                  <span>Installed models</span>
+                  <strong title={connection.models.join(", ")}>
+                    {connection.models.slice(0, 3).map(shortOllamaLabel).join(", ")}
+                  </strong>
+                </div>
+              ) : null}
+            </section>
+          )}
 
           <section className="settings-section" aria-label="Enhancement toggles">
             <SectionTitle icon={<Wrench size={16} />} title="Enhancements" />
@@ -2384,7 +2615,11 @@ function SettingsPanel({
             disabled={testing}
           >
             <ShieldCheck size={16} />
-            {testing ? "Testing" : "Test connection"}
+            {testing
+              ? "Testing"
+              : modelProvider === "openrouter"
+                ? "Test OpenRouter"
+                : "Test Ollama"}
           </button>
         </div>
       </section>
@@ -2434,7 +2669,7 @@ function TopBar({
           <Box size={22} />
           <div>
             <strong>Drive16</strong>
-            <span>Phase 4 enhancements</span>
+            <span>Phase 5 hardening</span>
           </div>
         </div>
       </div>
@@ -2487,6 +2722,8 @@ function ProjectMenu({
   exportBusy,
   exportResult,
   modelProvider,
+  ollamaEndpoint,
+  ollamaModel,
   preflight,
   projectSummary,
   saveBusy,
@@ -2501,6 +2738,8 @@ function ProjectMenu({
   exportBusy: boolean;
   exportResult?: RomExportResult;
   modelProvider: ModelProvider;
+  ollamaEndpoint: string;
+  ollamaModel: string;
   preflight: PreflightReport;
   projectSummary: ProjectSummary;
   saveBusy: boolean;
@@ -2608,8 +2847,8 @@ function ProjectMenu({
             <SectionTitle icon={<KeyRound size={16} />} title="Agent" />
             <div className="menu-meta-grid">
               <span>Inference</span>
-              <strong title={modelProvider === "openrouter" ? activeModel : "Ollama"}>
-                {modelProvider === "openrouter" ? shortModelLabel(activeModel) : "Ollama"}
+              <strong title={providerTitle(modelProvider, activeModel, ollamaEndpoint, ollamaModel)}>
+                {providerDisplayLabel(modelProvider, activeModel, ollamaModel)}
               </strong>
               <span>Setup</span>
               <strong>{preflightSummaryLabel(preflight.summaryState)}</strong>

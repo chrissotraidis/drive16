@@ -1,47 +1,50 @@
 # Drive16 Progress
 
-Current phase: Phase 4, enhancements
+Current phase: Phase 5, hardening and local path
 
-Exit criterion: from a prompt, the agent can optionally generate a
-palette-legal sprite and a short MML track in place of bundled assets, and
-still builds a working ROM.
+Exit criterion: the full loop runs locally with no paid service on a documented
+hardware target, and the hosted BYOK path is stable enough to share.
 
-## Phase 4 Checklist
+## Phase 5 Checklist
 
-- [x] Human sign-off: Phase 3 approved.
-- [x] Add default-off enhancement toggles so the CORE path remains independent.
-- [x] Add ComfyUI endpoint configuration and health probing behind the AI
-  sprites toggle.
-- [x] Wrap ComfyUI via `comfyui-mcp`.
-- [x] Ship the tuned Genesis palette ComfyUI workflow.
-- [x] Validate generated sprites as palette-legal SGDK SPRITE resources.
-- [x] Wrap ctrmml as the MML music MCP server.
-- [x] Ship the FM preset library.
-- [x] Add the MML reference to the RAG corpus.
-- [x] Wire the optional prompt path to use generated sprite and music assets.
-- [x] Build the generated-asset ROM and verify it still works.
+- [x] Human sign-off: Phase 4 approved, begin Phase 5.
+- [x] Clean provider switching between OpenRouter and Ollama.
+- [ ] Clarify live agent inference versus local proof responses.
+- [ ] Add project menu actions for load/open project and import ROM.
+- [ ] Import a local Genesis ROM into ignored storage and run it in the app.
+- [ ] Add visible ROM controls and keyboard/controller mapping.
+- [ ] Add collapsible or resizable ROM-first layout.
+- [ ] Clarify AI sprites and MML music readiness states.
+- [ ] Improve Run, Save, Export, Import, and tool-health feedback.
+- [ ] Validate and document the fully local Ollama plus local ComfyUI path.
+- [ ] Assemble Phase 5 evidence packet for human review.
 
 ## Current Task
 
-The Phase 4 exit proof now passes locally. The default SDXL Base checkpoint and
-Pixel Art XL LoRA were installed into the local ComfyUI model folders after
-human license acceptance. The live proof wrapper launches local ComfyUI on
-`127.0.0.1:8188`, verifies API, checkpoint, LoRA, Pixydust, and workflow
-classes, generates a sprite, repairs the dominant edge background into SGDK
-palette-index-0 transparency, validates the PNG as a 32x32 Genesis sprite with
-16 palette slots, and then runs the generated-sprite plus generated-MML ROM
-proof through Docker SGDK and Genteel. The final end-to-end command
-`scripts/validate-phase4-live-generated-assets.sh` passed on 2026-06-30 with
-prompt id `66752e6a-a6bd-44ae-92f1-fe5e4fa893bc`; the SGDK-ready generated
-sprite recorded 360 transparent pixels, the generated-assets native proof
-passed, and the wrapper printed `Phase 4 live generated-assets proof ok`.
-Phase 4 should not advance to Phase 5 until the human reviews this evidence
-and signs off.
+Phase 5 is open. Unit 1 cleaned up provider switching so OpenRouter and Ollama
+now render as separate settings surfaces. OpenRouter owns the hosted model
+dropdown, API key field, and OpenRouter key test. Ollama owns the local
+endpoint, local model name, and native `/api/tags` readiness probe. Browser
+preview does not pretend to test local Ollama; it reports that the native app
+does the local check. The conversation inference chip and project menu now
+follow the selected provider.
+
+Evidence is recorded in `docs/phase5-provider-settings.md`.
 
 ## Next Up
 
-PHASE GATE: Phase 4 evidence is ready for human review. If accepted, approve
-Phase 4 complete and explicitly start Phase 5 hardening and local-path work.
+Unit 2: clarify chat and agent truthfulness so the app clearly distinguishes
+local scripted proof responses from live model-backed inference.
+
+## Completed Phase 5 Work
+
+- [x] Phase 4 approved through the Phase 5 goal prompt.
+- [x] App header now reports Phase 5 hardening.
+- [x] Agent Settings renders OpenRouter and Ollama as mutually exclusive
+  provider panels.
+- [x] Native Ollama readiness check added for local `/api/tags` model probing.
+- [x] Conversation and project menu inference labels now follow the selected
+  provider.
 
 ## Completed Phase 4 Work
 

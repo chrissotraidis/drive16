@@ -1,5 +1,59 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 75 - Phase 5 provider settings cleanup
+
+Plan:
+
+- Task: start Phase 5 with the provider settings mismatch the user found in
+  the app.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `app/src-tauri/src/main.rs`, `app/src-tauri/src/ollama.rs`,
+  `DECISIONS.md`, `PROGRESS.md`, `README.md`, and
+  `docs/phase5-provider-settings.md`.
+- Verification: run native formatting and Ollama tests, build the frontend,
+  reload the app, click through provider switching, and capture screenshots.
+
+Did:
+
+- Split Agent Settings into mutually exclusive OpenRouter and Ollama panels.
+- Kept OpenRouter API key and hosted model controls out of the Ollama view.
+- Added local Ollama endpoint and model fields with no API key requirement.
+- Added a native Tauri `check_ollama_endpoint` command that only probes local
+  HTTP endpoints through `/api/tags`.
+- Made browser preview report that Ollama is checked by the native app instead
+  of pretending a browser fetch proves local model readiness.
+- Updated the conversation inference chip, project menu inference row, and app
+  header to reflect the active Phase 5 provider state.
+- Recorded the provider boundary as a Drive16 decision and Phase 5 evidence
+  doc.
+
+Evidence:
+
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml ollama -- --nocapture`
+  passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 33 tests
+  and 4 live-environment tests ignored.
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+- Browser proof at `http://127.0.0.1:1420/` showed OpenRouter and Ollama
+  panels switching cleanly with no console warnings or errors.
+- Ollama mode showed endpoint and model fields, footer action `Test Ollama`,
+  and browser-preview detail `Native app checks Ollama locally`.
+- Project menu showed the selected provider as
+  `Inference Ollama Qwen2.5 Coder 7b`.
+- Screenshots saved at `/tmp/drive16-phase5-unit1/ollama-settings.png` and
+  `/tmp/drive16-phase5-unit1/project-menu-ollama.png`.
+
+Gate:
+
+Phase 5 Unit 1 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 2: clarify chat and agent truthfulness so scripted proof responses and
+  live model-backed inference cannot be confused.
+
 ## 2026-06-30 - ITERATION 74 - Live generated sprite transparency repair
 
 Plan:

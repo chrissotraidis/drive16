@@ -1234,12 +1234,39 @@ h3 {
   min-width: 0;
 }
 
+.provider-model-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(244, 238, 230, 0.035);
+}
+
 .settings-meta span {
   color: var(--muted);
 }
 
-.settings-meta strong {
+.settings-meta strong,
+.provider-model-list strong {
   color: #eaded1;
+}
+
+.provider-model-list span,
+.provider-model-list strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.provider-model-list span {
+  color: var(--muted);
+  font-weight: 900;
 }
 
 .enhancement-list {

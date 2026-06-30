@@ -1,5 +1,31 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Ollama readiness uses a native local endpoint probe
+
+Context:
+
+Phase 5 needs clean provider switching and a truthful fully local model path.
+The app previously let the user select Ollama, but the settings surface still
+showed OpenRouter model and API key controls. It also had no real local
+provider check. Browser preview may be unable to reach Ollama because local
+service access can hit browser CORS or runtime limits.
+
+Decision:
+
+Render OpenRouter and Ollama as mutually exclusive settings panels. Keep the
+OpenRouter key and model list only in the OpenRouter panel. Add a Tauri
+`check_ollama_endpoint` command that accepts only local HTTP endpoints,
+defaults to `127.0.0.1:11434`, calls `/api/tags`, and reports whether the
+selected model is installed. In browser preview, report that the native app
+performs the local Ollama check instead of implying a failed provider setup.
+
+Consequence:
+
+The UI now has a clean hosted versus local provider boundary. Ollama testing is
+local-only, requires no key, and does not rely on browser networking behavior.
+Later Phase 5 work can use this as the provider-readiness source before
+claiming live local inference.
+
 ## 2026-06-30 - Generated sprite background repair is part of the ComfyUI path
 
 Context:

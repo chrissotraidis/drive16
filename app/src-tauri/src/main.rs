@@ -1,4 +1,5 @@
 mod comfyui;
+mod ollama;
 mod opencode;
 mod phase4_prompt;
 mod preflight;
@@ -96,6 +97,23 @@ async fn check_comfyui_endpoint(
         })
 }
 
+#[tauri::command]
+async fn check_ollama_endpoint(
+    request: ollama::OllamaEndpointRequest,
+) -> ollama::OllamaEndpointStatus {
+    tauri::async_runtime::spawn_blocking(move || ollama::check_endpoint(request))
+        .await
+        .unwrap_or_else(|error| ollama::OllamaEndpointStatus {
+            generated_at: "0".to_string(),
+            state: "warning".to_string(),
+            detail: format!("Ollama task failed: {}", error),
+            base_url: String::new(),
+            tags_url: String::new(),
+            model: String::new(),
+            models: Vec::new(),
+        })
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -108,7 +126,8 @@ fn main() {
             save_current_project,
             run_v1_prompt,
             run_phase4_music_prompt,
-            check_comfyui_endpoint
+            check_comfyui_endpoint,
+            check_ollama_endpoint
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Drive16");

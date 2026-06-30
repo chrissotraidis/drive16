@@ -24,21 +24,23 @@ Evidence:
 - Current ledger: `PROGRESS.md`
 - Iteration journal: `WORKLOG.md`
 
-The active work is Phase 4, which is optional enhancement work beyond core v1.
-The Phase 4 proof now passes locally: default-off settings toggles, ComfyUI
-readiness checks, the `comfyui-mcp` wrapper, the tuned Genesis sprite workflow,
-generated sprite validation, MML music generation, and the combined
-generated-assets proof harness are all in place.
+The active work is Phase 5 hardening and local-path polish. Phase 4 was
+approved after the live generated-assets proof passed locally: default-off
+settings toggles, ComfyUI readiness checks, the `comfyui-mcp` wrapper, the
+tuned Genesis sprite workflow, generated sprite validation, MML music
+generation, and the combined generated-assets proof harness are all in place.
 
-Phase 4 is at the human sign-off gate. The live proof generated an AI sprite
-with Stability AI SDXL Base plus the `nerijs/pixel-art-xl` LoRA, repaired the
-generated background into SGDK-ready palette transparency, built the generated
-sprite plus generated-MML ROM, and passed the Genteel movement and audio proof.
+Phase 5 has started with provider settings cleanup. Agent Settings now switches
+cleanly between OpenRouter and Ollama, hides hosted key/model fields when the
+local provider is active, and adds a native local Ollama `/api/tags` check.
 
 ## What to do next
 
-To reproduce the one-command live Phase 4 proof after reviewing and accepting
-the upstream model licenses:
+Current Phase 5 next step: clarify the chat surface so local scripted proof
+responses and live model-backed inference are unmistakable.
+
+To reproduce the Phase 4 live generated-assets proof after reviewing and
+accepting the upstream model licenses:
 
 ```sh
 scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
@@ -49,8 +51,7 @@ scripts/validate-phase4-live-generated-assets.sh
 The live proof wrapper launches local ComfyUI if needed, checks readiness, runs
 the live sprite workflow, validates the generated PNG, builds the generated
 sprite plus generated-MML ROM, runs it in Genteel, verifies movement, and
-verifies non-silent audio. If the evidence is accepted, Phase 5 hardening is
-next.
+verifies non-silent audio.
 
 ## Running the app locally
 
@@ -87,8 +88,8 @@ pnpm --dir app tauri dev
 - Phase 2: agent-produced CORE ROM with bundled sprite and bundled music.
 - Phase 3: core v1 app flow, complete and approved.
 - Phase 4: optional AI sprites and generated MML music, proof passed locally
-  and awaiting human sign-off.
-- Phase 5: hardening and fully local path, not started.
+  and approved.
+- Phase 5: hardening and fully local path, in progress.
 
 ## Model stance
 
