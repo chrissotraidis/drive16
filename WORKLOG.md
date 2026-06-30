@@ -1,5 +1,83 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 49 - Local Pixydust prerequisite
+
+Plan:
+
+- Task: install and verify the pinned Pixydust Quantizer custom node in the
+  local ComfyUI folder.
+- Files: `docs/phase4-comfyui-pixydust-local.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- Verification: run the committed setup helper with `--install-pixydust
+  --check`, inspect the installed revision, rerun readiness, run focused
+  generated-assets validation, full native tests, frontend build, secret scan,
+  Markdown punctuation check, ignored artifact check, and `git diff --check`.
+
+Did:
+
+- Ran `scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust --check`.
+- Installed Pixydust Quantizer into the local ComfyUI custom node folder:
+  `/Users/chrissotraidis/Documents/ComfyUI/custom_nodes/ComfyUI-PixydustQuantizer`.
+- Verified the local install is pinned to
+  `6ffbb1ca23637f61559c3bd13f7be2b37d1dae03`.
+- Left model checkpoint acquisition explicit.
+- Documented the local prerequisite state in
+  `docs/phase4-comfyui-pixydust-local.md`.
+
+Evidence:
+
+- `find /Users/chrissotraidis/Documents/ComfyUI -maxdepth 3 -type d`
+  showed local `custom_nodes` and `models/checkpoints` folders.
+- Before install, `scripts/check-phase4-comfyui-readiness.py` exited `68`
+  and reported missing API, checkpoint, and Pixydust.
+- `scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust --check`
+  cloned Pixydust and then exited `68`, as expected, because the checkpoint
+  and live API are still missing.
+- `git -C /Users/chrissotraidis/Documents/ComfyUI/custom_nodes/ComfyUI-PixydustQuantizer rev-parse HEAD`
+  returned `6ffbb1ca23637f61559c3bd13f7be2b37d1dae03`.
+- `git -C /Users/chrissotraidis/Documents/ComfyUI/custom_nodes/ComfyUI-PixydustQuantizer status --short`
+  returned no output.
+- `artifacts/phase4/comfyui-readiness/latest.json` now records
+  `pixydustQuantizer.ok: true`.
+- `scripts/check-phase4-comfyui-readiness.py` still exited `68`; the remaining
+  readiness issues are the unreachable ComfyUI API, missing checkpoint, and
+  API-dependent workflow class inspection.
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py
+  scripts/run-comfyui-sprite-workflow.py scripts/validate-comfyui-workflow.py`
+  passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture`
+  passed: 20 passed, 4 ignored.
+- `npm run build` in `app/` passed.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` with the live ComfyUI validation
+  request because the live sprite run record is not successful.
+- Secret scan returned no matches for OpenRouter key patterns.
+- Markdown punctuation and emoji guard returned no matches.
+- Ignored-artifact checks confirmed `app/dist/`,
+  `artifacts/phase4/comfyui-readiness/latest.json`, and
+  `artifacts/phase4/live-comfyui-sprite/last-run.json` are ignored.
+- `git diff --check` passed.
+
+Gate:
+
+VALIDATION REQUEST: place a Pixel Art Diffusion XL compatible checkpoint at:
+
+```text
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+Start ComfyUI on `http://127.0.0.1:8188`, then run:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Next:
+
+- Place the checkpoint, start ComfyUI, then run the live sprite workflow.
+
 ## 2026-06-30 - ITERATION 48 - ComfyUI prerequisite setup helper
 
 Plan:

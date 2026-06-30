@@ -24,14 +24,15 @@ still builds a working ROM.
 ## Current Task
 
 The generated-MML ROM proof now passes with Docker, SGDK, and Genteel. Full
-generated-asset ROM proof is awaiting live ComfyUI sprite output. A readiness
-check and dry-run setup helper now report the missing local ComfyUI
-prerequisites explicitly.
+generated-asset ROM proof is awaiting live ComfyUI sprite output. The local
+Pixydust Quantizer custom node is installed at the pinned Phase 4 revision;
+the remaining local prerequisites are a reachable ComfyUI API and a Pixel Art
+Diffusion XL compatible checkpoint.
 
 ## Next Up
 
-VALIDATION REQUEST: run
-`scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust --check`, make
+VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint,
+start ComfyUI on `http://127.0.0.1:8188`, make
 `scripts/check-phase4-comfyui-readiness.py` pass, then run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
 then run `scripts/validate-phase4-generated-assets-prompt.sh`.
@@ -94,6 +95,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   `scripts/setup-phase4-comfyui-prereqs.sh`.
 - [x] Phase 4 ComfyUI prerequisite setup evidence recorded in
   `docs/phase4-comfyui-prereq-setup.md`.
+- [x] Local Pixydust Quantizer prerequisite installed at the pinned revision
+  and recorded in `docs/phase4-comfyui-pixydust-local.md`.
 
 ## Completed Phase 3 Work
 
