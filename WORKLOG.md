@@ -1,5 +1,50 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 42 - MML RAG corpus reference
+
+Plan:
+
+- Task: add the `ctrmml` Megadrive MML reference to the RAG corpus.
+- Files: `corpus/mml/ctrmml-megadrive.md`, `corpus/sources.json`,
+  `corpus/README.md`, `scripts/validate-mml-rag-corpus.sh`,
+  `docs/phase4-mml-rag-corpus.md`, `scripts/README.md`, `PROGRESS.md`,
+  `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: local corpus term checks, preset manifest term checks, full
+  RAG ingest and query, targeted generated-MML RAG query, secret scan,
+  Markdown punctuation check, and `git diff --check`.
+
+Did:
+
+- Added a Drive16-authored `ctrmml` Megadrive MML crib sheet to the corpus.
+- Recorded the note in `corpus/sources.json` as Drive16-authored material.
+- Added a validator that checks required terms, refreshes the RAG index, and
+  queries for generated-MML terms.
+
+Evidence:
+
+- `bash -n scripts/validate-mml-rag-corpus.sh` passed.
+- `python3 -m json.tool corpus/sources.json` passed.
+- `scripts/validate-mml-rag-corpus.sh` passed.
+- RAG ingest found 16 corpus files, inserted 1537 chunks, and reported
+  `documentCount: 16`, `chunkCount: 1537`, and `ftsIndexEnabled: true`.
+- The targeted generated-MML query returned
+  `corpus/mml/ctrmml-megadrive.md` and included `drive16_round_bass`,
+  `compile_music`, and `XGM_startPlay`.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+- RAG index, model cache, and package artifacts under `artifacts/phase1/` were
+  ignored.
+
+Gate:
+
+None for this unit. The live ComfyUI generated-sprite validation request
+remains open.
+
+Next:
+
+- Wire the optional prompt path to use generated sprite and music assets.
+
 ## 2026-06-30 - ITERATION 41 - MML FM preset library
 
 Plan:

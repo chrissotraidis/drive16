@@ -18,6 +18,7 @@ Current Phase 1 source setup:
   `scripts/fetch-rag-corpus.sh`.
 - `vdp/`: Drive16-authored Genesis VDP core notes.
 - `drive16/`: Drive16-authored SGDK project patterns.
+- `mml/`: Drive16-authored Phase 4 `ctrmml` Megadrive MML notes.
 
 Validate local indexing with:
 

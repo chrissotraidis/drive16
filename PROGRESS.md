@@ -17,18 +17,18 @@ still builds a working ROM.
 - [ ] Validate generated sprites as palette-legal SGDK SPRITE resources.
 - [x] Wrap ctrmml as the MML music MCP server.
 - [x] Ship the FM preset library.
-- [ ] Add the MML reference to the RAG corpus.
+- [x] Add the MML reference to the RAG corpus.
 - [ ] Wire the optional prompt path to use generated sprite and music assets.
 - [ ] Build the generated-asset ROM and verify it still works.
 
 ## Current Task
 
-An original FM preset library now gives generated MML stable YM2612 starter
-voices. Live ComfyUI sprite validation is still awaiting local ComfyUI.
+The RAG corpus now includes Drive16 `ctrmml` Megadrive MML notes and FM preset
+hooks. Live ComfyUI sprite validation is still awaiting local ComfyUI.
 
 ## Next Up
 
-Add the MML reference to the RAG corpus.
+Wire the optional prompt path to use generated sprite and music assets.
 
 ## Completed Phase 4 Work
 
@@ -63,6 +63,10 @@ Add the MML reference to the RAG corpus.
 - [x] Original FM preset library added under `assets/enhancements/mml/`.
 - [x] Phase 4 MML FM preset evidence recorded in
   `docs/phase4-mml-presets.md`.
+- [x] MML reference added to the RAG corpus under
+  `corpus/mml/ctrmml-megadrive.md`.
+- [x] Phase 4 MML RAG evidence recorded in
+  `docs/phase4-mml-rag-corpus.md`.
 
 ## Completed Phase 3 Work
 

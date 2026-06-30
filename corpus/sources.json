@@ -43,6 +43,15 @@
         "corpus/vdp/genesis-vdp-core.md",
         "corpus/drive16/sgdk-project-patterns.md"
       ]
+    },
+    {
+      "name": "Drive16 ctrmml Megadrive MML Notes",
+      "license": "Drive16-authored, release license pending human confirmation",
+      "sourceBasis": "Original Drive16 crib sheet validated against the pinned ctrmml compiler",
+      "path": "corpus/mml/ctrmml-megadrive.md",
+      "includedPaths": [
+        "corpus/mml/ctrmml-megadrive.md"
+      ]
     }
   ],
   "excludedMaterial": [

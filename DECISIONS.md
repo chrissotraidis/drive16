@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - MML RAG note is Drive16-authored
+
+Context:
+
+Phase 4 needs the agent to retrieve `ctrmml` Megadrive MML syntax before
+writing generated music. The upstream `ctrmml` repository is GPL-2.0, and
+copying its full reference into Drive16 would complicate the corpus license
+posture.
+
+Decision:
+
+Add a concise Drive16-authored crib sheet to `corpus/mml/` instead of copying
+the upstream manual. The note records the syntax Drive16 needs for the first
+generated-music path and references the original preset IDs committed under
+`assets/enhancements/mml/`.
+
+Consequence:
+
+The agent can retrieve MML syntax and preset guidance through RAG without
+vendoring upstream GPL documentation wholesale. If later music features need a
+fuller reference, that can be added with explicit source and license handling.
+
 ## 2026-06-30 - FM presets ship as original MML data
 
 Context:
