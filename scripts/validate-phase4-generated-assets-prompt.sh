@@ -23,7 +23,21 @@ if grep -E "Live ComfyUI sprite run|scripts/run-comfyui-sprite-workflow.py|local
   cat <<'EOF'
 VALIDATION REQUEST: live ComfyUI sprite output is required for the generated-assets ROM proof.
 
-Start local ComfyUI on http://127.0.0.1:8188, then run:
+Place a Pixel Art Diffusion XL compatible checkpoint at:
+
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+
+If the compatible checkpoint uses a different local filename, set:
+
+export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+
+Start local ComfyUI:
+
+scripts/launch-phase4-comfyui-api.sh
+
+In another shell, confirm readiness and generate the sprite:
+
+scripts/check-phase4-comfyui-readiness.py
 
 COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
 
@@ -43,6 +57,7 @@ VALIDATION REQUEST: the live ComfyUI sprite PNG was generated but did not pass t
 
 Regenerate the sprite with:
 
+scripts/check-phase4-comfyui-readiness.py
 COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
 
 Expected result: the generated PNG is 32x32, uses at most 16 colors including

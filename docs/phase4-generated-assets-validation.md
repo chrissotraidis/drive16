@@ -25,6 +25,11 @@ ignored native test that requests both generated assets:
 - The script exits with clear validation requests for three expected gates:
   missing live ComfyUI sprite output, generated sprite validator rejection, and
   Docker Desktop not running.
+- The missing-live-sprite validation request now points to the current
+  checkpoint-aware readiness sequence:
+  `scripts/launch-phase4-comfyui-api.sh`,
+  `scripts/check-phase4-comfyui-readiness.py`, and the optional
+  `DRIVE16_COMFYUI_CHECKPOINT` override.
 - Documented the script in `scripts/README.md`.
 
 ## Local Verification
@@ -60,11 +65,43 @@ Result: it still stopped at the live ComfyUI sprite gate because
 `artifacts/phase4/live-comfyui-sprite/last-run.json` does not record a
 successful live generated sprite.
 
-## Validation Request
-
-Run the live sprite generator first:
+The harness was rerun after refreshing the validation request:
 
 ```sh
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Result: exit `66`. The focused tests passed, with 5 passed and 2 ignored. The
+ignored generated-assets proof stopped at the live ComfyUI sprite gate and
+printed the checkpoint-aware sequence: default checkpoint path, optional
+`DRIVE16_COMFYUI_CHECKPOINT`, `scripts/launch-phase4-comfyui-api.sh`,
+`scripts/check-phase4-comfyui-readiness.py`, and
+`scripts/run-comfyui-sprite-workflow.py`.
+
+## Validation Request
+
+Place a Pixel Art Diffusion XL compatible checkpoint at the default path:
+
+```text
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+If the compatible checkpoint uses a different local filename, set:
+
+```sh
+export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+```
+
+Start local ComfyUI:
+
+```sh
+scripts/launch-phase4-comfyui-api.sh
+```
+
+In another shell, confirm readiness and run the live sprite generator:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
 COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
 ```
 

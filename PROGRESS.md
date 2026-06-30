@@ -29,7 +29,9 @@ ComfyUI API launch path now starts on `127.0.0.1:8188`, Pixydust loads through
 the API, and the committed workflow classes are present. The remaining local
 prerequisite is a Pixel Art Diffusion XL compatible checkpoint. The default
 filename is `pixel-art-diffusion-xl.safetensors`, or
-`DRIVE16_COMFYUI_CHECKPOINT` can name a compatible local checkpoint.
+`DRIVE16_COMFYUI_CHECKPOINT` can name a compatible local checkpoint. The
+generated-assets validation harness now prints this checkpoint-aware readiness
+sequence when live sprite output is absent.
 
 ## Next Up
 
@@ -104,6 +106,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   `docs/phase4-comfyui-api-launch.md`.
 - [x] Runtime checkpoint override added for compatible local checkpoint names
   and recorded in `docs/phase4-comfyui-checkpoint-override.md`.
+- [x] Generated-assets validation request refreshed to use the checkpoint-aware
+  ComfyUI readiness sequence.
 
 ## Completed Phase 3 Work
 

@@ -1,5 +1,75 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 52 - Generated-assets readiness gate
+
+Plan:
+
+- Task: refresh the combined generated-assets validation request so the next
+  operator action includes the current checkpoint-aware ComfyUI readiness path.
+- Files: `scripts/validate-phase4-generated-assets-prompt.sh`,
+  `docs/phase4-generated-assets-validation.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- Verification: shell syntax check, generated-assets validation harness, live
+  ComfyUI readiness check, secret scan, Markdown punctuation check, ignored
+  artifact check, and `git diff --check`.
+
+Did:
+
+- Updated `scripts/validate-phase4-generated-assets-prompt.sh` so the
+  missing-live-sprite gate names the default Pixel Art Diffusion XL checkpoint
+  path, optional `DRIVE16_COMFYUI_CHECKPOINT`, local API launcher, readiness
+  check, and live sprite runner.
+- Updated the generated-sprite-validator rejection gate to ask for readiness
+  before rerunning live generation.
+- Updated `docs/phase4-generated-assets-validation.md` and `PROGRESS.md` with
+  the checkpoint-aware validation sequence.
+
+Evidence:
+
+- `bash -n scripts/validate-phase4-generated-assets-prompt.sh` passed.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` with the expected validation
+  request. The request now includes the default checkpoint path, optional
+  `DRIVE16_COMFYUI_CHECKPOINT`, `scripts/launch-phase4-comfyui-api.sh`,
+  `scripts/check-phase4-comfyui-readiness.py`, and
+  `scripts/run-comfyui-sprite-workflow.py`.
+- `scripts/check-phase4-comfyui-readiness.py` exited `68` with the current
+  local gate: ComfyUI API was not reachable on `127.0.0.1:8188`, and the
+  default `pixel-art-diffusion-xl.safetensors` checkpoint was not found.
+
+Gate:
+
+VALIDATION REQUEST: place a Pixel Art Diffusion XL compatible checkpoint at:
+
+```text
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+If the filename differs, set:
+
+```sh
+export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+```
+
+Then run:
+
+```sh
+scripts/launch-phase4-comfyui-api.sh
+```
+
+In another shell, run:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Next:
+
+- Place the checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof.
+
 ## 2026-06-30 - ITERATION 51 - ComfyUI checkpoint override
 
 Plan:
