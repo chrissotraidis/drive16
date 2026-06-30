@@ -1,5 +1,65 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 71 - App control hardening
+
+Plan:
+
+- Task: click through the running app and wire the most visible inert or
+  unclear controls.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/app-control-hardening.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: use the in-app browser to click the visible controls, check
+  DOM state and console health, test a mobile viewport, and run the frontend
+  production build.
+
+Did:
+
+- Audited the app at `http://127.0.0.1:1420/`.
+- Confirmed the previous top-level `Run` button had no rendered state change.
+- Wired the top action to `Run ROM` and added visible action feedback.
+- Added `New Project` to reset to a fresh starter-template conversation and
+  preview state.
+- Turned the fullscreen icon into a real focused-emulator mode with an exit
+  state.
+- Added action feedback for pause, resume, starter reset, export, and tool
+  health.
+- Changed browser-preview tool health from generic `Needs attention` to
+  `Preview checks limited`.
+- Added support for per-tool setup hints in the health list.
+- Added button titles for icon controls.
+
+Evidence:
+
+- Browser page identity was `http://127.0.0.1:1420/` with title `Drive16`.
+- Browser console warnings and errors were empty before and after the
+  interaction pass.
+- The visible controls were unique: `New Project`, `Run ROM`, `Export ROM`,
+  `Pause emulator`, `Launch starter ROM`, `Focus emulator`,
+  `Agent settings`, and `Refresh tool health`.
+- `Run ROM` appended `run.started` and changed the top action hint.
+- `New Project` reset the conversation and appended `project.new`.
+- `Focus emulator` applied `app-shell emulator-focused`, then
+  `Exit focused emulator` restored `app-shell`.
+- Pause and resume changed button labels and appended matching events.
+- `Refresh tool health` changed the action hint to the browser-preview
+  limitation message.
+- `Export ROM` appended `export.preview` and showed the preview export path.
+- `Agent settings` opened the settings panel and `Close settings` closed it.
+- A mobile viewport check showed `New Project`, `Run ROM`, and `Export ROM`
+  wrapping without horizontal overflow.
+- `pnpm --dir app build` passed.
+
+Gate:
+
+No new Phase 4 gate. The existing validation request remains: provide or
+install a compatible Pixel Art Diffusion XL checkpoint, then run
+`scripts/validate-phase4-live-generated-assets.sh`.
+
+Next:
+
+- Continue app-control hardening on deeper settings and generated-asset flows,
+  or return to the Phase 4 live checkpoint gate.
+
 ## 2026-06-30 - ITERATION 70 - README project state refresh
 
 Plan:

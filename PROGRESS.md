@@ -222,6 +222,10 @@ the generated-assets ROM proof.
 - [x] Left file panel and top-bar export action wired to project/export state.
 - [x] Phase 3 project export evidence recorded in
   `docs/phase3-project-export.md`.
+- [x] App control hardening pass wired visible `Run ROM`, `New Project`,
+  focused emulator, export feedback, and tool-health feedback.
+- [x] App control hardening evidence recorded in
+  `docs/app-control-hardening.md`.
 - [x] Native v1 prompt command added to build and verify the CORE bundled
   sprite/music ROM.
 - [x] Chat composer wired so the v1-style request loads the generated CORE ROM

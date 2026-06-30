@@ -62,7 +62,7 @@ button {
 
 .top-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+  grid-template-columns: minmax(180px, 0.8fr) minmax(320px, 1.2fr) minmax(360px, 1fr);
   align-items: center;
   gap: 16px;
   padding: 0 18px;
@@ -128,6 +128,23 @@ button {
   justify-content: center;
   gap: 10px;
   min-width: 0;
+}
+
+.run-status {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.run-status small {
+  max-width: 330px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-actions {
@@ -241,6 +258,18 @@ button {
   min-height: 0;
   padding: 14px;
   gap: 14px;
+}
+
+.app-shell.emulator-focused .workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell.emulator-focused .left-pane {
+  display: none;
+}
+
+.app-shell.emulator-focused .right-pane {
+  min-height: 0;
 }
 
 .left-pane,
@@ -834,6 +863,16 @@ h3 {
   background: #17110d;
 }
 
+.health-hints {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  margin: 6px 0 0;
+  padding: 0 0 0 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .health-list span,
 .health-list strong,
 .health-list small {
@@ -1260,6 +1299,14 @@ h3 {
     justify-content: flex-start;
     flex-wrap: wrap;
     width: 100%;
+  }
+
+  .run-status {
+    flex: 1 1 260px;
+  }
+
+  .run-status small {
+    max-width: 100%;
   }
 
   .model-select {

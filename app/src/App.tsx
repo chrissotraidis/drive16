@@ -13,8 +13,10 @@ import {
   KeyRound,
   Maximize2,
   MessageSquareText,
+  Minimize2,
   Pause,
   Play,
+  Plus,
   RefreshCcw,
   Send,
   Settings,
@@ -386,6 +388,10 @@ function App() {
   const [openCodeEvents, setOpenCodeEvents] = useState<OpenCodeEvent[]>([]);
   const [openCodeBusy, setOpenCodeBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [emulatorFocused, setEmulatorFocused] = useState(false);
+  const [actionDetail, setActionDetail] = useState(
+    "Starter template loaded. Run the ROM or ask for sprite and music.",
+  );
   const [modelProvider, setModelProvider] = useState<ModelProvider>("openrouter");
   const [activeModel, setActiveModel] = useState(fallbackModelOptions[0].id);
   const [modelOptions, setModelOptions] = useState<ModelOption[]>(fallbackModelOptions);
@@ -596,6 +602,10 @@ function App() {
         ...current,
       ].slice(0, 8),
     );
+  }
+
+  function noteAction(detail: string) {
+    setActionDetail(detail);
   }
 
   function appendOpenCodeEventFromData(data: string) {
@@ -895,10 +905,12 @@ function App() {
 
   async function exportRom() {
     setExportBusy(true);
+    noteAction("Exporting the current ROM.");
 
     if (!isTauriRuntime()) {
       setExportResult(previewExportResult);
       appendOpenCodeEvent("export.preview", previewExportResult.exportPath);
+      noteAction(`Preview export ready at ${previewExportResult.exportPath}.`);
       setExportBusy(false);
       return;
     }
@@ -907,6 +919,7 @@ function App() {
       const result = await invoke<RomExportResult>("export_current_rom");
       setExportResult(result);
       appendOpenCodeEvent("export.ready", result.exportPath);
+      noteAction(`ROM exported to ${result.exportPath}.`);
       void loadProjectSummary();
     } catch (error) {
       const detail = error instanceof Error ? error.message : "ROM export failed";
@@ -917,6 +930,7 @@ function App() {
         generatedAt: "error",
       });
       appendOpenCodeEvent("export.failed", detail);
+      noteAction(`ROM export failed: ${detail}`);
     } finally {
       setExportBusy(false);
     }
@@ -1135,15 +1149,56 @@ function App() {
     setTransport("running");
     setBuildState("running");
     setSpriteX(52);
-    void launchStarterRom();
+    noteAction("Starter ROM reset requested.");
+    appendOpenCodeEvent("starter.reset", "Starter ROM reset requested");
+    void launchStarterRom("Starter ROM reset and running.");
+  }
+
+  function startNewProject() {
+    setMessages([
+      makeMessage(
+        "agent",
+        "New starter project ready. It uses the blank SGDK template; ask for sprite and music when you want the CORE demo.",
+      ),
+    ]);
+    setDraft("");
+    setExportResult(undefined);
+    setV1PromptResult(undefined);
+    setV1PromptSource("idle");
+    setOpenCodeSessionId(undefined);
+    setTransport("running");
+    setSpriteX(52);
+    setProjectSummary(previewProjectSummary);
+    setProjectSource(isTauriRuntime() ? "checking" : "preview");
+    noteAction("New project started from the blank starter template.");
+    appendOpenCodeEvent("project.new", "Blank starter template loaded");
+    void loadProjectSummary();
+    void launchStarterRom("New starter project running.");
+  }
+
+  function runCurrentProject() {
+    noteAction("Running the current starter ROM.");
+    appendOpenCodeEvent("run.started", projectSummary.romPath);
+    void launchStarterRom("Current starter ROM is running.");
+  }
+
+  function toggleEmulatorFocus() {
+    setEmulatorFocused((current) => {
+      const next = !current;
+      noteAction(next ? "Focused emulator view enabled." : "Focused emulator view closed.");
+      appendOpenCodeEvent(next ? "view.focused" : "view.restored", "Emulator view");
+      return next;
+    });
   }
 
   async function refreshPreflight() {
     setPreflightSource("checking");
+    noteAction("Checking tool health.");
 
     if (!isTauriRuntime()) {
       setPreflight(previewPreflight);
       setPreflightSource("preview");
+      noteAction("Preview checks are limited. Native app preflight shows exact setup needs.");
       return;
     }
 
@@ -1151,6 +1206,7 @@ function App() {
       const report = await invoke<PreflightReport>("run_preflight");
       setPreflight(report);
       setPreflightSource("tauri");
+      noteAction(`Tool health: ${preflightSummaryLabel(report.summaryState, "tauri")}.`);
     } catch (error) {
       setPreflight({
         generatedAt: "error",
@@ -1167,26 +1223,31 @@ function App() {
         ],
       });
       setPreflightSource("error");
+      noteAction("Tool health check command was unavailable.");
     }
   }
 
-  async function launchStarterRom() {
+  async function launchStarterRom(doneMessage = "Starter ROM running.") {
     setStarterBusy(true);
     setStarterSource("checking");
+    setBuildState("building");
+    noteAction("Launching starter ROM.");
 
     if (!isTauriRuntime()) {
       setStarterRom(makePreviewStarterRom());
       setStarterSource("preview");
+      setBuildState("running");
+      noteAction(`${doneMessage} Browser preview is using simulated frames.`);
       setStarterBusy(false);
       return;
     }
 
-    setBuildState("building");
     try {
       const preview = await invoke<StarterRomPreview>("launch_starter_rom");
       setStarterRom(preview);
       setStarterSource("tauri");
       setBuildState("running");
+      noteAction(doneMessage);
     } catch (error) {
       setStarterRom({
         ...previewStarterRom,
@@ -1199,21 +1260,26 @@ function App() {
       });
       setStarterSource("error");
       setBuildState("error");
+      noteAction("Starter ROM could not launch.");
     } finally {
       setStarterBusy(false);
     }
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${emulatorFocused ? "emulator-focused" : ""}`}>
       <TopBar
+        actionDetail={actionDetail}
         activeModel={activeModel}
         buildLabel={buildLabel}
         buildState={buildState}
         exportBusy={exportBusy}
         modelProvider={modelProvider}
         onExportRom={exportRom}
+        onNewProject={startNewProject}
         onOpenSettings={() => setSettingsOpen(true)}
+        onRunProject={runCurrentProject}
+        runBusy={starterBusy || buildState === "building"}
       />
 
       <section className="workspace" aria-label="Drive16 workspace">
@@ -1337,14 +1403,20 @@ function App() {
           <div className="emulator-toolbar">
             <div>
               <p className="label">Live ROM</p>
-              <h2>Starter Project</h2>
+              <h2>{projectSummary.name}</h2>
             </div>
             <div className="toolbar-actions" aria-label="Emulator actions">
               <IconControl
                 label={transport === "running" ? "Pause emulator" : "Resume emulator"}
-                onClick={() =>
-                  setTransport(transport === "running" ? "paused" : "running")
-                }
+                onClick={() => {
+                  const next = transport === "running" ? "paused" : "running";
+                  setTransport(next);
+                  noteAction(next === "running" ? "Emulator resumed." : "Emulator paused.");
+                  appendOpenCodeEvent(
+                    next === "running" ? "emulator.resumed" : "emulator.paused",
+                    projectSummary.romPath,
+                  );
+                }}
               >
                 {transport === "running" ? <Pause size={18} /> : <Play size={18} />}
               </IconControl>
@@ -1355,8 +1427,11 @@ function App() {
               >
                 <RefreshCcw size={18} />
               </IconControl>
-              <IconControl label="Fullscreen">
-                <Maximize2 size={18} />
+              <IconControl
+                label={emulatorFocused ? "Exit focused emulator" : "Focus emulator"}
+                onClick={toggleEmulatorFocus}
+              >
+                {emulatorFocused ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
               </IconControl>
             </div>
           </div>
@@ -1476,7 +1551,7 @@ function App() {
                 data-testid="preflight-summary"
               >
                 {healthIcon(preflight.summaryState)}
-                <span>{summaryLabel(preflight.summaryState)}</span>
+                <span>{preflightSummaryLabel(preflight.summaryState, preflightSource)}</span>
                 <small>{sourceLabel(preflightSource)}</small>
               </div>
               <div className="health-list" data-testid="tool-health-list">
@@ -1485,6 +1560,13 @@ function App() {
                     <span>{tool.name}</span>
                     <strong>{stateLabel(tool.state)}</strong>
                     <small>{tool.detail}</small>
+                    {tool.hints && tool.hints.length > 0 ? (
+                      <ul className="health-hints" aria-label={`${tool.name} setup hints`}>
+                        {tool.hints.map((hint) => (
+                          <li key={hint}>{hint}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -1551,7 +1633,8 @@ function promptReadyMessage(generatedMusic: boolean, generatedSprite: boolean) {
     : "Previewed the bundled sprite/music ROM flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
 }
 
-function summaryLabel(state: HealthState) {
+function preflightSummaryLabel(state: HealthState, source = "") {
+  if (source === "preview" && state === "warning") return "Preview checks limited";
   if (state === "ready") return "All core tools ready";
   if (state === "missing") return "Setup needed";
   return "Needs attention";
@@ -2159,21 +2242,29 @@ function SettingsPanel({
 }
 
 function TopBar({
+  actionDetail,
   activeModel,
   buildLabel,
   buildState,
   exportBusy,
   modelProvider,
   onExportRom,
+  onNewProject,
   onOpenSettings,
+  onRunProject,
+  runBusy,
 }: {
+  actionDetail: string;
   activeModel: string;
   buildLabel: string;
   buildState: BuildState;
   exportBusy: boolean;
   modelProvider: ModelProvider;
   onExportRom: () => void;
+  onNewProject: () => void;
   onOpenSettings: () => void;
+  onRunProject: () => void;
+  runBusy: boolean;
 }) {
   return (
     <header className="top-bar">
@@ -2186,10 +2277,13 @@ function TopBar({
       </div>
 
       <div className="top-center">
-        <span className={`status-pill ${buildState}`}>
-          <Square size={10} />
-          {buildLabel}
-        </span>
+        <div className="run-status" data-testid="run-status">
+          <span className={`status-pill ${buildState}`}>
+            <Square size={10} />
+            {buildLabel}
+          </span>
+          <small title={actionDetail}>{actionDetail}</small>
+        </div>
         <button
           className="model-select"
           type="button"
@@ -2202,9 +2296,13 @@ function TopBar({
       </div>
 
       <nav className="top-actions" aria-label="Project actions">
-        <button type="button">
+        <button type="button" onClick={onNewProject}>
+          <Plus size={16} />
+          New Project
+        </button>
+        <button type="button" onClick={onRunProject} disabled={runBusy}>
           <Play size={16} />
-          Run
+          {runBusy ? "Running" : "Run ROM"}
         </button>
         <button type="button" onClick={onExportRom} disabled={exportBusy}>
           <Download size={16} />
@@ -2246,6 +2344,7 @@ function IconControl({
       className="icon-button"
       type="button"
       aria-label={label}
+      title={label}
       onClick={onClick}
       disabled={disabled}
     >
