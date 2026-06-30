@@ -1,5 +1,55 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 80 - Phase 5 ROM-first layout
+
+Plan:
+
+- Task: implement Phase 5 Unit 6 so the ROM viewport can take priority without
+  permanently crowding it with conversation and tool panels.
+- Files: `app/src/App.tsx`, `app/src/styles.css`, `DECISIONS.md`,
+  `PROGRESS.md`, `README.md`, `WORKLOG.md`, and
+  `docs/phase5-rom-first-layout.md`.
+- Verification: build frontend, run native tests, click conversation/status
+  collapse controls, check focused mode, restore panels, and test a narrow
+  viewport for overflow.
+
+Did:
+
+- Added emulator-toolbar controls to hide/show the conversation rail.
+- Added emulator-toolbar controls to hide/show ROM detail panels.
+- Added a compact status strip with current ROM and tool summary when details
+  are collapsed or focused mode is active.
+- Tuned focused/status-collapsed layout so the ROM viewport gets more vertical
+  room.
+- Preserved full status cards behind a one-click `Show Details` restore.
+- Added responsive wrapping for compact status and ROM controls.
+
+Evidence:
+
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 41 tests
+  and 4 live-environment tests ignored.
+- `pnpm --dir app build` passed.
+- Browser proof at `http://127.0.0.1:1420/`:
+  - Clicking `Hide conversation pane` set left pane display to `none`.
+  - Clicking `Hide ROM details` hid the status grid and showed compact status.
+  - Compact status included the ROM path, tool summary, and `Show Details`.
+  - Focused emulator mode kept compact status visible and hid full status
+    cards.
+  - `Show Details` restored the full status grid and exited focused mode.
+  - `Show conversation pane` restored the left pane.
+- Narrow viewport check at 390x760:
+  - ROM controls wrapped.
+  - No horizontal overflow was detected.
+
+Gate:
+
+Phase 5 Unit 6 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 7: clarify AI sprites and MML music readiness states.
+
 ## 2026-06-30 - ITERATION 79 - Phase 5 ROM controls and input mapping
 
 Plan:

@@ -304,12 +304,25 @@ button {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.app-shell.conversation-collapsed .workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .app-shell.emulator-focused .left-pane {
+  display: none;
+}
+
+.app-shell.conversation-collapsed .left-pane {
   display: none;
 }
 
 .app-shell.emulator-focused .right-pane {
   min-height: 0;
+}
+
+.app-shell.status-collapsed .status-grid,
+.app-shell.emulator-focused .status-grid {
+  display: none;
 }
 
 .left-pane,
@@ -330,7 +343,7 @@ button {
 
 .right-pane {
   display: grid;
-  grid-template-rows: auto minmax(320px, 1fr) auto;
+  grid-template-rows: auto minmax(320px, 1fr) auto auto;
   overflow: hidden;
 }
 
@@ -750,6 +763,11 @@ h3 {
   padding: 18px;
 }
 
+.app-shell.status-collapsed .emulator-frame,
+.app-shell.emulator-focused .emulator-frame {
+  padding-bottom: 12px;
+}
+
 .screen-bezel {
   display: grid;
   place-items: center;
@@ -782,6 +800,11 @@ h3 {
   box-shadow:
     0 0 0 2px rgba(255, 171, 82, 0.92),
     0 0 0 6px rgba(255, 171, 82, 0.14);
+}
+
+.app-shell.status-collapsed .genesis-screen,
+.app-shell.emulator-focused .genesis-screen {
+  width: min(100%, 1120px, calc((100vh - 260px) * 1.3333));
 }
 
 .scanlines {
@@ -988,6 +1011,52 @@ kbd {
   font-size: 12px;
   font-weight: 900;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 18px 14px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.status-compact span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.status-compact strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #eaded1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-compact button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--accent-2);
+  background: #17110d;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
   white-space: nowrap;
 }
 
@@ -1862,6 +1931,10 @@ kbd {
     justify-content: space-between;
   }
 
+  .status-compact {
+    flex-wrap: wrap;
+  }
+
   .tool-stream {
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -1931,6 +2004,16 @@ kbd {
 
   .rom-controls {
     margin: 0 12px 12px;
+  }
+
+  .status-compact {
+    align-items: stretch;
+    margin: 0 12px 12px;
+  }
+
+  .status-compact span,
+  .status-compact button {
+    flex: 1 1 140px;
   }
 
   .rom-key-map span {

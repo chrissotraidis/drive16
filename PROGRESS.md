@@ -13,7 +13,7 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Add project menu actions for load/open project and import ROM.
 - [x] Import a local Genesis ROM into ignored storage and run it in the app.
 - [x] Add visible ROM controls and keyboard/controller mapping.
-- [ ] Add collapsible or resizable ROM-first layout.
+- [x] Add collapsible or resizable ROM-first layout.
 - [ ] Clarify AI sprites and MML music readiness states.
 - [ ] Improve Run, Save, Export, Import, and tool-health feedback.
 - [ ] Validate and document the fully local Ollama plus local ComfyUI path.
@@ -21,17 +21,17 @@ hardware target, and the hosted BYOK path is stable enough to share.
 
 ## Current Task
 
-Phase 5 is open. Unit 5 added a ROM controls strip with keyboard mapping,
-viewport focus state, local input feedback, and a `Run Right Proof` action that
-uses the verified CORE/Genteel movement proof path. Local key capture is labeled
-as local control state, not full manual emulator controller support.
+Phase 5 is open. Unit 6 added ROM-first layout controls: the conversation rail
+can collapse, ROM details can collapse into a compact strip, and focused mode
+keeps compact status visible while giving the emulator more room.
 
-Evidence is recorded in `docs/phase5-rom-controls.md`.
+Evidence is recorded in `docs/phase5-rom-first-layout.md`.
 
 ## Next Up
 
-Unit 6: add collapsible or resizable ROM-first layout so the emulator can take
-priority without permanently crowding it with conversation and tool panels.
+Unit 7: clarify AI sprites and MML music readiness states so Disabled, Needs
+setup, Ready, Running, and Failed are visible without overstating what is
+currently enabled.
 
 ## Completed Phase 5 Work
 
@@ -64,6 +64,10 @@ priority without permanently crowding it with conversation and tool panels.
 - [x] Visible keyboard mapping shows Arrows, Z, X, C, and Enter.
 - [x] Local key capture updates the last input state and event feed.
 - [x] `Run Right Proof` reuses the verified CORE/Genteel movement proof path.
+- [x] Conversation rail can collapse and restore from the emulator toolbar.
+- [x] ROM details can collapse into a compact status strip.
+- [x] Focused emulator mode keeps status available without showing full cards.
+- [x] Narrow viewport check passed without horizontal overflow.
 
 ## Completed Phase 4 Work
 

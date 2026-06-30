@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ROM-first layout collapses panels without losing status
+
+Context:
+
+Phase 5 needs the emulator viewport to become the primary surface when the user
+is testing a ROM. The app already had a focused-emulator mode, but the user
+also needed a way to collapse the conversation rail and tool/status cards
+without making the system feel blind.
+
+Decision:
+
+Keep explicit toolbar controls for the conversation rail, ROM detail panels,
+and focused emulator mode. When details are collapsed or focused mode is active,
+replace the full cards with a compact status strip that keeps the current ROM
+path and tool summary visible.
+
+Consequence:
+
+The user can give the ROM more space without losing orientation. Full status is
+one click away, and focused mode no longer requires the large card grid to stay
+on screen.
+
 ## 2026-06-30 - ROM controls distinguish local input state from emulator proof
 
 Context:

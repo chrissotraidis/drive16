@@ -17,6 +17,10 @@ import {
   Menu,
   MessageSquareText,
   Minimize2,
+  PanelBottomClose,
+  PanelBottomOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pause,
   Play,
   Plus,
@@ -509,6 +513,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [emulatorFocused, setEmulatorFocused] = useState(false);
+  const [conversationCollapsed, setConversationCollapsed] = useState(false);
+  const [statusCollapsed, setStatusCollapsed] = useState(false);
   const [romInputFocused, setRomInputFocused] = useState(false);
   const [lastInputAction, setLastInputAction] = useState("No local input yet");
   const [inputProofBusy, setInputProofBusy] = useState(false);
@@ -1768,6 +1774,24 @@ function App() {
     });
   }
 
+  function toggleConversationPane() {
+    setConversationCollapsed((current) => {
+      const next = !current;
+      noteAction(next ? "Conversation pane collapsed." : "Conversation pane expanded.");
+      appendOpenCodeEvent(next ? "layout.conversation.collapsed" : "layout.conversation.expanded", "Conversation");
+      return next;
+    });
+  }
+
+  function toggleStatusPanels() {
+    setStatusCollapsed((current) => {
+      const next = !current;
+      noteAction(next ? "ROM details collapsed." : "ROM details expanded.");
+      appendOpenCodeEvent(next ? "layout.status.collapsed" : "layout.status.expanded", "ROM details");
+      return next;
+    });
+  }
+
   function focusRomInput() {
     setRomInputFocused(true);
     romViewportRef.current?.focus();
@@ -1909,7 +1933,11 @@ function App() {
   }
 
   return (
-    <main className={`app-shell ${emulatorFocused ? "emulator-focused" : ""}`}>
+    <main
+      className={`app-shell ${emulatorFocused ? "emulator-focused" : ""} ${
+        conversationCollapsed ? "conversation-collapsed" : ""
+      } ${statusCollapsed ? "status-collapsed" : ""}`}
+    >
       <input
         ref={romImportInputRef}
         type="file"
@@ -2110,6 +2138,30 @@ function App() {
                 <RefreshCcw size={18} />
               </IconControl>
               <IconControl
+                label={
+                  conversationCollapsed
+                    ? "Show conversation pane"
+                    : "Hide conversation pane"
+                }
+                onClick={toggleConversationPane}
+              >
+                {conversationCollapsed ? (
+                  <PanelLeftOpen size={18} />
+                ) : (
+                  <PanelLeftClose size={18} />
+                )}
+              </IconControl>
+              <IconControl
+                label={statusCollapsed ? "Show ROM details" : "Hide ROM details"}
+                onClick={toggleStatusPanels}
+              >
+                {statusCollapsed ? (
+                  <PanelBottomOpen size={18} />
+                ) : (
+                  <PanelBottomClose size={18} />
+                )}
+              </IconControl>
+              <IconControl
                 label={emulatorFocused ? "Exit focused emulator" : "Focus emulator"}
                 onClick={toggleEmulatorFocus}
               >
@@ -2223,6 +2275,33 @@ function App() {
               </button>
             </div>
           </div>
+
+          {statusCollapsed || emulatorFocused ? (
+            <div className="status-compact" data-testid="status-compact">
+              <span title={projectSummary.romPath}>
+                <Gamepad2 size={15} />
+                ROM
+                <strong>{shortPath(projectSummary.romPath)}</strong>
+              </span>
+              <span title={preflight.summaryState}>
+                <Wrench size={15} />
+                Tools
+                <strong>{preflightSummaryLabel(preflight.summaryState, preflightSource)}</strong>
+              </span>
+              <button
+                type="button"
+                data-testid="status-expand"
+                onClick={() => {
+                  setStatusCollapsed(false);
+                  setEmulatorFocused(false);
+                  noteAction("ROM details expanded.");
+                  appendOpenCodeEvent("layout.status.expanded", "ROM details");
+                }}
+              >
+                Show Details
+              </button>
+            </div>
+          ) : null}
 
           <div className="status-grid">
             <section className="runtime-panel" aria-label="Runtime status">
