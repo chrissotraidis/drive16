@@ -10,7 +10,7 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Human sign-off: Phase 4 approved, begin Phase 5.
 - [x] Clean provider switching between OpenRouter and Ollama.
 - [x] Clarify live agent inference versus local proof responses.
-- [ ] Add project menu actions for load/open project and import ROM.
+- [x] Add project menu actions for load/open project and import ROM.
 - [ ] Import a local Genesis ROM into ignored storage and run it in the app.
 - [ ] Add visible ROM controls and keyboard/controller mapping.
 - [ ] Add collapsible or resizable ROM-first layout.
@@ -21,19 +21,19 @@ hardware target, and the hosted BYOK path is stable enough to share.
 
 ## Current Task
 
-Phase 5 is open. Unit 2 clarified the conversation surface. The app now shows
-an explicit conversation mode row, labels local proof responses separately from
-OpenCode logs or future model replies, gates freeform prompts when the selected
-provider is not tested, and keeps ROM-changing proof prompts available. The
-message pane auto-scrolls to the latest response, and the top status changes
-from freeform gating to the completed ROM proof when the local proof finishes.
+Phase 5 is open. Unit 3 made the project menu the home for project and ROM
+actions. The menu now includes New Project, Save Project, Open Project, Import
+ROM, Export ROM, and Agent Settings. Save adds a recent saved snapshot row.
+Open Project selects a saved snapshot or clearly asks the user to save first.
+Import ROM prepares ignored local storage under `artifacts/phase5/imports` and
+shows accepted ROM extensions without pretending file import is complete.
 
-Evidence is recorded in `docs/phase5-agent-truthfulness.md`.
+Evidence is recorded in `docs/phase5-project-menu-actions.md`.
 
 ## Next Up
 
-Unit 3: add project menu actions for Load/Open Project and Import ROM so the
-menu becomes the home for project and ROM actions.
+Unit 4: implement the native Import ROM flow for `.bin`, `.gen`, `.md`, and
+`.smd` files, copy imports into ignored storage, and run a local test ROM.
 
 ## Completed Phase 5 Work
 
@@ -49,6 +49,12 @@ menu becomes the home for project and ROM actions.
 - [x] Freeform prompts are gated when the selected provider is not tested.
 - [x] ROM-changing proof prompts still run and are labeled as local proof.
 - [x] Message history auto-scrolls to the latest local proof response.
+- [x] Project menu includes New, Save, Open, Import, Export, and Agent
+  Settings actions.
+- [x] Save populates a recent project snapshot row.
+- [x] Open Project and Import ROM actions now provide visible feedback instead
+  of acting like dead buttons.
+- [x] Import ROM storage is prepared under ignored `artifacts/phase5/imports`.
 
 ## Completed Phase 4 Work
 

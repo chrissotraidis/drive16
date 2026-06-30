@@ -10,6 +10,8 @@ const STARTER_PROJECT: &str = "examples/app-starter-blank";
 const STARTER_ROM: &str = "examples/app-starter-blank/out/rom.bin";
 const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
 const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
+const ROM_IMPORT_DIRECTORY: &str = "artifacts/phase5/imports";
+const ROM_IMPORT_EXTENSIONS: [&str; 4] = [".bin", ".gen", ".md", ".smd"];
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,12 +56,32 @@ pub struct ProjectSaveResult {
     pub files: u64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSnapshot {
+    pub generated_at: String,
+    pub name: String,
+    pub project_path: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RomImportReadiness {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub import_directory: String,
+    pub accepted_extensions: Vec<String>,
+}
+
 struct ProjectPaths {
     repo_root: PathBuf,
     project_path: PathBuf,
     rom_path: PathBuf,
     export_directory: PathBuf,
     project_save_directory: PathBuf,
+    rom_import_directory: PathBuf,
     build_sgdk_script: PathBuf,
 }
 
@@ -73,6 +95,14 @@ pub fn export_current_rom() -> Result<RomExportResult, String> {
 
 pub fn save_current_project() -> Result<ProjectSaveResult, String> {
     save_current_project_for_repo(repo_root())
+}
+
+pub fn list_project_snapshots() -> Vec<ProjectSnapshot> {
+    list_project_snapshots_for_repo(repo_root())
+}
+
+pub fn prepare_rom_import() -> Result<RomImportReadiness, String> {
+    prepare_rom_import_for_repo(repo_root())
 }
 
 fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
@@ -183,6 +213,67 @@ fn save_current_project_for_repo(repo_root: PathBuf) -> Result<ProjectSaveResult
     })
 }
 
+fn list_project_snapshots_for_repo(repo_root: PathBuf) -> Vec<ProjectSnapshot> {
+    let paths = ProjectPaths::new(repo_root);
+    let mut snapshots = fs::read_dir(&paths.project_save_directory)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(Result::ok))
+        .filter_map(|entry| {
+            let entry_path = entry.path();
+            let metadata = entry.metadata().ok()?;
+            if !metadata.is_dir() {
+                return None;
+            }
+
+            let modified = metadata.modified().ok();
+            let detail = modified
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map(|duration| format!("Saved at {}", duration.as_secs()))
+                .unwrap_or_else(|| "Saved project snapshot".to_string());
+
+            Some((
+                modified,
+                ProjectSnapshot {
+                    generated_at: unix_timestamp(),
+                    name: entry.file_name().to_string_lossy().to_string(),
+                    project_path: repo_relative(&paths.repo_root, &entry_path),
+                    detail,
+                },
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    snapshots.sort_by(|left, right| right.0.cmp(&left.0));
+    snapshots
+        .into_iter()
+        .take(6)
+        .map(|(_, snapshot)| snapshot)
+        .collect()
+}
+
+fn prepare_rom_import_for_repo(repo_root: PathBuf) -> Result<RomImportReadiness, String> {
+    let paths = ProjectPaths::new(repo_root);
+    fs::create_dir_all(&paths.rom_import_directory).map_err(|error| {
+        format!(
+            "Could not create import directory {}: {}",
+            paths.rom_import_directory.display(),
+            error
+        )
+    })?;
+
+    Ok(RomImportReadiness {
+        generated_at: unix_timestamp(),
+        status: "warning".to_string(),
+        detail: "Import storage ready; file picker and ROM copy are next".to_string(),
+        import_directory: repo_relative(&paths.repo_root, &paths.rom_import_directory),
+        accepted_extensions: ROM_IMPORT_EXTENSIONS
+            .iter()
+            .map(|extension| extension.to_string())
+            .collect(),
+    })
+}
+
 impl ProjectPaths {
     fn new(repo_root: PathBuf) -> Self {
         Self {
@@ -190,6 +281,7 @@ impl ProjectPaths {
             rom_path: repo_root.join(STARTER_ROM),
             export_directory: repo_root.join(EXPORT_DIRECTORY),
             project_save_directory: repo_root.join(PROJECT_SAVE_DIRECTORY),
+            rom_import_directory: repo_root.join(ROM_IMPORT_DIRECTORY),
             build_sgdk_script: repo_root.join("scripts/build-sgdk.sh"),
             repo_root,
         }
@@ -420,6 +512,58 @@ mod tests {
         assert_eq!(result.files, 2);
         assert_eq!(saved_main_contents, "int main(){}");
         assert_eq!(saved_resources_contents, "SPRITE player");
+    }
+
+    #[test]
+    fn list_project_snapshots_reports_saved_directories() {
+        let temp_dir = temp_repo("snapshots");
+        fs::create_dir_all(
+            temp_dir
+                .join(PROJECT_SAVE_DIRECTORY)
+                .join("drive16-starter-a"),
+        )
+        .unwrap();
+        fs::create_dir_all(
+            temp_dir
+                .join(PROJECT_SAVE_DIRECTORY)
+                .join("drive16-starter-b"),
+        )
+        .unwrap();
+        fs::write(
+            temp_dir
+                .join(PROJECT_SAVE_DIRECTORY)
+                .join("not-a-project.txt"),
+            "skip",
+        )
+        .unwrap();
+
+        let snapshots = list_project_snapshots_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(snapshots.len(), 2);
+        assert!(snapshots
+            .iter()
+            .all(|snapshot| snapshot.project_path.starts_with(PROJECT_SAVE_DIRECTORY)));
+    }
+
+    #[test]
+    fn prepare_rom_import_creates_ignored_storage_path() {
+        let temp_dir = temp_repo("import");
+        let readiness = prepare_rom_import_for_repo(temp_dir.clone()).unwrap();
+        let import_directory = temp_dir.join(&readiness.import_directory);
+        let import_directory_exists = import_directory.is_dir();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(readiness.status, "warning");
+        assert_eq!(readiness.import_directory, ROM_IMPORT_DIRECTORY);
+        assert_eq!(
+            readiness.accepted_extensions,
+            ROM_IMPORT_EXTENSIONS
+                .iter()
+                .map(|extension| extension.to_string())
+                .collect::<Vec<_>>()
+        );
+        assert!(import_directory_exists);
     }
 
     fn temp_repo(label: &str) -> PathBuf {

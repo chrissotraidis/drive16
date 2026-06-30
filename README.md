@@ -30,17 +30,19 @@ settings toggles, ComfyUI readiness checks, the `comfyui-mcp` wrapper, the
 tuned Genesis sprite workflow, generated sprite validation, MML music
 generation, and the combined generated-assets proof harness are all in place.
 
-Phase 5 has started with provider settings cleanup and conversation
-truthfulness. Agent Settings now switches cleanly between OpenRouter and
-Ollama, hides hosted key/model fields when the local provider is active, and
-adds a native local Ollama `/api/tags` check. The conversation pane now labels
-local proof responses, gates freeform prompts when the selected provider is not
-tested, and avoids implying live model replies are streaming.
+Phase 5 has started with provider settings cleanup, conversation truthfulness,
+and project menu hardening. Agent Settings now switches cleanly between
+OpenRouter and Ollama, hides hosted key/model fields when the local provider is
+active, and adds a native local Ollama `/api/tags` check. The conversation pane
+now labels local proof responses, gates freeform prompts when the selected
+provider is not tested, and avoids implying live model replies are streaming.
+The project menu now surfaces New, Save, Open, Import, Export, and Agent
+Settings with visible action feedback.
 
 ## What to do next
 
-Current Phase 5 next step: add Load/Open Project and Import ROM actions to the
-project menu.
+Current Phase 5 next step: implement the native Import ROM flow, copy local
+Genesis ROM files into ignored storage, and run a local test ROM.
 
 To reproduce the Phase 4 live generated-assets proof after reviewing and
 accepting the upstream model licenses:

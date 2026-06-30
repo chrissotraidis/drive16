@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Imported ROM storage starts in ignored Phase 5 artifacts
+
+Context:
+
+Phase 5 needs an Import ROM entry point, but the repo must never commit user
+ROMs, commercial ROMs, or imported build artifacts. The app also needs visible
+feedback before the native file picker and copy path are fully wired.
+
+Decision:
+
+Prepare imported ROM storage at `artifacts/phase5/imports`, which is covered by
+the repo artifact ignore rules. The Unit 3 Import ROM action creates or
+previews that storage path and shows accepted Genesis ROM extensions. Actual
+file picking, copying, active-ROM switching, and emulator launch remain the
+Unit 4 import-flow work.
+
+Consequence:
+
+The menu now has a non-dead Import ROM action and a safe local destination for
+the next slice. Imported ROM files stay outside git by default, and the app
+does not imply a ROM was imported before the copy path exists.
+
 ## 2026-06-30 - Freeform chat stays gated until live replies are wired
 
 Context:

@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FolderInput,
   FolderOpen,
   FolderTree,
   Gamepad2,
@@ -26,6 +27,7 @@ import {
   ShieldCheck,
   Square,
   TerminalSquare,
+  Upload,
   Wrench,
   X,
 } from "lucide-react";
@@ -132,6 +134,27 @@ type ProjectSaveResult = {
   sourceProjectPath: string;
   snapshotPath: string;
   files: number;
+};
+
+type ProjectSnapshot = {
+  generatedAt: string;
+  name: string;
+  projectPath: string;
+  detail: string;
+};
+
+type RomImportReadiness = {
+  generatedAt: string;
+  status: HealthState;
+  detail: string;
+  importDirectory: string;
+  acceptedExtensions: string[];
+};
+
+type ProjectActionNotice = {
+  state: HealthState;
+  label: string;
+  detail: string;
 };
 
 type V1PromptResult = {
@@ -389,6 +412,20 @@ const previewSaveResult: ProjectSaveResult = {
   files: 0,
 };
 
+const previewImportReadiness: RomImportReadiness = {
+  generatedAt: "preview",
+  status: "warning",
+  detail: "Import storage preview; native file picker and ROM copy are next",
+  importDirectory: "artifacts/phase5/imports",
+  acceptedExtensions: [".bin", ".gen", ".md", ".smd"],
+};
+
+const initialProjectActionNotice: ProjectActionNotice = {
+  state: "warning",
+  label: "Project actions ready",
+  detail: "Use New, Save, Open, Import, or Export from this menu.",
+};
+
 const previewV1PromptResult: V1PromptResult = {
   status: "warning",
   detail: "Native v1 prompt verification runs inside the Tauri app",
@@ -429,6 +466,11 @@ function App() {
   const [exportBusy, setExportBusy] = useState(false);
   const [saveResult, setSaveResult] = useState<ProjectSaveResult | undefined>();
   const [saveBusy, setSaveBusy] = useState(false);
+  const [recentProjects, setRecentProjects] = useState<ProjectSnapshot[]>([]);
+  const [importReadiness, setImportReadiness] = useState<RomImportReadiness | undefined>();
+  const [importBusy, setImportBusy] = useState(false);
+  const [projectActionNotice, setProjectActionNotice] =
+    useState<ProjectActionNotice>(initialProjectActionNotice);
   const [v1PromptResult, setV1PromptResult] = useState<V1PromptResult | undefined>();
   const [v1PromptSource, setV1PromptSource] = useState("idle");
   const [openCode, setOpenCode] = useState<OpenCodeBridgeStatus>(previewOpenCode);
@@ -479,6 +521,7 @@ function App() {
     void launchStarterRom();
     void connectOpenCode();
     void loadProjectSummary();
+    void loadRecentProjects();
   }, []);
 
   useEffect(() => {
@@ -1025,12 +1068,34 @@ function App() {
     }
   }
 
+  async function loadRecentProjects() {
+    if (!isTauriRuntime()) {
+      setRecentProjects(saveResult ? [snapshotFromSaveResult(saveResult)] : []);
+      return;
+    }
+
+    try {
+      const snapshots = await invoke<ProjectSnapshot[]>("list_project_snapshots");
+      setRecentProjects(snapshots);
+    } catch (error) {
+      appendOpenCodeEvent(
+        "project.snapshots.failed",
+        error instanceof Error ? error.message : "Saved project list unavailable",
+      );
+    }
+  }
+
   async function exportRom() {
     setExportBusy(true);
     noteAction("Exporting the current ROM.");
 
     if (!isTauriRuntime()) {
       setExportResult(previewExportResult);
+      setProjectActionNotice({
+        state: previewExportResult.status,
+        label: "ROM export ready",
+        detail: previewExportResult.exportPath,
+      });
       appendOpenCodeEvent("export.preview", previewExportResult.exportPath);
       noteAction(`Preview export ready at ${previewExportResult.exportPath}.`);
       setExportBusy(false);
@@ -1040,6 +1105,11 @@ function App() {
     try {
       const result = await invoke<RomExportResult>("export_current_rom");
       setExportResult(result);
+      setProjectActionNotice({
+        state: result.status,
+        label: "ROM export ready",
+        detail: result.exportPath,
+      });
       appendOpenCodeEvent("export.ready", result.exportPath);
       noteAction(`ROM exported to ${result.exportPath}.`);
       void loadProjectSummary();
@@ -1050,6 +1120,11 @@ function App() {
         status: "missing",
         detail,
         generatedAt: "error",
+      });
+      setProjectActionNotice({
+        state: "missing",
+        label: "Export failed",
+        detail,
       });
       appendOpenCodeEvent("export.failed", detail);
       noteAction(`ROM export failed: ${detail}`);
@@ -1406,6 +1481,11 @@ function App() {
     setSpriteX(52);
     setProjectSummary(previewProjectSummary);
     setProjectSource(isTauriRuntime() ? "checking" : "preview");
+    setProjectActionNotice({
+      state: "ready",
+      label: "New starter project",
+      detail: "Blank starter template loaded",
+    });
     noteAction("New project started from the blank starter template.");
     appendOpenCodeEvent("project.new", "Blank starter template loaded");
     void loadProjectSummary();
@@ -1418,6 +1498,12 @@ function App() {
 
     if (!isTauriRuntime()) {
       setSaveResult(previewSaveResult);
+      setRecentProjects([snapshotFromSaveResult(previewSaveResult)]);
+      setProjectActionNotice({
+        state: previewSaveResult.status,
+        label: "Project saved",
+        detail: previewSaveResult.snapshotPath,
+      });
       appendOpenCodeEvent("project.save.preview", previewSaveResult.snapshotPath);
       noteAction(`Preview save ready at ${previewSaveResult.snapshotPath}.`);
       setSaveBusy(false);
@@ -1427,6 +1513,12 @@ function App() {
     try {
       const result = await invoke<ProjectSaveResult>("save_current_project");
       setSaveResult(result);
+      setRecentProjects((current) => [snapshotFromSaveResult(result), ...current].slice(0, 6));
+      setProjectActionNotice({
+        state: "ready",
+        label: "Project saved",
+        detail: result.snapshotPath,
+      });
       appendOpenCodeEvent("project.saved", result.snapshotPath);
       noteAction(`Project saved to ${result.snapshotPath}.`);
       void loadProjectSummary();
@@ -1438,10 +1530,79 @@ function App() {
         detail,
         generatedAt: "error",
       });
+      setProjectActionNotice({
+        state: "missing",
+        label: "Save failed",
+        detail,
+      });
       appendOpenCodeEvent("project.save.failed", detail);
       noteAction(`Project save failed: ${detail}`);
     } finally {
       setSaveBusy(false);
+    }
+  }
+
+  function openProjectSnapshot(snapshot?: ProjectSnapshot) {
+    const target = snapshot ?? recentProjects[0];
+    if (!target) {
+      const detail = "Save a project first so Drive16 has a local snapshot to open.";
+      setProjectActionNotice({
+        state: "warning",
+        label: "No saved projects yet",
+        detail,
+      });
+      appendOpenCodeEvent("project.open.waiting", detail);
+      noteAction(detail);
+      return;
+    }
+
+    setProjectActionNotice({
+      state: "ready",
+      label: "Project snapshot selected",
+      detail: target.projectPath,
+    });
+    appendOpenCodeEvent("project.open.selected", target.projectPath);
+    noteAction(`Project snapshot selected: ${target.projectPath}.`);
+  }
+
+  async function importRom() {
+    setImportBusy(true);
+    noteAction("Preparing local ROM import storage.");
+
+    if (!isTauriRuntime()) {
+      setImportReadiness(previewImportReadiness);
+      setProjectActionNotice({
+        state: previewImportReadiness.status,
+        label: "Import storage ready",
+        detail: `${previewImportReadiness.importDirectory} accepts ${previewImportReadiness.acceptedExtensions.join(", ")}`,
+      });
+      appendOpenCodeEvent("rom.import.preview", previewImportReadiness.importDirectory);
+      noteAction(`ROM import storage ready at ${previewImportReadiness.importDirectory}.`);
+      setImportBusy(false);
+      return;
+    }
+
+    try {
+      const readiness = await invoke<RomImportReadiness>("prepare_rom_import");
+      setImportReadiness(readiness);
+      setProjectActionNotice({
+        state: readiness.status,
+        label: "Import storage ready",
+        detail: `${readiness.importDirectory} accepts ${readiness.acceptedExtensions.join(", ")}`,
+      });
+      appendOpenCodeEvent("rom.import.ready", readiness.importDirectory);
+      noteAction(`ROM import storage ready at ${readiness.importDirectory}.`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "ROM import setup failed";
+      setProjectActionNotice({
+        state: "missing",
+        label: "Import setup failed",
+        detail,
+      });
+      appendOpenCodeEvent("rom.import.failed", detail);
+      noteAction(`ROM import setup failed: ${detail}`);
+    } finally {
+      setImportBusy(false);
     }
   }
 
@@ -1910,21 +2071,29 @@ function App() {
           activeModel={activeModel}
           exportBusy={exportBusy}
           exportResult={exportResult}
+          importBusy={importBusy}
+          importReadiness={importReadiness}
           modelProvider={modelProvider}
           ollamaEndpoint={ollamaEndpoint}
           ollamaModel={ollamaModel}
           preflight={preflight}
+          projectActionNotice={projectActionNotice}
           projectSummary={projectSummary}
+          recentProjects={recentProjects}
           saveBusy={saveBusy}
           saveResult={saveResult}
           onClose={() => setProjectMenuOpen(false)}
           onExportRom={() => {
             void exportRom();
           }}
+          onImportRom={() => {
+            void importRom();
+          }}
           onNewProject={() => {
             startNewProject();
             setProjectMenuOpen(false);
           }}
+          onOpenProject={openProjectSnapshot}
           onOpenSettings={() => {
             setProjectMenuOpen(false);
             setSettingsOpen(true);
@@ -2082,6 +2251,15 @@ function shortPath(path: string) {
   const parts = path.split("/").filter(Boolean);
   if (parts.length <= 3) return path;
   return `${parts[0]}/${parts[1]}/.../${parts[parts.length - 1]}`;
+}
+
+function snapshotFromSaveResult(result: ProjectSaveResult): ProjectSnapshot {
+  return {
+    generatedAt: result.generatedAt,
+    name: result.snapshotPath.split("/").filter(Boolean).pop() ?? "Saved project",
+    projectPath: result.snapshotPath,
+    detail: `${result.files} files`,
+  };
 }
 
 function shortIdentifier(value: string) {
@@ -2861,32 +3039,44 @@ function ProjectMenu({
   activeModel,
   exportBusy,
   exportResult,
+  importBusy,
+  importReadiness,
   modelProvider,
   ollamaEndpoint,
   ollamaModel,
   preflight,
+  projectActionNotice,
   projectSummary,
+  recentProjects,
   saveBusy,
   saveResult,
   onClose,
   onExportRom,
+  onImportRom,
   onNewProject,
+  onOpenProject,
   onOpenSettings,
   onSaveProject,
 }: {
   activeModel: string;
   exportBusy: boolean;
   exportResult?: RomExportResult;
+  importBusy: boolean;
+  importReadiness?: RomImportReadiness;
   modelProvider: ModelProvider;
   ollamaEndpoint: string;
   ollamaModel: string;
   preflight: PreflightReport;
+  projectActionNotice: ProjectActionNotice;
   projectSummary: ProjectSummary;
+  recentProjects: ProjectSnapshot[];
   saveBusy: boolean;
   saveResult?: ProjectSaveResult;
   onClose: () => void;
   onExportRom: () => void;
+  onImportRom: () => void;
   onNewProject: () => void;
+  onOpenProject: (snapshot?: ProjectSnapshot) => void;
   onOpenSettings: () => void;
   onSaveProject: () => void;
 }) {
@@ -2935,11 +3125,25 @@ function ProjectMenu({
                   ? shortPath(exportResult.exportPath)
                   : shortPath(projectSummary.exportDirectory)}
               </strong>
+              <span>Import</span>
+              <strong title={importReadiness?.importDirectory ?? "No imported ROM"}>
+                {importReadiness ? shortPath(importReadiness.importDirectory) : "Not imported yet"}
+              </strong>
             </div>
           </section>
 
           <section className="menu-section" aria-label="Project actions">
             <SectionTitle icon={<Save size={16} />} title="Actions" />
+            <div
+              className={`menu-action-status ${projectActionNotice.state}`}
+              data-testid="menu-action-status"
+            >
+              {healthIcon(projectActionNotice.state)}
+              <span>
+                <strong>{projectActionNotice.label}</strong>
+                <small>{projectActionNotice.detail}</small>
+              </span>
+            </div>
             <div className="menu-action-list">
               <button type="button" data-testid="menu-new-project" onClick={onNewProject}>
                 <Plus size={16} />
@@ -2958,6 +3162,37 @@ function ProjectMenu({
                 <span>
                   <strong>{saveBusy ? "Saving Project" : "Save Project"}</strong>
                   <small>Snapshot the current project under artifacts</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="menu-open-project"
+                onClick={() => onOpenProject()}
+              >
+                <FolderInput size={16} />
+                <span>
+                  <strong>Open Project</strong>
+                  <small>
+                    {recentProjects.length > 0
+                      ? "Select the latest saved snapshot"
+                      : "Save a snapshot first"}
+                  </small>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="menu-import-rom"
+                onClick={onImportRom}
+                disabled={importBusy}
+              >
+                <Upload size={16} />
+                <span>
+                  <strong>{importBusy ? "Preparing Import" : "Import ROM"}</strong>
+                  <small>
+                    {importReadiness
+                      ? importReadiness.acceptedExtensions.join(", ")
+                      : ".bin, .gen, .md, .smd"}
+                  </small>
                 </span>
               </button>
               <button
@@ -2981,6 +3216,25 @@ function ProjectMenu({
               <strong>Starter Project</strong>
               <small>{shortPath(projectSummary.projectPath)}</small>
             </button>
+            {recentProjects.length > 0 ? (
+              recentProjects.map((project) => (
+                <button
+                  className="project-choice"
+                  type="button"
+                  data-testid="menu-recent-project"
+                  key={project.projectPath}
+                  onClick={() => onOpenProject(project)}
+                >
+                  <strong>{project.name}</strong>
+                  <small title={project.projectPath}>{shortPath(project.projectPath)}</small>
+                </button>
+              ))
+            ) : (
+              <div className="project-empty" data-testid="menu-empty-projects">
+                <strong>No saved snapshots</strong>
+                <small>Save Project will add one here</small>
+              </div>
+            )}
           </section>
 
           <section className="menu-section" aria-label="Agent setup">

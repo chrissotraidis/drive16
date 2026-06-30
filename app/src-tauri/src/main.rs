@@ -50,6 +50,18 @@ fn load_project_summary() -> project::ProjectSummary {
 }
 
 #[tauri::command]
+fn list_project_snapshots() -> Vec<project::ProjectSnapshot> {
+    project::list_project_snapshots()
+}
+
+#[tauri::command]
+async fn prepare_rom_import() -> Result<project::RomImportReadiness, String> {
+    tauri::async_runtime::spawn_blocking(project::prepare_rom_import)
+        .await
+        .map_err(|error| format!("ROM import task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn export_current_rom() -> Result<project::RomExportResult, String> {
     tauri::async_runtime::spawn_blocking(project::export_current_rom)
         .await
@@ -122,6 +134,8 @@ fn main() {
             connect_opencode,
             send_opencode_message,
             load_project_summary,
+            list_project_snapshots,
+            prepare_rom_import,
             export_current_rom,
             save_current_project,
             run_v1_prompt,

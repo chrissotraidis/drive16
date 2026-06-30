@@ -1,5 +1,57 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 77 - Project menu actions and import entry point
+
+Plan:
+
+- Task: make the project menu the home for project and ROM actions.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `app/src-tauri/src/main.rs`, `app/src-tauri/src/project.rs`,
+  `DECISIONS.md`, `PROGRESS.md`, `README.md`, `WORKLOG.md`, and
+  `docs/phase5-project-menu-actions.md`.
+- Verification: run native project tests, build the frontend, open the menu in
+  browser preview, click each project action, and capture evidence.
+
+Did:
+
+- Added native saved-project snapshot listing for
+  `artifacts/phase3/projects`.
+- Added native import-storage preparation under ignored
+  `artifacts/phase5/imports`.
+- Added Open Project and Import ROM actions to the project menu.
+- Added an action status panel so every menu action gives visible feedback.
+- Made Save Project populate a recent saved snapshot row.
+- Made Open Project select the latest saved snapshot or explain that a save is
+  needed first.
+- Made Import ROM show the import folder and accepted Genesis ROM extensions.
+- Fixed project-list row layout so saved project names do not collapse.
+
+Evidence:
+
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml project -- --nocapture`
+  passed with 7 tests.
+- `pnpm --dir app build` passed.
+- Browser proof at `http://127.0.0.1:1420/` loaded with title `Drive16`, no
+  framework overlay, and no console warnings or errors.
+- Menu actions present: New Project, Save Project, Open Project, Import ROM,
+  Export ROM, and Agent Settings.
+- Open before save showed `No saved projects yet`.
+- Save added a `drive16-starter-preview` recent project row.
+- Open after save selected the snapshot path.
+- Import ROM showed `artifacts/phase5/imports` and extensions
+  `.bin, .gen, .md, .smd`.
+- Export ROM updated action status and export path.
+- Screenshot saved at `/tmp/drive16-phase5-unit3/project-menu-actions.png`.
+
+Gate:
+
+Phase 5 Unit 3 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 4: import a local generated test ROM into ignored storage and run it.
+
 ## 2026-06-30 - ITERATION 76 - Agent truthfulness and chat state
 
 Plan:
