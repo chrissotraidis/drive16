@@ -1,5 +1,46 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 86 - Phase 6 player architecture
+
+Plan:
+
+- Task: add the player architecture boundary before integrating a live emulator
+  core.
+- Files: `app/src/App.tsx`, `app/src/styles.css`, `app/src/player/*`,
+  `docs/phase6-player-architecture.md`, `PROGRESS.md`, `README.md`, and
+  `WORKLOG.md`.
+- Verification: TypeScript/Vite build and diff whitespace check.
+
+Did:
+
+- Added player types for active ROM source, provider state, player session
+  state, audio state, input action, and input focus/readiness.
+- Added a shared keyboard input map for D-pad, A/B/C, and Start.
+- Derived the active ROM source from starter, imported, or generated ROM state.
+- Added a compact player-session strip above the ROM viewport.
+- Kept the future interactive player provider separate from the existing
+  Genteel proof path.
+
+Evidence:
+
+- `docs/phase6-player-architecture.md`.
+- `pnpm --dir app build` passed after the player model integration.
+- `git diff --check` passed.
+- Browser QA at `http://127.0.0.1:1420/` confirmed:
+  - page title `Drive16`,
+  - one `interactive-player-session` strip,
+  - zero console warnings/errors,
+  - keyboard focus changed the strip to `Keyboard captured`,
+  - Z key updated last input to `A`.
+
+Gate:
+
+Phase 6 Unit 2 is complete. Phase 6 remains open.
+
+Next:
+
+- Clean up UI language so Play and Verify/Capture Proof are distinct.
+
 ## 2026-06-30 - ITERATION 85 - Phase 6 emulator core selection
 
 Plan:

@@ -759,6 +759,7 @@ h3 {
 
 .emulator-frame {
   display: grid;
+  gap: 10px;
   min-height: 0;
   padding: 18px;
 }
@@ -778,6 +779,70 @@ h3 {
   border-radius: 8px;
   background: #050403;
   padding: 18px;
+}
+
+.player-session-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: rgba(23, 17, 13, 0.82);
+}
+
+.player-session-strip.ready {
+  border-color: rgba(115, 209, 123, 0.34);
+}
+
+.player-session-strip.warning {
+  border-color: rgba(255, 171, 82, 0.32);
+}
+
+.player-session-strip.missing {
+  border-color: rgba(255, 115, 106, 0.42);
+}
+
+.player-session-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(244, 238, 230, 0.08);
+  border-radius: 7px;
+  background: rgba(5, 4, 3, 0.34);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.player-session-strip svg {
+  flex: 0 0 auto;
+  color: var(--accent-2);
+}
+
+.player-session-strip strong,
+.player-session-strip small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-session-strip strong {
+  color: var(--text);
+}
+
+.player-session-strip small {
+  max-width: 180px;
+  color: var(--muted-2);
+}
+
+.player-session-primary {
+  flex: 1 1 180px;
 }
 
 .genesis-screen {
@@ -2132,6 +2197,14 @@ kbd {
   .rom-controls {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .player-session-strip {
+    flex-wrap: wrap;
+  }
+
+  .player-session-strip span {
+    flex: 1 1 150px;
   }
 
   .rom-input-proof {

@@ -10,7 +10,7 @@ Genteel proof path remains available and distinct.
 
 - [x] Read Phase 6 goal objective.
 - [x] Evaluate embedded emulator core options and license posture.
-- [ ] Add player architecture boundary.
+- [x] Add player architecture boundary.
 - [ ] Clean up UI language so Play and Verify/Capture Proof are distinct.
 - [ ] Wire imported ROMs into the interactive player.
 - [ ] Wire keyboard input into the running interactive player.
@@ -37,17 +37,18 @@ Genteel proof path remains available and distinct.
 
 ## Current Task
 
-Phase 6 is open. Unit 1 selected an adapter-based interactive player direction
-after checking browser emulator options and Genesis core licensing. Nostalgist
-is the first browser adapter target, but core binaries remain uncommitted and
-core delivery must stay configurable because common Mega Drive cores have
-non-commercial or copyleft licensing constraints.
+Phase 6 is open. Unit 2 added a Drive16-owned player architecture boundary:
+active ROM source, player provider state, player session state, audio state,
+and shared keyboard input actions. The UI now has a compact player-session
+strip that distinguishes the future interactive player provider from the
+existing Genteel proof path.
 
-Evidence is recorded in `docs/phase6-emulator-core-selection.md`.
+Evidence is recorded in `docs/phase6-player-architecture.md`.
 
 ## Next Up
 
-Unit 2: add the player architecture boundary and active ROM source model.
+Unit 3: clean up visible UI language so Play and Verify/Capture Proof are
+distinct.
 
 ## Completed Phase 6 Work
 
@@ -58,6 +59,10 @@ Unit 2: add the player architecture boundary and active ROM source model.
 - [x] Genteel remains the Verify/Capture Proof path.
 - [x] Emulator core binaries remain outside git until licensing and delivery
   are explicit.
+- [x] Active ROM source model added for starter, imported, and generated ROMs.
+- [x] Player provider/session/audio/input types added under `app/src/player`.
+- [x] Keyboard mapping now comes from a shared player input model.
+- [x] Compact player-session strip added above the ROM viewport.
 
 ## Completed Phase 5 Work
 

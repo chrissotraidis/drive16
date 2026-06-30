@@ -38,6 +38,18 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  nostalgistProviderPending,
+  playerInputActionFromKey,
+  proofPreviewProvider,
+  visibleKeyboardMappings,
+  type ActiveRomSource,
+  type InteractivePlayerSession,
+  type PlayerAudioState,
+  type PlayerInputAction,
+  type PlayerProvider,
+  type PlayerSessionState,
+} from "./player";
 
 type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
@@ -63,13 +75,6 @@ type ToolStep = {
   label: string;
   detail: string;
   state: "done" | "active" | "queued";
-};
-
-type RomInputAction = {
-  label: string;
-  detail: string;
-  event: string;
-  spriteDelta?: number;
 };
 
 type HealthState = "ready" | "warning" | "missing";
@@ -526,6 +531,10 @@ function App() {
   const [statusCollapsed, setStatusCollapsed] = useState(false);
   const [romInputFocused, setRomInputFocused] = useState(false);
   const [lastInputAction, setLastInputAction] = useState("No local input yet");
+  const [lastPlayerInput, setLastPlayerInput] = useState<PlayerInputAction | undefined>();
+  const [playerState] = useState<PlayerSessionState>("idle");
+  const [playerAudio] = useState<PlayerAudioState>("unavailable");
+  const [interactiveProvider] = useState<PlayerProvider>(nostalgistProviderPending);
   const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
     "Starter template loaded. Run the ROM or ask for sprite and music.",
@@ -709,6 +718,34 @@ function App() {
         openCode,
       ),
     [activeModel, modelConnection, modelProvider, ollamaModel, openCode],
+  );
+
+  const activeRomSource = useMemo(
+    () => activeRomSourceFor(projectSummary, importResult, v1PromptResult),
+    [importResult, projectSummary, v1PromptResult],
+  );
+  const keyboardMappings = useMemo(() => visibleKeyboardMappings(), []);
+  const playerSession = useMemo<InteractivePlayerSession>(
+    () => ({
+      provider: interactiveProvider,
+      state: playerState,
+      audio: playerAudio,
+      rom: activeRomSource,
+      input: {
+        focused: romInputFocused,
+        keyboardReady: true,
+        controllerReady: false,
+        lastAction: lastPlayerInput,
+      },
+    }),
+    [
+      activeRomSource,
+      interactiveProvider,
+      lastPlayerInput,
+      playerAudio,
+      playerState,
+      romInputFocused,
+    ],
   );
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
@@ -1852,19 +1889,22 @@ function App() {
   }
 
   function handleRomKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const action = romInputActionFromKey(event.key);
+    const action = playerInputActionFromKey(event.key);
     if (!action) return;
     event.preventDefault();
     applyLocalRomInput(action);
   }
 
-  function applyLocalRomInput(action: RomInputAction) {
+  function applyLocalRomInput(action: PlayerInputAction) {
     const spriteDelta = action.spriteDelta ?? 0;
     if (spriteDelta !== 0) {
       setSpriteX((current) => Math.min(88, Math.max(12, current + spriteDelta)));
     }
+    setLastPlayerInput(action);
     setLastInputAction(action.label);
-    noteAction(`${action.label} captured locally. Run Right Proof verifies emulator input.`);
+    noteAction(
+      `${action.label} captured by the player input model. Interactive emulator input is next.`,
+    );
     appendOpenCodeEvent(action.event, action.detail);
   }
 
@@ -2223,6 +2263,10 @@ function App() {
           </div>
 
           <div className="emulator-frame">
+            <PlayerSessionStrip
+              proofProvider={proofPreviewProvider}
+              session={playerSession}
+            />
             <div className="screen-bezel">
               <div
                 className={`genesis-screen ${transport} ${
@@ -2292,26 +2336,12 @@ function App() {
               <span>{romInputFocused ? "Input focused" : "Click ROM to control"}</span>
             </button>
             <div className="rom-key-map" aria-label="Keyboard mapping">
-              <span>
-                <kbd>Arrows</kbd>
-                D-pad
-              </span>
-              <span>
-                <kbd>Z</kbd>
-                A
-              </span>
-              <span>
-                <kbd>X</kbd>
-                B
-              </span>
-              <span>
-                <kbd>C</kbd>
-                C
-              </span>
-              <span>
-                <kbd>Enter</kbd>
-                Start
-              </span>
+              {keyboardMappings.map((mapping) => (
+                <span key={`${mapping.control}-${mapping.label}`}>
+                  <kbd>{mapping.control}</kbd>
+                  {mapping.label}
+                </span>
+              ))}
             </div>
             <div className="rom-input-proof">
               <span data-testid="rom-last-input">{lastInputAction}</span>
@@ -2660,71 +2690,131 @@ function stateLabel(state: HealthState) {
   return "Check";
 }
 
-function romInputActionFromKey(key: string): RomInputAction | undefined {
-  switch (key) {
-    case "ArrowLeft":
-      return {
-        label: "Left",
-        detail: "Local D-pad left",
-        event: "input.local.left",
-        spriteDelta: -6,
-      };
-    case "ArrowRight":
-      return {
-        label: "Right",
-        detail: "Local D-pad right",
-        event: "input.local.right",
-        spriteDelta: 6,
-      };
-    case "ArrowUp":
-      return {
-        label: "Up",
-        detail: "Local D-pad up",
-        event: "input.local.up",
-      };
-    case "ArrowDown":
-      return {
-        label: "Down",
-        detail: "Local D-pad down",
-        event: "input.local.down",
-      };
-    case "z":
-    case "Z":
-      return {
-        label: "A",
-        detail: "Local A button",
-        event: "input.local.a",
-      };
-    case "x":
-    case "X":
-      return {
-        label: "B",
-        detail: "Local B button",
-        event: "input.local.b",
-      };
-    case "c":
-    case "C":
-      return {
-        label: "C",
-        detail: "Local C button",
-        event: "input.local.c",
-      };
-    case "Enter":
-      return {
-        label: "Start",
-        detail: "Local Start button",
-        event: "input.local.start",
-      };
-    default:
-      return undefined;
-  }
-}
-
 function sourceLabel(source: string, nativeLabel = "Native preflight") {
   if (source === "tauri") return nativeLabel;
   if (source === "checking") return "Checking";
   if (source === "error") return "Command unavailable";
   return "Preview mode";
+}
+
+function activeRomSourceFor(
+  projectSummary: ProjectSummary,
+  importResult?: RomImportResult,
+  v1PromptResult?: V1PromptResult,
+): ActiveRomSource {
+  if (importResult) {
+    return {
+      kind: "imported",
+      label: "Imported ROM",
+      detail: `${importResult.sourceName} copied into ignored local storage`,
+      path: importResult.importPath,
+      storage: "ignored-artifact",
+      canVerify: true,
+    };
+  }
+
+  if (v1PromptResult) {
+    return {
+      kind: "generated",
+      label: projectSummary.name,
+      detail: "Drive16-generated ROM artifact",
+      path: v1PromptResult.romPath,
+      storage: "generated-artifact",
+      canVerify: true,
+    };
+  }
+
+  return {
+    kind: "starter",
+    label: projectSummary.name,
+    detail: "Starter project ROM",
+    path: projectSummary.romPath,
+    storage: "repo",
+    canVerify: true,
+  };
+}
+
+function PlayerSessionStrip({
+  proofProvider,
+  session,
+}: {
+  proofProvider: PlayerProvider;
+  session: InteractivePlayerSession;
+}) {
+  const providerState = playerProviderHealthState(session.provider.state);
+  const controllerLabel = session.input.controllerReady ? "Controller ready" : "Controller later";
+  const inputLabel = session.input.focused ? "Keyboard captured" : "Keyboard ready";
+  const audioLabel =
+    session.audio === "audible"
+      ? "Audio on"
+      : session.audio === "muted"
+        ? "Muted"
+        : "Audio gated";
+
+  return (
+    <div
+      className={`player-session-strip ${providerState}`}
+      data-testid="interactive-player-session"
+    >
+      <span className="player-session-primary" title={session.rom.path}>
+        <Gamepad2 size={15} />
+        <strong>{session.rom.label}</strong>
+        <small>{shortPath(session.rom.path)}</small>
+      </span>
+      <span title={session.provider.detail}>
+        {connectionIcon(providerHealthToConnection(providerState))}
+        {session.provider.label}
+        <strong>{playerSessionLabel(session.state, session.provider.state)}</strong>
+      </span>
+      <span title={proofProvider.detail}>
+        <ShieldCheck size={15} />
+        Verify
+        <strong>{proofProvider.label}</strong>
+      </span>
+      <span title={session.input.lastAction?.detail ?? "Keyboard input model is ready"}>
+        <KeyRound size={15} />
+        {inputLabel}
+        <strong>{session.input.lastAction?.label ?? "No input"}</strong>
+      </span>
+      <span>
+        <Gamepad2 size={15} />
+        Input
+        <strong>{controllerLabel}</strong>
+      </span>
+      <span>
+        <Activity size={15} />
+        Sound
+        <strong>{audioLabel}</strong>
+      </span>
+    </div>
+  );
+}
+
+function playerProviderHealthState(state: PlayerProvider["state"]): HealthState {
+  if (state === "available") return "ready";
+  if (state === "error") return "missing";
+  return "warning";
+}
+
+function providerHealthToConnection(state: HealthState): ConnectionState {
+  if (state === "ready") return "ready";
+  if (state === "missing") return "missing";
+  return "warning";
+}
+
+function playerSessionLabel(
+  sessionState: PlayerSessionState,
+  providerState: PlayerProvider["state"],
+) {
+  if (providerState === "unconfigured") return "Needs core";
+  if (providerState === "loading") return "Loading";
+  if (providerState === "error") return "Unavailable";
+  if (sessionState === "playing") return "Playing";
+  if (sessionState === "paused") return "Paused";
+  if (sessionState === "loading") return "Loading";
+  if (sessionState === "stopped") return "Stopped";
+  if (sessionState === "error") return "Error";
+  return "Idle";
 }
 
 function starterLabel(preview: StarterRomPreview, busy: boolean, projectName = "Starter ROM") {

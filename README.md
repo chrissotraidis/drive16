@@ -48,17 +48,18 @@ compact status. Enhancement toggles now show explicit readiness labels instead
 of ambiguous On/Off state. Run, Save, Export, and Import actions now report
 near the ROM viewport and preserve recent action paths.
 
-Phase 6 has started by selecting the interactive player architecture direction.
-Drive16 will keep Genteel as the deterministic Verify/Capture Proof path and
-add a separate interactive Play path behind a provider adapter. Nostalgist plus
-RetroArch Emscripten is the first browser adapter target, but Genesis core
-delivery remains explicit and configurable because common Mega Drive cores have
-non-commercial or copyleft licensing constraints.
+Phase 6 has started by selecting the interactive player architecture direction
+and adding a Drive16-owned player boundary. Drive16 will keep Genteel as the
+deterministic Verify/Capture Proof path and add a separate interactive Play
+path behind a provider adapter. Nostalgist plus RetroArch Emscripten is the
+first browser adapter target, but Genesis core delivery remains explicit and
+configurable because common Mega Drive cores have non-commercial or copyleft
+licensing constraints.
 
 ## What to do next
 
-Current Phase 6 next step: add the player architecture boundary and active ROM
-source model.
+Current Phase 6 next step: clean up visible UI language so Play and
+Verify/Capture Proof are distinct.
 
 Current local validation:
 
