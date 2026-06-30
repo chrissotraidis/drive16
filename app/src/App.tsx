@@ -325,7 +325,7 @@ const starterMessages: Message[] = [
     id: 1,
     role: "agent",
     source: "local",
-    body: "Starter project loaded. Blank ROM is running.",
+    body: "Starter project loaded. Blank ROM proof preview is ready.",
     time: "09:41",
   },
   {
@@ -372,7 +372,7 @@ const previewPreflight: PreflightReport = {
 
 const previewStarterRom: StarterRomPreview = {
   status: "warning",
-  detail: "Native starter ROM launch runs inside the Tauri app",
+  detail: "Native starter ROM capture runs inside the Tauri app",
   generatedAt: "preview",
   projectPath: "examples/app-starter-blank",
   romPath: "examples/app-starter-blank/out/rom.bin",
@@ -537,7 +537,7 @@ function App() {
   const [interactiveProvider] = useState<PlayerProvider>(nostalgistProviderPending);
   const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
-    "Starter template loaded. Run the ROM or ask for sprite and music.",
+    "Starter template loaded. Verify the ROM or ask for sprite and music.",
   );
   const [modelProvider, setModelProvider] = useState<ModelProvider>("openrouter");
   const [activeModel, setActiveModel] = useState(fallbackModelOptions[0].id);
@@ -622,8 +622,8 @@ function App() {
   }, [messages]);
 
   const buildLabel = useMemo(() => {
-    if (buildState === "building") return "Building";
-    if (buildState === "running") return "Running";
+    if (buildState === "building") return "Verifying";
+    if (buildState === "running") return "Ready";
     if (buildState === "error") return "Error";
     return "Idle";
   }, [buildState]);
@@ -697,7 +697,7 @@ function App() {
     if (starterBusy || buildState === "building") {
       return {
         state: "warning",
-        label: "Running ROM",
+        label: "Verifying ROM",
         detail: actionDetail,
       };
     }
@@ -852,7 +852,7 @@ function App() {
       const agentMessage = makeMessage(
         "agent",
         shouldRunV1
-          ? `The v1 ROM run could not finish yet. ${detail}`
+          ? `The v1 ROM proof could not finish yet. ${detail}`
           : `OpenCode bridge could not send that yet. ${detail}`,
         "local",
       );
@@ -1596,14 +1596,14 @@ function App() {
     setTransport("running");
     setBuildState("running");
     setSpriteX(52);
-    noteAction(importResult ? "Imported ROM reset requested." : "Starter ROM reset requested.");
+    noteAction(importResult ? "Imported ROM capture requested." : "Starter ROM capture requested.");
     appendOpenCodeEvent(
-      importResult ? "imported.reset" : "starter.reset",
-      importResult?.importPath ?? "Starter ROM reset requested",
+      importResult ? "imported.capture" : "starter.capture",
+      importResult?.importPath ?? "Starter ROM capture requested",
     );
     void launchRom(
       importResult?.importPath,
-      importResult ? "Imported ROM reset and running." : "Starter ROM reset and running.",
+      importResult ? "Imported ROM proof captured." : "Starter ROM proof captured.",
     );
   }
 
@@ -1634,7 +1634,7 @@ function App() {
     noteAction("New project started from the blank starter template.");
     appendOpenCodeEvent("project.new", "Blank starter template loaded");
     void loadProjectSummary();
-    void launchRom(undefined, "New starter project running.");
+    void launchRom(undefined, "New starter project proof preview ready.");
   }
 
   async function saveProject() {
@@ -1804,7 +1804,7 @@ function App() {
         : previewImportForFile(selectedFile, readiness);
       activateImportedRom(result);
       appendOpenCodeEvent("rom.imported", result.importPath);
-      void launchRom(result.importPath, "Imported ROM running.");
+      void launchRom(result.importPath, "Imported ROM proof captured.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "ROM import setup failed";
       setProjectActionNotice({
@@ -1829,7 +1829,7 @@ function App() {
         : previewTestRomImport();
       activateImportedRom(result);
       appendOpenCodeEvent("rom.imported.test", result.importPath);
-      void launchRom(result.importPath, "Test ROM imported and running.");
+      void launchRom(result.importPath, "Test ROM imported and proof captured.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Test ROM import failed";
       setProjectActionNotice({
@@ -1846,11 +1846,11 @@ function App() {
 
   function runCurrentProject() {
     const activePath = importResult?.importPath ?? projectSummary.romPath;
-    noteAction(importResult ? "Running the imported ROM." : "Running the current starter ROM.");
-    appendOpenCodeEvent("run.started", activePath);
+    noteAction(importResult ? "Verifying the imported ROM." : "Verifying the current starter ROM.");
+    appendOpenCodeEvent("verify.started", activePath);
     void launchRom(
       importResult?.importPath,
-      importResult ? "Imported ROM running." : "Current starter ROM is running.",
+      importResult ? "Imported ROM proof captured." : "Current starter ROM proof captured.",
     );
   }
 
@@ -1913,8 +1913,8 @@ function App() {
     setInputProofBusy(true);
     setBuildState("building");
     setV1PromptSource("running");
-    setLastInputAction("Right proof running");
-    noteAction("Running scripted Right-input proof.");
+    setLastInputAction("Right proof verifying");
+    noteAction("Verifying scripted Right-input proof.");
     appendOpenCodeEvent("input.proof.started", "Scripted Right input");
 
     try {
@@ -1983,11 +1983,11 @@ function App() {
     }
   }
 
-  async function launchRom(romPath?: string, doneMessage = "Starter ROM running.") {
+  async function launchRom(romPath?: string, doneMessage = "Starter ROM proof captured.") {
     setStarterBusy(true);
     setStarterSource("checking");
     setBuildState("building");
-    noteAction(romPath ? "Launching imported ROM." : "Launching starter ROM.");
+    noteAction(romPath ? "Capturing imported ROM proof." : "Capturing starter ROM proof.");
 
     if (!isTauriRuntime()) {
       setStarterRom(makePreviewStarterRom(romPath));
@@ -2124,7 +2124,7 @@ function App() {
 
           <div className="split-panel">
             <section className="tool-stream" aria-label="Agent steps">
-              <SectionTitle icon={<TerminalSquare size={16} />} title="Run" />
+              <SectionTitle icon={<TerminalSquare size={16} />} title="Proof" />
               <ol>
                 {runSteps.map((step) => (
                   <li className={step.state} key={step.label}>
@@ -2201,21 +2201,21 @@ function App() {
           </form>
         </aside>
 
-        <section className="right-pane" aria-label="Live emulator">
+        <section className="right-pane" aria-label="ROM player">
           <div className="emulator-toolbar">
             <div>
-              <p className="label">Live ROM</p>
+              <p className="label">ROM Player</p>
               <h2>{projectSummary.name}</h2>
             </div>
             <div className="toolbar-actions" aria-label="Emulator actions">
               <IconControl
-                label={transport === "running" ? "Pause emulator" : "Resume emulator"}
+                label={transport === "running" ? "Pause proof preview" : "Resume proof preview"}
                 onClick={() => {
                   const next = transport === "running" ? "paused" : "running";
                   setTransport(next);
-                  noteAction(next === "running" ? "Emulator resumed." : "Emulator paused.");
+                  noteAction(next === "running" ? "Proof preview resumed." : "Proof preview paused.");
                   appendOpenCodeEvent(
-                    next === "running" ? "emulator.resumed" : "emulator.paused",
+                    next === "running" ? "preview.resumed" : "preview.paused",
                     projectSummary.romPath,
                   );
                 }}
@@ -2223,7 +2223,7 @@ function App() {
                 {transport === "running" ? <Pause size={18} /> : <Play size={18} />}
               </IconControl>
               <IconControl
-                label="Rerun current ROM"
+                label="Capture current ROM proof"
                 onClick={resetPreview}
                 disabled={starterBusy}
               >
@@ -2333,7 +2333,7 @@ function App() {
               onClick={focusRomInput}
             >
               <Gamepad2 size={16} />
-              <span>{romInputFocused ? "Input focused" : "Click ROM to control"}</span>
+              <span>{romInputFocused ? "Input focused" : "Click ROM for keyboard"}</span>
             </button>
             <div className="rom-key-map" aria-label="Keyboard mapping">
               {keyboardMappings.map((mapping) => (
@@ -2353,7 +2353,7 @@ function App() {
                 }}
                 disabled={inputProofBusy || openCodeBusy}
               >
-                {inputProofBusy ? "Testing Right" : "Run Right Proof"}
+                {inputProofBusy ? "Verifying Right" : "Verify Right"}
               </button>
             </div>
           </div>
@@ -2597,16 +2597,16 @@ function isV1Prompt(text: string) {
 function promptReadyMessage(generatedMusic: boolean, generatedSprite: boolean) {
   if (generatedMusic && generatedSprite) {
     return isTauriRuntime()
-      ? "Built and verified the generated sprite with generated MML music. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
+      ? "Built and verified the generated sprite with generated MML music. Right input moved the sprite, audio is non-silent, and the proof preview is loaded on the right."
       : "Previewed the generated sprite and MML music flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
   }
   if (generatedMusic) {
     return isTauriRuntime()
-      ? "Built and verified the bundled sprite with generated MML music. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
+      ? "Built and verified the bundled sprite with generated MML music. Right input moved the sprite, audio is non-silent, and the proof preview is loaded on the right."
       : "Previewed the generated MML music flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
   }
   return isTauriRuntime()
-    ? "Built and verified the bundled sprite/music ROM. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
+    ? "Built and verified the bundled sprite/music ROM. Right input moved the sprite, audio is non-silent, and the proof preview is loaded on the right."
     : "Previewed the bundled sprite/music ROM flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
 }
 
@@ -3781,7 +3781,7 @@ function TopBar({
           <Box size={22} />
           <div>
             <strong>Drive16</strong>
-            <span>Phase 5 hardening</span>
+            <span>Phase 6 player</span>
           </div>
         </div>
       </div>
@@ -3799,12 +3799,12 @@ function TopBar({
       <nav className="top-actions" aria-label="Project actions">
         <button
           type="button"
-          data-testid="run-project"
+          data-testid="verify-rom"
           onClick={onRunProject}
           disabled={runBusy}
         >
-          <Play size={16} />
-          {runBusy ? "Running" : "Run"}
+          <ShieldCheck size={16} />
+          {runBusy ? "Verifying" : "Verify"}
         </button>
         <button
           type="button"

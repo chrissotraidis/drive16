@@ -54,12 +54,13 @@ deterministic Verify/Capture Proof path and add a separate interactive Play
 path behind a provider adapter. Nostalgist plus RetroArch Emscripten is the
 first browser adapter target, but Genesis core delivery remains explicit and
 configurable because common Mega Drive cores have non-commercial or copyleft
-licensing constraints.
+licensing constraints. The app now reserves Play for the future interactive
+adapter and labels the current Genteel path as Verify/Proof Preview.
 
 ## What to do next
 
-Current Phase 6 next step: clean up visible UI language so Play and
-Verify/Capture Proof are distinct.
+Current Phase 6 next step: wire imported ROMs into the interactive player
+adapter path.
 
 Current local validation:
 

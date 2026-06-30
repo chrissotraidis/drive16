@@ -11,7 +11,7 @@ Genteel proof path remains available and distinct.
 - [x] Read Phase 6 goal objective.
 - [x] Evaluate embedded emulator core options and license posture.
 - [x] Add player architecture boundary.
-- [ ] Clean up UI language so Play and Verify/Capture Proof are distinct.
+- [x] Clean up UI language so Play and Verify/Capture Proof are distinct.
 - [ ] Wire imported ROMs into the interactive player.
 - [ ] Wire keyboard input into the running interactive player.
 - [ ] Add player controls without crowding the ROM viewport.
@@ -37,18 +37,15 @@ Genteel proof path remains available and distinct.
 
 ## Current Task
 
-Phase 6 is open. Unit 2 added a Drive16-owned player architecture boundary:
-active ROM source, player provider state, player session state, audio state,
-and shared keyboard input actions. The UI now has a compact player-session
-strip that distinguishes the future interactive player provider from the
-existing Genteel proof path.
+Phase 6 is open. Unit 3 cleaned up visible UI language so Genteel capture is
+called Verify or Proof Preview, while Play remains reserved for the future
+interactive emulator adapter.
 
-Evidence is recorded in `docs/phase6-player-architecture.md`.
+Evidence is recorded in `docs/phase6-ui-language.md`.
 
 ## Next Up
 
-Unit 3: clean up visible UI language so Play and Verify/Capture Proof are
-distinct.
+Unit 4: wire imported ROMs into the interactive player adapter path.
 
 ## Completed Phase 6 Work
 
@@ -63,6 +60,9 @@ distinct.
 - [x] Player provider/session/audio/input types added under `app/src/player`.
 - [x] Keyboard mapping now comes from a shared player input model.
 - [x] Compact player-session strip added above the ROM viewport.
+- [x] Top-level ROM action now says Verify instead of Run.
+- [x] Captured-frame toolbar labels now say proof preview and capture.
+- [x] Scripted movement proof now says Verify Right.
 
 ## Completed Phase 5 Work
 

@@ -1,5 +1,46 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 87 - Phase 6 UI language cleanup
+
+Plan:
+
+- Task: clean up UI language so Play is reserved for interactive sessions and
+  the current Genteel path is labeled Verify/Proof.
+- Files: `app/src/App.tsx`, `docs/phase6-ui-language.md`, `PROGRESS.md`,
+  `README.md`, and `WORKLOG.md`.
+- Verification: frontend build, browser label checks, keyboard focus check, and
+  diff whitespace check.
+
+Did:
+
+- Changed the top ROM action from Run to Verify.
+- Changed the phase label to Phase 6 player.
+- Changed the right pane from Live ROM to ROM Player.
+- Changed captured-frame toolbar labels to proof-preview and capture language.
+- Changed the scripted movement proof action to Verify Right.
+- Updated prompt/action messages so they say proof preview or captured proof
+  when the app is using Genteel.
+
+Evidence:
+
+- `docs/phase6-ui-language.md`.
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+- Browser QA at `http://127.0.0.1:1420/` confirmed:
+  - one `verify-rom` control with visible text `Verify`,
+  - `Phase 6 player`, `ROM Player`, and `Proof preview` present,
+  - old visible labels absent,
+  - zero console warnings/errors,
+  - keyboard focus still updates last input and the player-session strip.
+
+Gate:
+
+Phase 6 Unit 3 is complete. Phase 6 remains open.
+
+Next:
+
+- Wire imported ROMs into the interactive player adapter path.
+
 ## 2026-06-30 - ITERATION 86 - Phase 6 player architecture
 
 Plan:
