@@ -226,6 +226,11 @@ the generated-assets ROM proof.
   focused emulator, export feedback, and tool-health feedback.
 - [x] App control hardening evidence recorded in
   `docs/app-control-hardening.md`.
+- [x] App navigation hardening added a project menu, project save snapshots,
+  compact top actions, agent-local inference placement, and responsive header
+  fixes.
+- [x] App navigation hardening evidence recorded in
+  `docs/app-navigation-hardening.md`.
 - [x] Native v1 prompt command added to build and verify the CORE bundled
   sprite/music ROM.
 - [x] Chat composer wired so the v1-style request loads the generated CORE ROM

@@ -8,16 +8,19 @@ import {
   Download,
   Eye,
   EyeOff,
+  FolderOpen,
   FolderTree,
   Gamepad2,
   KeyRound,
   Maximize2,
+  Menu,
   MessageSquareText,
   Minimize2,
   Pause,
   Play,
   Plus,
   RefreshCcw,
+  Save,
   Send,
   Settings,
   ShieldCheck,
@@ -112,6 +115,15 @@ type RomExportResult = {
   sourceRomPath: string;
   exportPath: string;
   bytes: number;
+};
+
+type ProjectSaveResult = {
+  generatedAt: string;
+  status: HealthState;
+  detail: string;
+  sourceProjectPath: string;
+  snapshotPath: string;
+  files: number;
 };
 
 type V1PromptResult = {
@@ -342,6 +354,15 @@ const previewExportResult: RomExportResult = {
   bytes: 0,
 };
 
+const previewSaveResult: ProjectSaveResult = {
+  generatedAt: "preview",
+  status: "warning",
+  detail: "Save runs inside the Tauri app",
+  sourceProjectPath: "examples/app-starter-blank",
+  snapshotPath: "artifacts/phase3/projects/drive16-starter-preview",
+  files: 0,
+};
+
 const previewV1PromptResult: V1PromptResult = {
   status: "warning",
   detail: "Native v1 prompt verification runs inside the Tauri app",
@@ -380,6 +401,8 @@ function App() {
   const [projectSource, setProjectSource] = useState("checking");
   const [exportResult, setExportResult] = useState<RomExportResult | undefined>();
   const [exportBusy, setExportBusy] = useState(false);
+  const [saveResult, setSaveResult] = useState<ProjectSaveResult | undefined>();
+  const [saveBusy, setSaveBusy] = useState(false);
   const [v1PromptResult, setV1PromptResult] = useState<V1PromptResult | undefined>();
   const [v1PromptSource, setV1PromptSource] = useState("idle");
   const [openCode, setOpenCode] = useState<OpenCodeBridgeStatus>(previewOpenCode);
@@ -388,6 +411,7 @@ function App() {
   const [openCodeEvents, setOpenCodeEvents] = useState<OpenCodeEvent[]>([]);
   const [openCodeBusy, setOpenCodeBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [emulatorFocused, setEmulatorFocused] = useState(false);
   const [actionDetail, setActionDetail] = useState(
     "Starter template loaded. Run the ROM or ask for sprite and music.",
@@ -522,11 +546,27 @@ function App() {
       setV1PromptSource("running");
     }
 
+    let openCodeResult: OpenCodeSendResult | undefined;
     try {
-      const result = await sendOpenCodeMessage(trimmed);
-      setOpenCodeSessionId(result.sessionId);
-      appendOpenCodeEvent("message.posted", result.detail);
+      openCodeResult = await sendOpenCodeMessage(trimmed);
+      setOpenCodeSessionId(openCodeResult.sessionId);
+      appendOpenCodeEvent("message.posted", openCodeResult.detail);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "OpenCode message send failed";
+      appendOpenCodeEvent("message.local", detail);
+      if (!shouldRunV1) {
+        const agentMessage = makeMessage(
+          "agent",
+          "I caught that locally. This v1 shell can run ROM-changing prompts now; open Agent Settings to test the model before expecting freeform live replies.",
+        );
+        setMessages((current) => [...current, agentMessage]);
+        noteAction("Message handled locally. ROM-changing prompts are still available.");
+        setOpenCodeBusy(false);
+        return;
+      }
+    }
 
+    try {
       if (shouldRunV1) {
         const promptResult = shouldRunGeneratedMusic
           ? await runPhase4MusicPrompt(trimmed, shouldRunGeneratedSprite)
@@ -551,9 +591,14 @@ function App() {
       } else {
         const agentMessage = makeMessage(
           "agent",
-          `Posted to OpenCode session ${shortIdentifier(result.sessionId)}. Live model replies turn on in the settings step.`,
+          openCodeResult
+            ? `Message sent to OpenCode session ${shortIdentifier(
+                openCodeResult.sessionId,
+              )}. ROM-changing prompts run here; freeform live replies need a tested model in Agent Settings.`
+            : "Message captured locally. ROM-changing prompts run here; freeform live replies need a tested model in Agent Settings.",
         );
         setMessages((current) => [...current, agentMessage]);
+        noteAction("Message captured. Use Agent Settings to test live model replies.");
       }
       setBuildState("running");
     } catch (error) {
@@ -1163,6 +1208,7 @@ function App() {
     ]);
     setDraft("");
     setExportResult(undefined);
+    setSaveResult(undefined);
     setV1PromptResult(undefined);
     setV1PromptSource("idle");
     setOpenCodeSessionId(undefined);
@@ -1174,6 +1220,39 @@ function App() {
     appendOpenCodeEvent("project.new", "Blank starter template loaded");
     void loadProjectSummary();
     void launchStarterRom("New starter project running.");
+  }
+
+  async function saveProject() {
+    setSaveBusy(true);
+    noteAction("Saving the current project snapshot.");
+
+    if (!isTauriRuntime()) {
+      setSaveResult(previewSaveResult);
+      appendOpenCodeEvent("project.save.preview", previewSaveResult.snapshotPath);
+      noteAction(`Preview save ready at ${previewSaveResult.snapshotPath}.`);
+      setSaveBusy(false);
+      return;
+    }
+
+    try {
+      const result = await invoke<ProjectSaveResult>("save_current_project");
+      setSaveResult(result);
+      appendOpenCodeEvent("project.saved", result.snapshotPath);
+      noteAction(`Project saved to ${result.snapshotPath}.`);
+      void loadProjectSummary();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Project save failed";
+      setSaveResult({
+        ...previewSaveResult,
+        status: "missing",
+        detail,
+        generatedAt: "error",
+      });
+      appendOpenCodeEvent("project.save.failed", detail);
+      noteAction(`Project save failed: ${detail}`);
+    } finally {
+      setSaveBusy(false);
+    }
   }
 
   function runCurrentProject() {
@@ -1270,16 +1349,20 @@ function App() {
     <main className={`app-shell ${emulatorFocused ? "emulator-focused" : ""}`}>
       <TopBar
         actionDetail={actionDetail}
-        activeModel={activeModel}
         buildLabel={buildLabel}
         buildState={buildState}
         exportBusy={exportBusy}
-        modelProvider={modelProvider}
-        onExportRom={exportRom}
-        onNewProject={startNewProject}
-        onOpenSettings={() => setSettingsOpen(true)}
+        menuOpen={projectMenuOpen}
+        onExportRom={() => {
+          void exportRom();
+        }}
         onRunProject={runCurrentProject}
+        onSaveProject={() => {
+          void saveProject();
+        }}
+        onToggleMenu={() => setProjectMenuOpen((current) => !current)}
         runBusy={starterBusy || buildState === "building"}
+        saveBusy={saveBusy}
       />
 
       <section className="workspace" aria-label="Drive16 workspace">
@@ -1306,6 +1389,19 @@ function App() {
                 <Settings size={18} />
               </button>
             </div>
+          </div>
+
+          <div className="agent-config-row" data-testid="agent-config-row">
+            <span title={modelProvider === "openrouter" ? activeModel : "Ollama"}>
+              <KeyRound size={15} />
+              Inference
+              <strong>
+                {modelProvider === "openrouter" ? shortModelLabel(activeModel) : "Ollama"}
+              </strong>
+            </span>
+            <button type="button" onClick={() => setSettingsOpen(true)}>
+              Agent Settings
+            </button>
           </div>
 
           <div className="messages" aria-label="Message history">
@@ -1598,6 +1694,33 @@ function App() {
           onShowOpenRouterKeyChange={setShowOpenRouterKey}
           onTestComfyUiConnection={testComfyUiConnection}
           onTestConnection={testModelConnection}
+        />
+      ) : null}
+      {projectMenuOpen ? (
+        <ProjectMenu
+          activeModel={activeModel}
+          exportBusy={exportBusy}
+          exportResult={exportResult}
+          modelProvider={modelProvider}
+          preflight={preflight}
+          projectSummary={projectSummary}
+          saveBusy={saveBusy}
+          saveResult={saveResult}
+          onClose={() => setProjectMenuOpen(false)}
+          onExportRom={() => {
+            void exportRom();
+          }}
+          onNewProject={() => {
+            startNewProject();
+            setProjectMenuOpen(false);
+          }}
+          onOpenSettings={() => {
+            setProjectMenuOpen(false);
+            setSettingsOpen(true);
+          }}
+          onSaveProject={() => {
+            void saveProject();
+          }}
         />
       ) : null}
     </main>
@@ -2243,36 +2366,48 @@ function SettingsPanel({
 
 function TopBar({
   actionDetail,
-  activeModel,
   buildLabel,
   buildState,
   exportBusy,
-  modelProvider,
+  menuOpen,
   onExportRom,
-  onNewProject,
-  onOpenSettings,
   onRunProject,
+  onSaveProject,
+  onToggleMenu,
   runBusy,
+  saveBusy,
 }: {
   actionDetail: string;
-  activeModel: string;
   buildLabel: string;
   buildState: BuildState;
   exportBusy: boolean;
-  modelProvider: ModelProvider;
+  menuOpen: boolean;
   onExportRom: () => void;
-  onNewProject: () => void;
-  onOpenSettings: () => void;
   onRunProject: () => void;
+  onSaveProject: () => void;
+  onToggleMenu: () => void;
   runBusy: boolean;
+  saveBusy: boolean;
 }) {
   return (
     <header className="top-bar">
-      <div className="brand">
-        <Box size={22} />
-        <div>
-          <strong>Drive16</strong>
-          <span>Phase 4 enhancements</span>
+      <div className="brand-cluster">
+        <button
+          className="menu-trigger"
+          type="button"
+          aria-label={menuOpen ? "Close project menu" : "Open project menu"}
+          aria-expanded={menuOpen}
+          data-testid="project-menu-toggle"
+          onClick={onToggleMenu}
+        >
+          <Menu size={18} />
+        </button>
+        <div className="brand">
+          <Box size={22} />
+          <div>
+            <strong>Drive16</strong>
+            <span>Phase 4 enhancements</span>
+          </div>
         </div>
       </div>
 
@@ -2284,32 +2419,211 @@ function TopBar({
           </span>
           <small title={actionDetail}>{actionDetail}</small>
         </div>
-        <button
-          className="model-select"
-          type="button"
-          aria-label="Open model settings"
-          onClick={onOpenSettings}
-        >
-          <KeyRound size={16} />
-          {modelProvider === "openrouter" ? shortModelLabel(activeModel) : "Ollama"}
-        </button>
       </div>
 
       <nav className="top-actions" aria-label="Project actions">
-        <button type="button" onClick={onNewProject}>
-          <Plus size={16} />
-          New Project
-        </button>
-        <button type="button" onClick={onRunProject} disabled={runBusy}>
+        <button
+          type="button"
+          data-testid="run-project"
+          onClick={onRunProject}
+          disabled={runBusy}
+        >
           <Play size={16} />
-          {runBusy ? "Running" : "Run ROM"}
+          {runBusy ? "Running" : "Run"}
         </button>
-        <button type="button" onClick={onExportRom} disabled={exportBusy}>
+        <button
+          type="button"
+          data-testid="save-project"
+          onClick={onSaveProject}
+          disabled={saveBusy}
+        >
+          <Save size={16} />
+          {saveBusy ? "Saving" : "Save"}
+        </button>
+        <button
+          type="button"
+          data-testid="export-rom"
+          onClick={onExportRom}
+          disabled={exportBusy}
+        >
           <Download size={16} />
-          {exportBusy ? "Exporting" : "Export ROM"}
+          {exportBusy ? "Exporting" : "Export"}
         </button>
       </nav>
     </header>
+  );
+}
+
+function ProjectMenu({
+  activeModel,
+  exportBusy,
+  exportResult,
+  modelProvider,
+  preflight,
+  projectSummary,
+  saveBusy,
+  saveResult,
+  onClose,
+  onExportRom,
+  onNewProject,
+  onOpenSettings,
+  onSaveProject,
+}: {
+  activeModel: string;
+  exportBusy: boolean;
+  exportResult?: RomExportResult;
+  modelProvider: ModelProvider;
+  preflight: PreflightReport;
+  projectSummary: ProjectSummary;
+  saveBusy: boolean;
+  saveResult?: ProjectSaveResult;
+  onClose: () => void;
+  onExportRom: () => void;
+  onNewProject: () => void;
+  onOpenSettings: () => void;
+  onSaveProject: () => void;
+}) {
+  const attentionChecks = preflight.checks.filter((check) => check.state !== "ready");
+
+  return (
+    <div className="project-menu-backdrop" onClick={onClose}>
+      <aside
+        className="project-menu"
+        aria-label="Project menu"
+        data-testid="project-menu"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="project-menu-header">
+          <div>
+            <p className="label">Project Menu</p>
+            <h2>{projectSummary.name}</h2>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Close project menu"
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="project-menu-body">
+          <section className="menu-section" aria-label="Current project">
+            <SectionTitle icon={<FolderOpen size={16} />} title="Current Project" />
+            <div className="menu-meta-grid">
+              <span>Project</span>
+              <strong title={projectSummary.projectPath}>{shortPath(projectSummary.projectPath)}</strong>
+              <span>ROM</span>
+              <strong title={projectSummary.romPath}>
+                {shortPath(projectSummary.romPath)}
+              </strong>
+              <span>Saved</span>
+              <strong title={saveResult?.snapshotPath ?? "Not saved yet"}>
+                {saveResult ? shortPath(saveResult.snapshotPath) : "Not saved yet"}
+              </strong>
+              <span>Export</span>
+              <strong title={exportResult?.exportPath ?? projectSummary.exportDirectory}>
+                {exportResult
+                  ? shortPath(exportResult.exportPath)
+                  : shortPath(projectSummary.exportDirectory)}
+              </strong>
+            </div>
+          </section>
+
+          <section className="menu-section" aria-label="Project actions">
+            <SectionTitle icon={<Save size={16} />} title="Actions" />
+            <div className="menu-action-list">
+              <button type="button" data-testid="menu-new-project" onClick={onNewProject}>
+                <Plus size={16} />
+                <span>
+                  <strong>New Project</strong>
+                  <small>Reset to the blank starter template</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="menu-save-project"
+                onClick={onSaveProject}
+                disabled={saveBusy}
+              >
+                <Save size={16} />
+                <span>
+                  <strong>{saveBusy ? "Saving Project" : "Save Project"}</strong>
+                  <small>Snapshot the current project under artifacts</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="menu-export-rom"
+                onClick={onExportRom}
+                disabled={exportBusy}
+              >
+                <Download size={16} />
+                <span>
+                  <strong>{exportBusy ? "Exporting ROM" : "Export ROM"}</strong>
+                  <small>Copy the current ROM build for sharing</small>
+                </span>
+              </button>
+            </div>
+          </section>
+
+          <section className="menu-section" aria-label="Recent projects">
+            <SectionTitle icon={<FolderTree size={16} />} title="Projects" />
+            <button className="project-choice active" type="button" onClick={onClose}>
+              <strong>Starter Project</strong>
+              <small>{shortPath(projectSummary.projectPath)}</small>
+            </button>
+          </section>
+
+          <section className="menu-section" aria-label="Agent setup">
+            <SectionTitle icon={<KeyRound size={16} />} title="Agent" />
+            <div className="menu-meta-grid">
+              <span>Inference</span>
+              <strong title={modelProvider === "openrouter" ? activeModel : "Ollama"}>
+                {modelProvider === "openrouter" ? shortModelLabel(activeModel) : "Ollama"}
+              </strong>
+              <span>Setup</span>
+              <strong>{preflightSummaryLabel(preflight.summaryState)}</strong>
+            </div>
+            <button
+              className="menu-secondary-action"
+              type="button"
+              data-testid="menu-agent-settings"
+              onClick={onOpenSettings}
+            >
+              <Settings size={16} />
+              Agent Settings
+            </button>
+          </section>
+
+          <section className="menu-section" aria-label="Needs attention">
+            <SectionTitle icon={<AlertCircle size={16} />} title="Needs Attention" />
+            <div className="attention-list">
+              {attentionChecks.length > 0 ? (
+                attentionChecks.map((check) => (
+                  <div className={`attention-item ${check.state}`} key={check.name}>
+                    {healthIcon(check.state)}
+                    <span>
+                      <strong>{check.name}</strong>
+                      <small>{check.detail}</small>
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="attention-item ready">
+                  <CheckCircle2 size={15} />
+                  <span>
+                    <strong>No tool blockers</strong>
+                    <small>All tracked checks are ready</small>
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
   );
 }
 

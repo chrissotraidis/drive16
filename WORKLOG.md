@@ -1,5 +1,60 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 72 - App navigation hardening
+
+Plan:
+
+- Task: respond to the UI audit by adding a project menu, save surface,
+  agent-local inference placement, clearer chat feedback, and tighter
+  responsive layout.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `app/src-tauri/src/main.rs`, `app/src-tauri/src/project.rs`,
+  `docs/app-navigation-hardening.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: rebuild the frontend, run the focused native project tests,
+  click the menu/settings/save/chat flows in the in-app browser, check desktop
+  and mobile layout metrics, and check the diff for whitespace errors.
+
+Did:
+
+- Added a hamburger project menu in the top-left chrome.
+- Moved `New Project`, `Save Project`, `Export ROM`, recent project selection,
+  inference state, and tool attention into the project menu.
+- Added a native `save_current_project` Tauri command that snapshots the
+  starter project under ignored Phase 3 artifacts.
+- Kept the top bar to compact `Run`, `Save`, and `Export` actions.
+- Moved the active inference label into the conversation pane near
+  `Agent Settings`.
+- Changed freeform chat feedback so the app explains local ROM prompt handling
+  and the need for a tested model before expecting live replies.
+- Added dark scrollbar styling and phone-width header rules.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml project -- --nocapture`
+  passed with 5 tests.
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+- Browser desktop pass opened the project menu, clicked `Save Project`, opened
+  `Agent Settings` from the menu, clicked top `Save`, sent `what can you do?`,
+  and observed the new explanatory agent reply.
+- Desktop browser console warnings and errors were empty.
+- Desktop metrics showed the top bar at 58 px tall, compact top buttons, and no
+  top-bar model selector.
+- Mobile browser pass opened and closed the project menu, then reported body
+  client width and scroll width both at 316 px.
+- Mobile browser console warnings and errors were empty.
+
+Gate:
+
+No new Phase 4 gate. The existing validation request remains: provide or
+install a compatible Pixel Art Diffusion XL checkpoint, then run
+`scripts/validate-phase4-live-generated-assets.sh`.
+
+Next:
+
+- Continue app UX hardening on deeper project persistence and live model reply
+  streaming, or return to the Phase 4 live checkpoint gate.
+
 ## 2026-06-30 - ITERATION 71 - App control hardening
 
 Plan:

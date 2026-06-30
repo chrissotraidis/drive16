@@ -9,6 +9,7 @@ use std::{
 const STARTER_PROJECT: &str = "examples/app-starter-blank";
 const STARTER_ROM: &str = "examples/app-starter-blank/out/rom.bin";
 const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
+const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,11 +43,23 @@ pub struct RomExportResult {
     pub bytes: u64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSaveResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub source_project_path: String,
+    pub snapshot_path: String,
+    pub files: u64,
+}
+
 struct ProjectPaths {
     repo_root: PathBuf,
     project_path: PathBuf,
     rom_path: PathBuf,
     export_directory: PathBuf,
+    project_save_directory: PathBuf,
     build_sgdk_script: PathBuf,
 }
 
@@ -56,6 +69,10 @@ pub fn load_project_summary() -> ProjectSummary {
 
 pub fn export_current_rom() -> Result<RomExportResult, String> {
     export_current_rom_for_repo(repo_root())
+}
+
+pub fn save_current_project() -> Result<ProjectSaveResult, String> {
+    save_current_project_for_repo(repo_root())
 }
 
 fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
@@ -135,12 +152,44 @@ fn export_current_rom_for_repo(repo_root: PathBuf) -> Result<RomExportResult, St
     })
 }
 
+fn save_current_project_for_repo(repo_root: PathBuf) -> Result<ProjectSaveResult, String> {
+    let paths = ProjectPaths::new(repo_root);
+    if !paths.project_path.is_dir() {
+        return Err(format!(
+            "Starter project is missing: {}",
+            paths.project_path.display()
+        ));
+    }
+    fs::create_dir_all(&paths.project_save_directory).map_err(|error| {
+        format!(
+            "Could not create project save directory {}: {}",
+            paths.project_save_directory.display(),
+            error
+        )
+    })?;
+
+    let snapshot_path = paths
+        .project_save_directory
+        .join(format!("drive16-starter-{}", unique_stamp()));
+    let files = copy_project_tree(&paths.project_path, &snapshot_path)?;
+
+    Ok(ProjectSaveResult {
+        generated_at: unix_timestamp(),
+        status: "ready".to_string(),
+        detail: "Project snapshot saved".to_string(),
+        source_project_path: repo_relative(&paths.repo_root, &paths.project_path),
+        snapshot_path: repo_relative(&paths.repo_root, &snapshot_path),
+        files,
+    })
+}
+
 impl ProjectPaths {
     fn new(repo_root: PathBuf) -> Self {
         Self {
             project_path: repo_root.join(STARTER_PROJECT),
             rom_path: repo_root.join(STARTER_ROM),
             export_directory: repo_root.join(EXPORT_DIRECTORY),
+            project_save_directory: repo_root.join(PROJECT_SAVE_DIRECTORY),
             build_sgdk_script: repo_root.join("scripts/build-sgdk.sh"),
             repo_root,
         }
@@ -185,6 +234,58 @@ fn file_entry(repo_root: &Path, path: PathBuf, label: &str) -> ProjectFileEntry 
         path: repo_relative(repo_root, &path),
         state: if path.is_file() { "ready" } else { "missing" }.to_string(),
     }
+}
+
+fn copy_project_tree(source: &Path, destination: &Path) -> Result<u64, String> {
+    fs::create_dir_all(destination).map_err(|error| {
+        format!(
+            "Could not create snapshot directory {}: {}",
+            destination.display(),
+            error
+        )
+    })?;
+
+    let mut copied_files = 0;
+    for entry in fs::read_dir(source).map_err(|error| {
+        format!(
+            "Could not read project directory {}: {}",
+            source.display(),
+            error
+        )
+    })? {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Could not read a project entry in {}: {}",
+                source.display(),
+                error
+            )
+        })?;
+        let entry_path = entry.path();
+        let target_path = destination.join(entry.file_name());
+        let file_type = entry.file_type().map_err(|error| {
+            format!(
+                "Could not inspect project entry {}: {}",
+                entry_path.display(),
+                error
+            )
+        })?;
+
+        if file_type.is_dir() {
+            copied_files += copy_project_tree(&entry_path, &target_path)?;
+        } else if file_type.is_file() {
+            fs::copy(&entry_path, &target_path).map_err(|error| {
+                format!(
+                    "Could not copy project file {} to {}: {}",
+                    entry_path.display(),
+                    target_path.display(),
+                    error
+                )
+            })?;
+            copied_files += 1;
+        }
+    }
+
+    Ok(copied_files)
 }
 
 fn repo_root() -> PathBuf {
@@ -287,6 +388,38 @@ mod tests {
         assert_eq!(result.source_rom_path, STARTER_ROM);
         assert_eq!(result.bytes, 10);
         assert_eq!(exported_bytes, b"DRIVE16ROM");
+    }
+
+    #[test]
+    fn save_current_project_copies_starter_tree_to_snapshot() {
+        let temp_dir = temp_repo("save");
+        fs::create_dir_all(temp_dir.join("examples/app-starter-blank/src")).unwrap();
+        fs::create_dir_all(temp_dir.join("examples/app-starter-blank/res")).unwrap();
+        fs::write(
+            temp_dir.join("examples/app-starter-blank/src/main.c"),
+            "int main(){}",
+        )
+        .unwrap();
+        fs::write(
+            temp_dir.join("examples/app-starter-blank/res/resources.res"),
+            "SPRITE player",
+        )
+        .unwrap();
+
+        let result = save_current_project_for_repo(temp_dir.clone()).expect("project saves");
+        let saved_main = temp_dir.join(&result.snapshot_path).join("src/main.c");
+        let saved_resources = temp_dir
+            .join(&result.snapshot_path)
+            .join("res/resources.res");
+        let saved_main_contents = fs::read_to_string(saved_main).unwrap();
+        let saved_resources_contents = fs::read_to_string(saved_resources).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.source_project_path, STARTER_PROJECT);
+        assert_eq!(result.files, 2);
+        assert_eq!(saved_main_contents, "int main(){}");
+        assert_eq!(saved_resources_contents, "SPRITE player");
     }
 
     fn temp_repo(label: &str) -> PathBuf {
