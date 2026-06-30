@@ -1,5 +1,28 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Live ComfyUI sprite validation uses a committed runner
+
+Context:
+
+Phase 4 needs a real generated PNG to pass the Drive16 sprite validator before
+the generated-sprite checklist item can close. Local ComfyUI may not be running
+in every agent environment, and `comfyui-mcp` can auto-update its ignored npm
+artifact unless disabled.
+
+Decision:
+
+Add `scripts/run-comfyui-sprite-workflow.py` as the live validation entrypoint.
+It checks ComfyUI through `drive16-comfyui`, enqueues the committed workflow,
+downloads the output PNG from ComfyUI history, and runs the generated-sprite
+validator. Also default `COMFYUI_MCP_AUTOUPDATE=0` in `scripts/comfyui-mcp.sh`
+and reinstall the pinned package if the ignored artifact version drifts.
+
+Consequence:
+
+The live ComfyUI proof has one command and still uses the MCP integration under
+test. When ComfyUI is unavailable, the runner produces an explicit validation
+request instead of pretending the generated-sprite task is done.
+
 ## 2026-06-30 - Generated sprite validation accepts ComfyUI PNG shapes
 
 Context:

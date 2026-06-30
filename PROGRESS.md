@@ -23,13 +23,13 @@ still builds a working ROM.
 
 ## Current Task
 
-Generated-sprite PNG validation is available through
-`scripts/validate-generated-sprite.py`, but no live ComfyUI output has passed
-it yet.
+Live ComfyUI sprite validation has a runner, but local ComfyUI was not
+available on `http://127.0.0.1:8188`, so no live output has passed yet.
 
 ## Next Up
 
-Run the ComfyUI workflow and validate a live generated sprite PNG.
+Wrap ctrmml as the MML music MCP server while the live ComfyUI validation
+request is open.
 
 ## Completed Phase 4 Work
 
@@ -53,6 +53,10 @@ Run the ComfyUI workflow and validate a live generated sprite PNG.
   `scripts/validate-generated-sprite.py`.
 - [x] Phase 4 generated-sprite validator evidence recorded in
   `docs/phase4-generated-sprite-validator.md`.
+- [x] Live ComfyUI sprite runner added at
+  `scripts/run-comfyui-sprite-workflow.py`.
+- [x] Phase 4 live ComfyUI validation request recorded in
+  `docs/phase4-live-comfyui-runner.md`.
 
 ## Completed Phase 3 Work
 

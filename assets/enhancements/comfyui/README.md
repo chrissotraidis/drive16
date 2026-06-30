@@ -29,3 +29,9 @@ After a live generation run, validate the output:
 ```sh
 scripts/validate-generated-sprite.py <generated-png>
 ```
+
+To run the whole live path through `drive16-comfyui`:
+
+```sh
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+```

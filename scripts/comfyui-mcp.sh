@@ -27,7 +27,13 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
 fi
 
 CLI="$PREFIX/node_modules/comfyui-mcp/dist/index.js"
-if [ ! -f "$CLI" ]; then
+PACKAGE_JSON="$PREFIX/node_modules/comfyui-mcp/package.json"
+INSTALLED_VERSION=""
+if [ -f "$PACKAGE_JSON" ]; then
+  INSTALLED_VERSION="$("$NODE_BIN" -e 'const fs = require("fs"); const p = process.argv[1]; try { console.log(JSON.parse(fs.readFileSync(p, "utf8")).version || ""); } catch { process.exit(1); }' "$PACKAGE_JSON" 2>/dev/null || true)"
+fi
+
+if [ ! -f "$CLI" ] || [ "$INSTALLED_VERSION" != "$VERSION" ]; then
   NPM_BIN="${DRIVE16_NPM:-$(command -v npm || true)}"
   if [ -z "$NPM_BIN" ]; then
     echo "npm is required to install comfyui-mcp into artifacts/." >&2
@@ -45,5 +51,6 @@ fi
 
 export COMFYUI_URL="${COMFYUI_URL:-http://127.0.0.1:8188}"
 export COMFYUI_DOWNLOAD_CACHE_DIR="${COMFYUI_DOWNLOAD_CACHE_DIR:-$PREFIX/cache}"
+export COMFYUI_MCP_AUTOUPDATE="${COMFYUI_MCP_AUTOUPDATE:-0}"
 
 exec "$NODE_BIN" "$CLI" "$@"

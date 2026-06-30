@@ -1,5 +1,66 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 39 - Live ComfyUI sprite runner
+
+Plan:
+
+- Task: add the live runner that executes the ComfyUI sprite workflow through
+  `drive16-comfyui` and validates the downloaded PNG.
+- Files: `scripts/run-comfyui-sprite-workflow.py`,
+  `scripts/comfyui-mcp.sh`, `docs/phase4-live-comfyui-runner.md`,
+  `assets/enhancements/comfyui/README.md`, `scripts/README.md`,
+  `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: runner offline behavior, ComfyUI MCP wrapper validation,
+  generated sprite validator self-test, Python syntax checks, secret scan,
+  Markdown punctuation check, and `git diff --check`.
+
+Did:
+
+- Added a live runner that calls `get_system_stats` and `enqueue_workflow`
+  through the `drive16-comfyui` MCP wrapper.
+- The runner polls ComfyUI history, downloads the first PNG output, and runs
+  `scripts/validate-generated-sprite.py` on it.
+- Hardened `scripts/comfyui-mcp.sh` to disable `comfyui-mcp` auto-update by
+  default and reinstall the pinned package version if ignored artifacts drift.
+
+Evidence:
+
+- Local ComfyUI probing failed with `Connection refused` for
+  `http://127.0.0.1:8188/system_stats`.
+- `scripts/run-comfyui-sprite-workflow.py` printed a `VALIDATION REQUEST`
+  because local ComfyUI was unavailable.
+- `scripts/validate-comfyui-mcp-wrapper.py` passed after the wrapper enforced
+  the pinned package version.
+- `scripts/validate-generated-sprite.py --self-test` passed.
+- `scripts/validate-comfyui-workflow.py` passed.
+- The ignored `comfyui-mcp` artifact reported package version `0.21.0` after
+  wrapper pin enforcement.
+- `python3 -m py_compile scripts/run-comfyui-sprite-workflow.py
+  scripts/validate-generated-sprite.py` passed.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+- Run artifacts under `artifacts/phase4/live-comfyui-sprite/` were ignored.
+
+Gate:
+
+VALIDATION REQUEST: start local ComfyUI on `http://127.0.0.1:8188` with the
+Pixel Art Diffusion XL checkpoint and Pixydust Quantizer custom node installed,
+then run:
+
+```sh
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+```
+
+Expected result: the command enqueues through `drive16-comfyui`, downloads a
+PNG under ignored artifacts, and `scripts/validate-generated-sprite.py` prints
+`Generated sprite ok`.
+
+Next:
+
+- Wrap ctrmml as the MML music MCP server while the live ComfyUI validation
+  request is open.
+
 ## 2026-06-30 - ITERATION 38 - Generated sprite validator
 
 Plan:
