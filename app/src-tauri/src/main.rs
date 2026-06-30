@@ -85,6 +85,7 @@ async fn check_comfyui_endpoint(
             system_stats_url: String::new(),
             version: None,
             devices: 0,
+            checks: Vec::new(),
         })
 }
 

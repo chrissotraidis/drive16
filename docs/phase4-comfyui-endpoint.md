@@ -12,6 +12,11 @@ Implemented behavior:
 - Local-only endpoint normalization for `http://127.0.0.1:8188` and
   `http://localhost:8188`.
 - Health probing through ComfyUI's `GET /system_stats` route.
+- Phase 4 sprite-readiness checks through ComfyUI's `GET /object_info` route,
+  the committed workflow contract, the selected checkpoint name, and local
+  ComfyUI fallback paths.
+- The endpoint status now reports compact readiness rows for API, checkpoint,
+  Pixydust Quantizer, and workflow classes.
 - Settings endpoint field and `Test` action that only render after enabling
   `AI sprites`.
 - Browser-preview fallback that reports a clean failed state when ComfyUI is
@@ -33,15 +38,36 @@ Result:
 
 - `5 passed; 0 failed; 0 ignored`.
 
+The focused native tests were rerun after adding sprite-readiness rows to the
+same app command:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
+```
+
+Result:
+
+- `11 passed; 0 failed; 0 ignored`.
+
 Frontend build:
 
 ```sh
-pnpm --dir app build
+npm run build
 ```
 
 Result:
 
 - Frontend build passed.
+
+Full non-ignored native suite:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture
+```
+
+Result:
+
+- `24 passed; 0 failed; 4 ignored`.
 
 Rendered browser check at `http://127.0.0.1:1420/`:
 

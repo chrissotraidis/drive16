@@ -29,6 +29,9 @@ API is not reachable.
 - The script records the selected checkpoint name, the manifest default, and
   whether a runtime override is active.
 - Documented the script in `scripts/README.md`.
+- The app's native `check_comfyui_endpoint` command now mirrors the same
+  readiness concepts in the settings drawer: API, checkpoint, Pixydust, and
+  workflow classes.
 
 ## Local Verification
 
@@ -46,6 +49,22 @@ was found under `~/Documents/ComfyUI/custom_nodes`.
 The generated-MML proof remains passed from the previous iteration. The
 combined generated-assets proof remains gated only on live ComfyUI sprite
 output.
+
+The app-side readiness command was verified with focused native tests:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
+```
+
+Result: 11 passed.
+
+The frontend production build was rerun:
+
+```sh
+npm run build
+```
+
+Result: passed.
 
 ## Validation Request
 

@@ -1064,6 +1064,17 @@ h3 {
   background: rgba(255, 115, 106, 0.08);
 }
 
+.readiness-list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.readiness-list .connection-summary {
+  min-height: 34px;
+  padding: 7px 8px;
+}
+
 .settings-meta {
   justify-content: space-between;
   gap: 10px;

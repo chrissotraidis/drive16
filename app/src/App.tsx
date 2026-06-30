@@ -184,6 +184,7 @@ type ComfyUiEndpointStatus = {
   systemStatsUrl: string;
   version?: string;
   devices: number;
+  checks: HealthCheck[];
 };
 
 type DecodedFramebufferFrame = {
@@ -401,6 +402,7 @@ function App() {
     baseUrl: defaultComfyUiEndpoint,
     systemStatsUrl: `${defaultComfyUiEndpoint}/system_stats`,
     devices: 0,
+    checks: [],
   });
   const [modelConnection, setModelConnection] = useState<ModelConnectionReport>({
     state: "idle",
@@ -1071,11 +1073,16 @@ function App() {
 
   function handleComfyUiEndpointChange(value: string) {
     setComfyUiEndpoint(value);
-    if (comfyUiConnection.state === "ready" || comfyUiConnection.state === "missing") {
+    if (
+      comfyUiConnection.state === "ready" ||
+      comfyUiConnection.state === "missing" ||
+      comfyUiConnection.state === "warning"
+    ) {
       setComfyUiConnection((current) => ({
         ...current,
         state: "idle",
         detail: "Not tested",
+        checks: [],
       }));
     }
   }
@@ -1788,6 +1795,13 @@ async function checkComfyUiEndpointInBrowser(endpoint: string): Promise<ComfyUiE
     systemStatsUrl,
     version: stats.system.comfyui_version,
     devices: Array.isArray(stats.devices) ? stats.devices.length : 0,
+    checks: [
+      {
+        name: "API",
+        state: "ready",
+        detail: "System stats available",
+      },
+    ],
   };
 }
 
@@ -2021,6 +2035,18 @@ function SettingsPanel({
                     <span>{connectionLabel(comfyUiConnection.state)}</span>
                     <small>{comfyUiConnection.detail}</small>
                   </div>
+
+                  {comfyUiConnection.checks.length ? (
+                    <div className="readiness-list" data-testid="comfyui-readiness-checks">
+                      {comfyUiConnection.checks.map((check) => (
+                        <div className={`connection-summary ${check.state}`} key={check.name}>
+                          {connectionIcon(check.state)}
+                          <span>{check.name}</span>
+                          <small>{check.detail}</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
 
                   <div className="settings-meta">
                     <span>{comfyUiConnection.version ?? "Version pending"}</span>
