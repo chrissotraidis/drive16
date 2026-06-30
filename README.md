@@ -50,8 +50,20 @@ near the ROM viewport and preserve recent action paths.
 
 ## What to do next
 
-Current Phase 5 next step: validate and document the fully local Ollama plus
-local ComfyUI path without mixing it with the hosted OpenRouter BYOK path.
+Current Phase 5 next step: assemble the Phase 5 evidence packet for human
+review.
+
+Current local validation:
+
+- Ollama HTTP is reachable at `http://127.0.0.1:11434/api/tags` after the
+  local service wakes.
+- The app default `qwen2.5-coder:7b` is not currently installed on this
+  machine. Install it with `ollama pull qwen2.5-coder:7b` or enter an installed
+  model name in Agent Settings.
+- ComfyUI model files are present under `~/Documents/ComfyUI`, including
+  `sd_xl_base_1.0.safetensors` and `pixel-art-xl.safetensors`.
+- The local ComfyUI API is not currently running on `127.0.0.1:8188`, so AI
+  sprite readiness correctly reports setup failure until ComfyUI is launched.
 
 To reproduce the Phase 4 live generated-assets proof after reviewing and
 accepting the upstream model licenses:
@@ -93,6 +105,57 @@ The native Tauri app can be run with:
 
 ```sh
 pnpm --dir app tauri dev
+```
+
+## Provider and enhancement setup
+
+OpenRouter hosted BYOK:
+
+1. Select OpenRouter in Agent Settings.
+2. Paste an OpenRouter API key.
+3. Select the hosted model.
+4. Click Test OpenRouter.
+
+Ollama local:
+
+1. Install and start Ollama.
+2. Install or choose a local model:
+
+```sh
+ollama pull qwen2.5-coder:7b
+```
+
+3. Select Ollama in Agent Settings.
+4. Use endpoint `http://127.0.0.1:11434`.
+5. Enter the installed model name.
+6. Click Test Ollama.
+
+ComfyUI local AI sprites:
+
+1. Install or select a local ComfyUI data folder. Drive16 defaults to:
+
+```text
+~/Documents/ComfyUI
+```
+
+2. Install the default model pair after reviewing the upstream licenses:
+
+```sh
+scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
+```
+
+3. Launch the local ComfyUI API when needed:
+
+```sh
+scripts/launch-phase4-comfyui-api.sh
+```
+
+4. In Agent Settings, enable AI sprites and click Test ComfyUI.
+
+For the full generated sprite plus MML proof:
+
+```sh
+scripts/validate-phase4-live-generated-assets.sh
 ```
 
 ## Phase map

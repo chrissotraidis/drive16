@@ -16,21 +16,22 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Add collapsible or resizable ROM-first layout.
 - [x] Clarify AI sprites and MML music readiness states.
 - [x] Improve Run, Save, Export, Import, and tool-health feedback.
-- [ ] Validate and document the fully local Ollama plus local ComfyUI path.
+- [x] Validate and document the fully local Ollama plus local ComfyUI path.
 - [ ] Assemble Phase 5 evidence packet for human review.
 
 ## Current Task
 
-Phase 5 is open. Unit 8 added a near-ROM action feedback strip. Run, Save,
-Export, and Import now update visible status next to the emulator and show
-recent save/export/import paths where applicable.
+Phase 5 is open. Unit 9 validated and documented the local provider and
+enhancement setup paths. Ollama HTTP is reachable locally and lists installed
+models, but the app default `qwen2.5-coder:7b` is not installed. ComfyUI model
+files and Pixydust are present, but the API is not currently running on
+`127.0.0.1:8188`.
 
-Evidence is recorded in `docs/phase5-action-feedback.md`.
+Evidence is recorded in `docs/phase5-local-path-validation.md`.
 
 ## Next Up
 
-Unit 9: validate and document the fully local Ollama plus local ComfyUI path
-without mixing it with the hosted OpenRouter BYOK path.
+Assemble the Phase 5 evidence packet for human review.
 
 ## Completed Phase 5 Work
 
@@ -76,6 +77,13 @@ without mixing it with the hosted OpenRouter BYOK path.
 - [x] Save feedback shows the latest snapshot path.
 - [x] Export feedback shows the latest exported ROM path.
 - [x] Import feedback shows the active imported ROM path.
+- [x] Ollama local HTTP readiness documented with installed model list status.
+- [x] App default Ollama model miss documented with a concrete pull or model
+  override path.
+- [x] ComfyUI local readiness documented: API not running, checkpoint/LoRA and
+  Pixydust present.
+- [x] OpenRouter BYOK, Ollama local, and ComfyUI local setup paths are
+  documented separately.
 
 ## Completed Phase 4 Work
 

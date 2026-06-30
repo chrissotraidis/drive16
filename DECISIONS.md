@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Local and hosted setup paths stay separate
+
+Context:
+
+Phase 5 needs both a hosted BYOK path and a fully local path, but those should
+not be blended in the UI or setup docs. OpenRouter depends on an API key.
+Ollama depends on a local HTTP service and an installed model. AI sprites depend
+on local ComfyUI, model files, Pixydust, and the ComfyUI API.
+
+Decision:
+
+Document OpenRouter, Ollama, and ComfyUI as separate setup paths. Treat
+OpenRouter as hosted BYOK, Ollama as local inference readiness, and ComfyUI as
+an optional local enhancement dependency behind AI sprites.
+
+Consequence:
+
+The app can remain honest when one path is ready and another is not. A missing
+Ollama model or stopped ComfyUI API does not affect the OpenRouter BYOK path,
+and OpenRouter setup does not imply local inference or local sprite generation
+is ready.
+
 ## 2026-06-30 - Primary action feedback belongs near the ROM viewport
 
 Context:

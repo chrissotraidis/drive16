@@ -1,5 +1,50 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 83 - Phase 5 local path validation
+
+Plan:
+
+- Task: implement Phase 5 Unit 9 by validating and documenting the local
+  Ollama plus local ComfyUI setup path without mixing it with OpenRouter BYOK.
+- Files: `DECISIONS.md`, `PROGRESS.md`, `README.md`, `WORKLOG.md`, and
+  `docs/phase5-local-path-validation.md`.
+- Verification: check local Ollama HTTP readiness, installed Ollama models,
+  local ComfyUI API readiness, ComfyUI model/checkpoint state, and setup docs.
+
+Did:
+
+- Checked Ollama CLI and HTTP readiness.
+- Checked whether the app default Ollama model is installed.
+- Checked local ComfyUI API endpoints.
+- Ran the Phase 4 ComfyUI readiness script.
+- Updated README with separate setup paths for OpenRouter, Ollama, and ComfyUI.
+- Recorded exact current blockers and next actions.
+
+Evidence:
+
+- `ollama --version` found `/usr/local/bin/ollama` and reported client
+  `0.30.10`.
+- `ollama list` reported 15 installed models.
+- `http://127.0.0.1:11434/api/tags` became reachable and reported 15 models.
+- The app default `qwen2.5-coder:7b` was not installed.
+- `ollama ps` reported no running model.
+- `http://127.0.0.1:8188/system_stats` was not reachable.
+- `http://127.0.0.1:8188/object_info` was not reachable.
+- `scripts/check-phase4-comfyui-readiness.py` reported:
+  - API connection refused.
+  - Workflow classes could not be inspected.
+  - SDXL base checkpoint present.
+  - Pixel Art XL LoRA present.
+  - Pixydust Quantizer present.
+
+Gate:
+
+Phase 5 Unit 9 is complete. Phase 5 remains open.
+
+Next:
+
+- Assemble the Phase 5 evidence packet for human review.
+
 ## 2026-06-30 - ITERATION 82 - Phase 5 action feedback polish
 
 Plan:
