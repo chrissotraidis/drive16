@@ -26,6 +26,7 @@ local ComfyUI produces a PNG that passes the generated-sprite validator.
 | Pixydust Quantizer prerequisite can be installed and detected | `docs/phase4-comfyui-pixydust-local.md` |
 | ComfyUI API launch and smoke path exists | `docs/phase4-comfyui-api-launch.md`, `docs/phase4-comfyui-api-smoke.md` |
 | Checkpoint override and install helper exist for local filenames and user-provided sources | `docs/phase4-comfyui-checkpoint-override.md`, `docs/phase4-comfyui-checkpoint-install.md` |
+| Pixel Art Diffusion XL source metadata was audited without auto-downloading weights | `docs/phase4-comfyui-checkpoint-source-audit.md` |
 | ctrmml MML music MCP wrapper exists | `docs/phase4-mml-music-mcp.md` |
 | FM preset library is committed | `docs/phase4-mml-presets.md` |
 | MML reference is in the RAG corpus | `docs/phase4-mml-rag-corpus.md` |
@@ -46,6 +47,10 @@ The remaining live gate is the real ComfyUI sprite output:
 - `scripts/validate-phase4-generated-assets-prompt.sh` exits `66` because
   `artifacts/phase4/live-comfyui-sprite/last-run.json` does not record a
   successful live sprite run.
+- `docs/phase4-comfyui-checkpoint-source-audit.md` records that the likely
+  Civitai Pixel Art Diffusion XL source currently has metadata that conflicts
+  with the architecture appendix's open CreativeML assumption, so Drive16 must
+  keep the checkpoint source user-selected.
 
 ## Validation Request
 
@@ -58,6 +63,10 @@ scripts/install-phase4-comfyui-checkpoint.sh \
   --sha256 <optional-known-hash> \
   --check
 ```
+
+If using the Civitai Pixel Art Diffusion XL checkpoint, treat it as a
+user-selected external model under its own license. Do not redistribute or
+commit the model weights.
 
 Start local ComfyUI:
 

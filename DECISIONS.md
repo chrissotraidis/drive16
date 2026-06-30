@@ -1,5 +1,31 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Pixel Art Diffusion XL source remains user-selected
+
+Context:
+
+Phase 4 needs a Pixel Art Diffusion XL compatible checkpoint for live ComfyUI
+sprite generation. The architecture appendix describes Pixel Art Diffusion XL
+as open CreativeML, but the current Civitai API metadata for model `277680`
+reports restricted commercial use, no derivatives, no different license, and
+restricted redistribution outside Civitai. A local scan found other image
+checkpoints on disk, but not a dedicated Pixel Art Diffusion XL checkpoint in
+the local ComfyUI model folders.
+
+Decision:
+
+Treat the Pixel Art Diffusion XL checkpoint as a user-selected external model
+asset. Keep Drive16 from auto-downloading that checkpoint or baking a Civitai
+source URL into scripts. Continue to accept explicit user-provided local files
+or URLs through the checkpoint installer, with optional SHA-256 verification.
+
+Consequence:
+
+The Phase 4 generated-sprite gate remains honest and license-aware. The app and
+validation scripts can use a local compatible checkpoint once the user provides
+one, but Drive16 does not redistribute or silently acquire model weights whose
+current upstream metadata conflicts with the architecture assumption.
+
 ## 2026-06-30 - ComfyUI checkpoint filename override is runtime-only
 
 Context:

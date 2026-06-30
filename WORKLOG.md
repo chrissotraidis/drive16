@@ -1,5 +1,55 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 62 - ComfyUI checkpoint source audit
+
+Plan:
+
+- Task: audit the likely Pixel Art Diffusion XL source before treating it as a
+  normal Phase 4 install target.
+- Files: `docs/phase4-comfyui-checkpoint-source-audit.md`, `DECISIONS.md`,
+  `docs/phase4-evidence.md`, `docs/phase4-comfyui-checkpoint-install.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: inspect local checkpoint candidates, inspect current upstream
+  model metadata, run Markdown and secret hygiene checks, and keep the live
+  generated-sprite gate open.
+
+Did:
+
+- Searched the local machine for checkpoint files and Pixel Art Diffusion XL
+  candidates.
+- Found general image checkpoints, including a Fooocus SDXL checkpoint, but no
+  dedicated Pixel Art Diffusion XL checkpoint in the local ComfyUI model
+  folders.
+- Checked the Civitai API metadata for model `277680`.
+- Recorded the metadata conflict with the architecture appendix's open
+  CreativeML assumption.
+- Kept Drive16 on an explicit user-selected checkpoint install path.
+
+Evidence:
+
+- Local model scan found no Pixel Art Diffusion XL checkpoint under
+  `/Users/chrissotraidis/Documents/ComfyUI`.
+- `curl -L --fail --silent --show-error https://civitai.com/api/v1/models/277680`
+  returned model name `Pixel Art Diffusion XL`, type `Checkpoint`, and base
+  model `SDXL 1.0`.
+- The current primary file is
+  `pixelArtDiffusionXL_spriteShaper.safetensors` with SHA-256
+  `7ADFFA28D4003A773C2D4E5F10AE1BA63C33573967864A7F9A4A3BE9C9F04A93`.
+- The metadata reports restricted commercial use, no derivatives, no different
+  license, and restricted redistribution outside Civitai.
+- `docs/phase4-comfyui-checkpoint-source-audit.md` records the findings.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live ComfyUI sprite workflow and the
+real generated-assets ROM proof.
+
+Next:
+
+- Install the compatible checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 61 - ComfyUI API smoke gate narrowing
 
 Plan:

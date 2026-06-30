@@ -7,6 +7,10 @@ Diffusion XL compatible checkpoint into the local ComfyUI checkpoints folder.
 It does not choose, download, or commit model weights automatically. The user
 must provide a local file path or URL, and may provide a SHA-256 hash for
 verification.
+The follow-up source audit in
+`docs/phase4-comfyui-checkpoint-source-audit.md` keeps this behavior explicit
+because the likely Civitai Pixel Art Diffusion XL source currently has metadata
+that conflicts with the architecture appendix's open CreativeML assumption.
 
 Implemented behavior:
 

@@ -48,7 +48,11 @@ The current Phase 4 evidence packet is recorded in `docs/phase4-evidence.md`;
 it keeps Phase 4 open on the real live ComfyUI sprite gate. The repeatable
 ComfyUI API smoke now confirms the API can start, the committed workflow
 classes are present, and Pixydust is loaded. The remaining ComfyUI prerequisite
-is the compatible checkpoint.
+is the compatible checkpoint. The likely Civitai Pixel Art Diffusion XL source
+has also been audited, and its current metadata conflicts with the
+architecture appendix's open CreativeML assumption, so Drive16 continues to
+require an explicit user-selected checkpoint source instead of auto-downloading
+model weights.
 
 ## Next Up
 
@@ -57,7 +61,9 @@ VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint, set
 the compatible filename into the app's `Checkpoint` field before testing the
 endpoint. You can use
 `scripts/install-phase4-comfyui-checkpoint.sh --source /path-or-url/to/compatible-checkpoint.safetensors --checkpoint pixel-art-diffusion-xl.safetensors --check`
-to place an explicit user-provided checkpoint. Start ComfyUI with
+to place an explicit user-provided checkpoint. If the source is the Civitai
+Pixel Art Diffusion XL checkpoint, treat it as a user-selected external model
+under its own license. Start ComfyUI with
 `scripts/launch-phase4-comfyui-api.sh`, make
 `scripts/check-phase4-comfyui-readiness.py` pass in another shell, then run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
@@ -146,6 +152,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
 - [x] Phase 4 evidence packet assembled at `docs/phase4-evidence.md`.
 - [x] Repeatable ComfyUI API smoke verifies API, workflow classes, and
   Pixydust without masking the missing checkpoint.
+- [x] Pixel Art Diffusion XL source metadata audited without auto-downloading
+  model weights.
 
 ## Completed Phase 3 Work
 
