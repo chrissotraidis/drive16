@@ -6,7 +6,7 @@ COMFYUI_ROOT="${COMFYUI_ROOT:-$HOME/Documents/ComfyUI}"
 PIXYDUST_REPO="${DRIVE16_PIXYDUST_REPO:-https://github.com/sousakujikken/ComfyUI-PixydustQuantizer.git}"
 PIXYDUST_REV="${DRIVE16_PIXYDUST_REV:-6ffbb1ca23637f61559c3bd13f7be2b37d1dae03}"
 PIXYDUST_DIR="$COMFYUI_ROOT/custom_nodes/ComfyUI-PixydustQuantizer"
-CHECKPOINT_NAME="pixel-art-diffusion-xl.safetensors"
+CHECKPOINT_NAME="${DRIVE16_COMFYUI_CHECKPOINT:-pixel-art-diffusion-xl.safetensors}"
 CHECKPOINT_PATH="$COMFYUI_ROOT/models/checkpoints/$CHECKPOINT_NAME"
 INSTALL_PIXYDUST=0
 INSTALL_PIXYDUST_REQUIREMENTS=0
@@ -32,12 +32,15 @@ Options:
   --install-pixydust-requirements
                        Install Pixydust Python requirements into the selected
                        ComfyUI Python environment.
+  --checkpoint <name>  Pixel Art Diffusion XL compatible checkpoint filename.
   --check              Run scripts/check-phase4-comfyui-readiness.py afterward.
 
 Environment:
   COMFYUI_ROOT         Local ComfyUI data folder. Default: $HOME/Documents/ComfyUI
   DRIVE16_COMFYUI_PYTHON
                        Python executable. Default: COMFYUI_ROOT/.venv/bin/python
+  DRIVE16_COMFYUI_CHECKPOINT
+                       Checkpoint filename. Default: pixel-art-diffusion-xl.safetensors
   DRIVE16_PIXYDUST_REPO
   DRIVE16_PIXYDUST_REV
 EOF
@@ -52,6 +55,15 @@ while [ "$#" -gt 0 ]; do
     --install-pixydust-requirements)
       INSTALL_PIXYDUST_REQUIREMENTS=1
       shift
+      ;;
+    --checkpoint)
+      if [ "$#" -lt 2 ]; then
+        echo "--checkpoint requires a filename." >&2
+        exit 64
+      fi
+      CHECKPOINT_NAME="$2"
+      CHECKPOINT_PATH="$COMFYUI_ROOT/models/checkpoints/$CHECKPOINT_NAME"
+      shift 2
       ;;
     --check)
       RUN_CHECK=1
@@ -152,5 +164,5 @@ fi
 
 if [ "$RUN_CHECK" -eq 1 ]; then
   echo
-  COMFYUI_ROOT="$COMFYUI_ROOT" "$ROOT/scripts/check-phase4-comfyui-readiness.py"
+  COMFYUI_ROOT="$COMFYUI_ROOT" DRIVE16_COMFYUI_CHECKPOINT="$CHECKPOINT_NAME" "$ROOT/scripts/check-phase4-comfyui-readiness.py"
 fi

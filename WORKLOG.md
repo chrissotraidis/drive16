@@ -1,5 +1,106 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 51 - ComfyUI checkpoint override
+
+Plan:
+
+- Task: make the remaining ComfyUI checkpoint gate accept a compatible local
+  checkpoint filename without editing committed workflow JSON.
+- Files: `scripts/check-phase4-comfyui-readiness.py`,
+  `scripts/run-comfyui-sprite-workflow.py`,
+  `scripts/setup-phase4-comfyui-prereqs.sh`, `scripts/README.md`,
+  `docs/phase4-comfyui-checkpoint-override.md`,
+  `docs/phase4-live-comfyui-runner.md`,
+  `docs/phase4-comfyui-readiness.md`,
+  `docs/phase4-comfyui-api-launch.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: script syntax, Python compilation, static workflow validation,
+  override readiness run, override live-runner validation request, full native
+  tests, frontend build, generated-assets harness, secret scan, Markdown
+  punctuation check, ignored artifact check, and `git diff --check`.
+
+Did:
+
+- Added `--checkpoint` and `DRIVE16_COMFYUI_CHECKPOINT` support to
+  `scripts/check-phase4-comfyui-readiness.py`.
+- Readiness now records the selected checkpoint name, manifest default, and
+  whether the selected name is a runtime override.
+- Added the same checkpoint override to
+  `scripts/run-comfyui-sprite-workflow.py`.
+- The live runner now rewrites `CheckpointLoaderSimple.ckpt_name` in memory
+  before enqueueing through `drive16-comfyui`.
+- Added `--checkpoint` and `DRIVE16_COMFYUI_CHECKPOINT` support to
+  `scripts/setup-phase4-comfyui-prereqs.sh`.
+- Documented the runtime-only override in
+  `docs/phase4-comfyui-checkpoint-override.md`.
+
+Evidence:
+
+- `bash -n scripts/setup-phase4-comfyui-prereqs.sh
+  scripts/launch-phase4-comfyui-api.sh` passed.
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py
+  scripts/run-comfyui-sprite-workflow.py scripts/validate-comfyui-workflow.py`
+  passed.
+- `scripts/setup-phase4-comfyui-prereqs.sh --checkpoint alternate-pixel.safetensors --check`
+  exited `68` and printed the selected checkpoint path under
+  `~/Documents/ComfyUI/models/checkpoints/alternate-pixel.safetensors`.
+- `DRIVE16_COMFYUI_CHECKPOINT=alternate-pixel.safetensors scripts/check-phase4-comfyui-readiness.py`
+  exited `68` and wrote a readiness report with `checkpoint.name:
+  alternate-pixel.safetensors`, `checkpoint.manifestName:
+  pixel-art-diffusion-xl.safetensors`, and `checkpoint.override: true`.
+- `COMFYUI_URL=http://127.0.0.1:65535 DRIVE16_COMFYUI_CHECKPOINT=alternate-pixel.safetensors scripts/run-comfyui-sprite-workflow.py`
+  exited `2` with the expected validation request, and the ignored run record
+  preserved the selected checkpoint override in the command.
+- `scripts/validate-comfyui-workflow.py` passed and kept the committed
+  workflow on the manifest default checkpoint.
+- A short launch probe with `scripts/launch-phase4-comfyui-api.sh` returned
+  ComfyUI `/system_stats`.
+- The live readiness probe recorded `api.ok: true`,
+  `pixydustQuantizer.ok: true`, `workflowClasses.ok: true`, and
+  `checkpoint.ok: false`.
+- The launcher now passes an explicit SQLite database URL under
+  `~/Documents/ComfyUI/user/comfyui.db`; the follow-up launch log had no
+  database initialization warning.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture`
+  passed: 20 passed, 4 ignored.
+- `npm run build` in `app/` passed.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` with the live ComfyUI validation
+  request because no live generated sprite has completed successfully.
+
+Gate:
+
+VALIDATION REQUEST: place a Pixel Art Diffusion XL compatible checkpoint at:
+
+```text
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+If the filename differs, set:
+
+```sh
+export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+```
+
+Then run:
+
+```sh
+scripts/launch-phase4-comfyui-api.sh
+```
+
+In another shell, run:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Next:
+
+- Place the checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof.
+
 ## 2026-06-30 - ITERATION 50 - ComfyUI API launcher
 
 Plan:

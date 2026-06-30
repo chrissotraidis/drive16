@@ -27,12 +27,15 @@ The generated-MML ROM proof now passes with Docker, SGDK, and Genteel. Full
 generated-asset ROM proof is awaiting live ComfyUI sprite output. The local
 ComfyUI API launch path now starts on `127.0.0.1:8188`, Pixydust loads through
 the API, and the committed workflow classes are present. The remaining local
-prerequisite is a Pixel Art Diffusion XL compatible checkpoint.
+prerequisite is a Pixel Art Diffusion XL compatible checkpoint. The default
+filename is `pixel-art-diffusion-xl.safetensors`, or
+`DRIVE16_COMFYUI_CHECKPOINT` can name a compatible local checkpoint.
 
 ## Next Up
 
-VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint,
-start ComfyUI with `scripts/launch-phase4-comfyui-api.sh`, make
+VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint, set
+`DRIVE16_COMFYUI_CHECKPOINT` if the filename differs from the default, start
+ComfyUI with `scripts/launch-phase4-comfyui-api.sh`, make
 `scripts/check-phase4-comfyui-readiness.py` pass in another shell, then run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
 then run `scripts/validate-phase4-generated-assets-prompt.sh`.
@@ -99,6 +102,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   and recorded in `docs/phase4-comfyui-pixydust-local.md`.
 - [x] Local ComfyUI API launch path added, verified, and recorded in
   `docs/phase4-comfyui-api-launch.md`.
+- [x] Runtime checkpoint override added for compatible local checkpoint names
+  and recorded in `docs/phase4-comfyui-checkpoint-override.md`.
 
 ## Completed Phase 3 Work
 

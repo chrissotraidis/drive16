@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -32,6 +34,26 @@ class RunnerError(Exception):
 
 def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def workflow_with_checkpoint(workflow: Any, checkpoint: str) -> Any:
+    updated = copy.deepcopy(workflow)
+    if not isinstance(updated, dict):
+        raise RunnerError("Workflow must be a ComfyUI API prompt object.")
+    checkpoint_nodes = [
+        node
+        for node in updated.values()
+        if isinstance(node, dict) and node.get("class_type") == "CheckpointLoaderSimple"
+    ]
+    if len(checkpoint_nodes) != 1:
+        raise RunnerError(
+            f"Expected exactly one CheckpointLoaderSimple node, found {len(checkpoint_nodes)}."
+        )
+    inputs = checkpoint_nodes[0].setdefault("inputs", {})
+    if not isinstance(inputs, dict):
+        raise RunnerError("CheckpointLoaderSimple inputs must be an object.")
+    inputs["ckpt_name"] = checkpoint
+    return updated
 
 
 def read_json_lines(text: str) -> list[dict[str, Any]]:
@@ -193,20 +215,25 @@ def run_validator(png: Path, symbol: str) -> str:
 
 
 def validation_request(message: str, args: argparse.Namespace) -> int:
+    command = (
+        f"COMFYUI_URL={shlex.quote(args.comfyui_url)} "
+        f"DRIVE16_COMFYUI_CHECKPOINT={shlex.quote(args.checkpoint)} "
+        "scripts/run-comfyui-sprite-workflow.py"
+    )
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "ok": False,
         "reason": message,
         "validationRequest": {
             "startComfyUI": "Start local ComfyUI on http://127.0.0.1:8188 with the Pixel Art Diffusion XL checkpoint and Pixydust Quantizer custom node installed.",
-            "command": f"COMFYUI_URL={args.comfyui_url} scripts/run-comfyui-sprite-workflow.py",
+            "command": command,
             "expected": "The command enqueues through drive16-comfyui, downloads a PNG, and prints Generated sprite ok.",
         },
     }
     RUN_LOG.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print("VALIDATION REQUEST: local ComfyUI is required for live generated sprite validation.")
     print(message)
-    print(f"Run after ComfyUI is available: COMFYUI_URL={args.comfyui_url} scripts/run-comfyui-sprite-workflow.py")
+    print(f"Run after ComfyUI is available: {command}")
     return 2
 
 
@@ -218,10 +245,18 @@ def main() -> int:
     parser.add_argument("--mcp-timeout", type=int, default=240)
     parser.add_argument("--disable-random-seed", action="store_true")
     parser.add_argument("--symbol", default=None)
+    parser.add_argument(
+        "--checkpoint",
+        default=os.environ.get("DRIVE16_COMFYUI_CHECKPOINT"),
+        help="Pixel Art Diffusion XL compatible checkpoint filename to use.",
+    )
     args = parser.parse_args()
 
     manifest = load_json(MANIFEST)
     workflow = load_json(WORKFLOW)
+    manifest_checkpoint = str(manifest.get("model", {}).get("checkpoint", ""))
+    args.checkpoint = str(args.checkpoint or manifest_checkpoint)
+    workflow = workflow_with_checkpoint(workflow, args.checkpoint)
     validator = manifest.get("validator", {})
     symbol = args.symbol or (
         validator.get("defaultSymbol") if isinstance(validator, dict) else None
@@ -255,6 +290,7 @@ def main() -> int:
         payload = {
             "ok": True,
             "promptId": prompt_id,
+            "checkpoint": args.checkpoint,
             "downloadedPng": str(png.relative_to(ROOT)),
             "validatorOutput": validator_output,
         }

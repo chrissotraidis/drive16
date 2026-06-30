@@ -28,13 +28,15 @@ Toolchain and validation scripts live here.
   sprite validator.
 - `check-phase4-comfyui-readiness.py`: checks the local ComfyUI API,
   committed workflow classes, Pixel Art Diffusion XL checkpoint, and Pixydust
-  Quantizer node before live sprite generation.
+  Quantizer node before live sprite generation. Set
+  `DRIVE16_COMFYUI_CHECKPOINT` when the compatible checkpoint uses a different
+  local filename.
 - `launch-phase4-comfyui-api.sh`: fetches a pinned ComfyUI source checkout
   into ignored artifacts and launches it against the local ComfyUI data folder.
 - `setup-phase4-comfyui-prereqs.sh`: dry-run-first helper for installing the
   Pixydust Quantizer custom node and showing the required checkpoint path for
   the live Phase 4 sprite workflow. It can also install Pixydust's Python
-  requirements explicitly.
+  requirements explicitly and accepts the same checkpoint override.
 - `validate-mml-music-mcp.py`: verifies the Phase 4 `drive16-mml-music` MCP
   server by compiling a tiny Megadrive MML song to VGM.
 - `validate-mml-presets.py`: validates the Phase 4 FM preset manifest and

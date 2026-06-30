@@ -20,6 +20,9 @@ Implemented behavior:
   runs `scripts/validate-generated-sprite.py` on that PNG.
 - It writes ignored run records under
   `artifacts/phase4/live-comfyui-sprite/`.
+- It accepts `DRIVE16_COMFYUI_CHECKPOINT` or `--checkpoint` to use a
+  compatible local checkpoint filename without editing the committed workflow
+  JSON.
 
 ## Verification
 
@@ -65,6 +68,12 @@ checkpoint and Pixydust Quantizer custom node installed:
 
 ```sh
 COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+```
+
+If the compatible checkpoint has a different local filename, set:
+
+```sh
+DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
 ```
 
 Expected result:

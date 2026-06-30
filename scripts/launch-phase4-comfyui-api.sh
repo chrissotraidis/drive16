@@ -11,6 +11,7 @@ HOST="${COMFYUI_HOST:-127.0.0.1}"
 PORT="${COMFYUI_PORT:-8188}"
 EXTRA_MODELS_CONFIG="${COMFYUI_EXTRA_MODELS_CONFIG:-$HOME/Library/Application Support/ComfyUI/extra_models_config.yaml}"
 GENERATED_EXTRA_MODELS_CONFIG="$BASE_DIR/drive16-extra-models.yaml"
+DATABASE_URL="${COMFYUI_DATABASE_URL:-sqlite:///$COMFYUI_ROOT/user/comfyui.db}"
 PREPARE_ONLY=0
 INSTALL_REQUIREMENTS=0
 
@@ -43,6 +44,7 @@ Environment:
                           Optional explicit extra model paths config. When
                           unset, Drive16 generates a clean config from
                           COMFYUI_ROOT.
+  COMFYUI_DATABASE_URL    ComfyUI database URL. Default: sqlite:///COMFYUI_ROOT/user/comfyui.db
   DRIVE16_COMFYUI_PYTHON  Python executable. Default: COMFYUI_ROOT/.venv/bin/python
   DRIVE16_COMFYUI_REV     Pinned ComfyUI source revision.
 EOF
@@ -133,6 +135,7 @@ echo "ComfyUI root: $COMFYUI_ROOT"
 echo "Python: $PYTHON_BIN"
 echo "URL: http://$HOST:$PORT"
 echo "Extra models config: $ACTIVE_EXTRA_MODELS_CONFIG"
+echo "Database URL: $DATABASE_URL"
 
 if [ "$PREPARE_ONLY" -eq 1 ]; then
   exit 0
@@ -144,6 +147,7 @@ ARGS=(
   --user-directory "$COMFYUI_ROOT/user"
   --input-directory "$COMFYUI_ROOT/input"
   --output-directory "$COMFYUI_ROOT/output"
+  --database-url "$DATABASE_URL"
   --listen "$HOST"
   --port "$PORT"
 )

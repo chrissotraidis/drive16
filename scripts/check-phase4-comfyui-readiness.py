@@ -30,6 +30,9 @@ def request_json(base_url: str, path: str, *, timeout: float) -> Any:
 
 
 def checkpoint_candidates(comfyui_root: Path, checkpoint: str) -> list[Path]:
+    checkpoint_path = Path(checkpoint)
+    if checkpoint_path.is_absolute():
+        return [checkpoint_path]
     return [
         comfyui_root / "models" / "checkpoints" / checkpoint,
         comfyui_root / "models" / checkpoint,
@@ -100,13 +103,19 @@ def main() -> int:
         "--comfyui-root",
         default=os.environ.get("COMFYUI_ROOT", str(Path.home() / "Documents" / "ComfyUI")),
     )
+    parser.add_argument(
+        "--checkpoint",
+        default=os.environ.get("DRIVE16_COMFYUI_CHECKPOINT"),
+        help="Pixel Art Diffusion XL compatible checkpoint filename to require.",
+    )
     parser.add_argument("--timeout", type=float, default=5)
     args = parser.parse_args()
 
     manifest = load_json(MANIFEST)
     workflow = load_json(WORKFLOW)
     comfyui_root = Path(args.comfyui_root).expanduser()
-    checkpoint = str(manifest.get("model", {}).get("checkpoint", ""))
+    manifest_checkpoint = str(manifest.get("model", {}).get("checkpoint", ""))
+    checkpoint = str(args.checkpoint or manifest_checkpoint)
     custom_nodes = manifest.get("customNodes", [])
     pixydust_source = ""
     if custom_nodes and isinstance(custom_nodes[0], dict):
@@ -114,7 +123,12 @@ def main() -> int:
 
     checks: dict[str, Any] = {
         "api": {"ok": False, "url": args.comfyui_url},
-        "checkpoint": {"ok": False, "name": checkpoint},
+        "checkpoint": {
+            "ok": False,
+            "name": checkpoint,
+            "manifestName": manifest_checkpoint,
+            "override": checkpoint != manifest_checkpoint,
+        },
         "pixydustQuantizer": {"ok": False, "source": pixydust_source},
         "workflowClasses": {"ok": False, "classes": class_types(workflow)},
     }

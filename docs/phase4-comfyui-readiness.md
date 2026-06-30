@@ -13,6 +13,8 @@ The readiness check verifies:
 - `pixel-art-diffusion-xl.safetensors` is available to
   `CheckpointLoaderSimple`
 - Pixydust `Quantizer` is available as a ComfyUI node
+- optional `DRIVE16_COMFYUI_CHECKPOINT` or `--checkpoint` override when a
+  compatible local checkpoint uses a different filename
 
 It also falls back to filesystem checks under `~/Documents/ComfyUI` when the
 API is not reachable.
@@ -24,6 +26,8 @@ API is not reachable.
   `artifacts/phase4/comfyui-readiness/latest.json`.
 - The script exits `68` with a validation request when the API, checkpoint, or
   Pixydust node is missing.
+- The script records the selected checkpoint name, the manifest default, and
+  whether a runtime override is active.
 - Documented the script in `scripts/README.md`.
 
 ## Local Verification
@@ -49,6 +53,12 @@ Install or start local ComfyUI so this passes:
 
 ```sh
 scripts/check-phase4-comfyui-readiness.py
+```
+
+If the compatible checkpoint has a different local filename, run:
+
+```sh
+DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors scripts/check-phase4-comfyui-readiness.py
 ```
 
 Expected result: the readiness report records `ok: true`.

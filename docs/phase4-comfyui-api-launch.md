@@ -22,6 +22,9 @@ had previously left a stale extra-models path pointing at
 - When `COMFYUI_EXTRA_MODELS_CONFIG` is unset, the launcher writes a clean
   Drive16 extra-models config under ignored artifacts so stale Desktop paths do
   not break startup.
+- The launcher passes an explicit SQLite database URL under
+  `~/Documents/ComfyUI/user/comfyui.db`, matching the local ComfyUI data
+  folder.
 - `--prepare-only` fetches and verifies source without launching.
 - `--install-requirements` installs ComfyUI Python requirements into the
   selected local ComfyUI Python environment.
@@ -75,12 +78,24 @@ The live readiness report recorded:
 The remaining missing prerequisite is the Pixel Art Diffusion XL compatible
 checkpoint.
 
+If the compatible checkpoint has a different filename, set
+`DRIVE16_COMFYUI_CHECKPOINT` before running readiness and the live workflow.
+
+A later launcher probe also confirmed the explicit database URL removes the
+previous database initialization warning while still serving the API.
+
 ## Validation Request
 
 Place a Pixel Art Diffusion XL compatible checkpoint at:
 
 ```text
 ~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+Or set a compatible local checkpoint filename explicitly:
+
+```sh
+export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
 ```
 
 Then run:

@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ComfyUI checkpoint filename override is runtime-only
+
+Context:
+
+Phase 4 defaults to `pixel-art-diffusion-xl.safetensors`, but a user may have
+a Pixel Art Diffusion XL compatible checkpoint under a different local
+filename. Requiring manual edits to the committed workflow JSON would make the
+validation path brittle and easy to drift from the manifest.
+
+Decision:
+
+Keep the committed workflow and manifest on the default checkpoint filename.
+Allow `DRIVE16_COMFYUI_CHECKPOINT` and matching `--checkpoint` flags to select
+a different compatible checkpoint at runtime. The live runner rewrites the
+`CheckpointLoaderSimple.ckpt_name` input in memory before enqueueing.
+
+Consequence:
+
+Drive16 can validate and run against a locally named compatible checkpoint
+without changing committed workflow metadata or downloading model weights.
+
 ## 2026-06-30 - ComfyUI API launch uses pinned source artifacts
 
 Context:
