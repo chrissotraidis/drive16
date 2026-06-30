@@ -3,8 +3,8 @@
 ## Scope
 
 This slice adds the proof command for the remaining generated-assets prompt
-path. It does not claim Phase 4 is complete, because local ComfyUI and Docker
-Desktop are still required to produce the final evidence.
+path. It does not claim Phase 4 is complete, because live ComfyUI sprite output
+is still required to produce the final evidence.
 
 The new validation script runs the focused Phase 4 prompt tests, then runs an
 ignored native test that requests both generated assets:
@@ -45,8 +45,20 @@ The existing generated-music validation command was also rerun:
 scripts/validate-phase4-generated-music-prompt.sh
 ```
 
-Result: the focused tests passed, then the ignored generated-MML proof stopped
-at the Docker Desktop gate because the Docker daemon was not reachable.
+Result: the focused tests passed, then the ignored generated-MML proof passed.
+Docker Desktop was running, SGDK built the generated project, Genteel captured
+the verification screenshots, sprite movement passed, and generated audio was
+non-silent.
+
+The combined validation command was rerun after the generated-MML proof passed:
+
+```sh
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Result: it still stopped at the live ComfyUI sprite gate because
+`artifacts/phase4/live-comfyui-sprite/last-run.json` does not record a
+successful live generated sprite.
 
 ## Validation Request
 

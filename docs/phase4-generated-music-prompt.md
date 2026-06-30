@@ -48,27 +48,51 @@ The generated MML path ran far enough to write ignored artifacts under
 
 The generated VGM was detected as VGM v1.61 with PSG and YM2612 chips.
 
-## Validation Request
+## Full ROM Proof
 
-The full generated-ROM proof could not run in this environment because Docker
-was installed but the Docker daemon was not reachable.
-
-Run this after starting Docker Desktop:
+Docker Desktop was started and the full generated-MML ROM proof passed:
 
 ```sh
 scripts/validate-phase4-generated-music-prompt.sh
 ```
 
+Result:
+
+- Focused Phase 4 prompt tests passed: 5 passed, 2 ignored.
+- The ignored generated-MML native test passed.
+- The generated SGDK project built through `scripts/build-sgdk.sh`.
+- Genteel captured neutral and Right-input screenshots.
+- `scripts/validate-sprite-movement.py` proved the bundled sprite moved right:
+  `changed_pixels=768`, `delta=155`, `orthogonal_span=25`.
+- The generated audio dump was non-silent: `audio_max_abs=14043`.
+- The generated ROM was written to
+  `artifacts/phase4/generated-music-prompt/project/out/rom.bin`.
+
+The verified ignored artifacts are not committed:
+
+- `artifacts/phase4/generated-music-prompt/phase4-music-neutral.png`
+- `artifacts/phase4/generated-music-prompt/phase4-music-right.png`
+- `artifacts/phase4/generated-music-prompt/phase4-music-audio.wav`
+- `artifacts/phase4/generated-music-prompt/project/out/rom.bin`
+
+## Validation Request
+
+The generated-MML music side is now proven. The combined generated-assets proof
+still needs live ComfyUI sprite output. Run:
+
+```sh
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
 Expected result:
 
-- The ignored native test builds the generated SGDK project through
-  `scripts/build-sgdk.sh`.
-- Genteel captures a neutral screenshot.
-- Genteel captures a Right-input screenshot and audio dump.
-- `scripts/validate-sprite-movement.py` proves the bundled sprite moves right.
-- The audio dump is non-silent.
+- The live ComfyUI runner records `ok: true`.
+- The downloaded PNG passes `scripts/validate-generated-sprite.py`.
+- The combined generated-assets ROM builds and passes the same Genteel
+  screenshot, movement, and audio checks.
 
 ## Next
 
-Keep the broad prompt-path checklist item open until the generated music ROM
-proof passes and the generated sprite side has a real validated ComfyUI PNG.
+Keep the broad prompt-path checklist item open until the generated sprite side
+has a real validated ComfyUI PNG and the combined generated-assets proof passes.

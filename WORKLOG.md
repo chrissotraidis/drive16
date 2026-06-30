@@ -1,5 +1,82 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 46 - Generated MML ROM proof
+
+Plan:
+
+- Task: rerun the generated-MML ROM proof now that Docker Desktop can be
+  started locally, then record the remaining Phase 4 gate.
+- Files: `docs/phase4-generated-music-prompt.md`,
+  `docs/phase4-generated-assets-validation.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- Verification: generated-music validation script, generated-assets validation
+  script, artifact inspection, sprite movement validator, audio amplitude
+  check, secret scan, Markdown punctuation check, ignored artifact check, and
+  `git diff --check`.
+
+Did:
+
+- Started Docker Desktop from the local machine and confirmed `docker info`
+  returned a running daemon.
+- Reran the generated-MML prompt validation.
+- Confirmed the generated-MML proof now builds the SGDK project, runs the ROM
+  in Genteel, captures neutral and Right-input screenshots, proves sprite
+  movement, and records non-silent generated audio.
+- Tried to launch local ComfyUI through Comfy Desktop. The local API still did
+  not bind to `127.0.0.1:8188`, so the combined generated-assets proof remains
+  correctly gated on live ComfyUI sprite output.
+
+Evidence:
+
+- `scripts/validate-phase4-generated-music-prompt.sh` passed and printed
+  `Phase 4 generated music prompt ok`.
+- The generated ROM exists at
+  `artifacts/phase4/generated-music-prompt/project/out/rom.bin` and `file`
+  identifies it as a Sega Mega Drive / Genesis ROM image.
+- Genteel screenshots exist at
+  `artifacts/phase4/generated-music-prompt/phase4-music-neutral.png` and
+  `artifacts/phase4/generated-music-prompt/phase4-music-right.png`.
+- Generated audio exists at
+  `artifacts/phase4/generated-music-prompt/phase4-music-audio.wav`.
+- `scripts/validate-sprite-movement.py` reported
+  `direction=right changed_pixels=768 delta=155 orthogonal_span=25`.
+- The audio amplitude check reported `audio_max_abs 14043`.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` with the live ComfyUI validation
+  request because the live sprite run record is not successful.
+- Secret scan returned no matches for OpenRouter key patterns.
+- Markdown punctuation and emoji guard returned no matches.
+- Ignored-artifact checks confirmed the generated ROM, generated screenshots,
+  generated audio, and live ComfyUI run log are ignored.
+- `git diff --check` passed.
+
+Gate:
+
+VALIDATION REQUEST: start local ComfyUI on `http://127.0.0.1:8188`, then run:
+
+```sh
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+```
+
+Expected result: the live runner records `ok: true` and a downloaded PNG under
+`artifacts/phase4/live-comfyui-sprite/` that passes
+`scripts/validate-generated-sprite.py --symbol drive16_player`.
+
+Then run:
+
+```sh
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Expected result: the ignored native test builds the generated-assets SGDK
+project, runs it in Genteel, captures neutral and Right-input screenshots,
+proves Right-input sprite movement, and verifies non-silent generated music.
+
+Next:
+
+- Get local ComfyUI serving on `127.0.0.1:8188`, run the live sprite workflow,
+  then rerun `scripts/validate-phase4-generated-assets-prompt.sh`.
+
 ## 2026-06-30 - ITERATION 45 - Generated assets validation harness
 
 Plan:
