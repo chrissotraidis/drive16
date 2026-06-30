@@ -18,6 +18,7 @@ const WORKFLOW_RELATIVE: &str = "assets/enhancements/comfyui/drive16-genesis-spr
 #[serde(rename_all = "camelCase")]
 pub struct ComfyUiEndpointRequest {
     pub endpoint: String,
+    pub checkpoint: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,7 +56,7 @@ struct HttpResponse {
 
 pub fn check_endpoint(request: ComfyUiEndpointRequest) -> ComfyUiEndpointStatus {
     match normalize_endpoint(&request.endpoint) {
-        Ok(endpoint) => check_endpoint_for_repo(repo_root(), endpoint),
+        Ok(endpoint) => check_endpoint_for_repo(repo_root(), endpoint, request.checkpoint),
         Err(error) => ComfyUiEndpointStatus {
             generated_at: unix_timestamp(),
             state: "missing".to_string(),
@@ -69,7 +70,11 @@ pub fn check_endpoint(request: ComfyUiEndpointRequest) -> ComfyUiEndpointStatus 
     }
 }
 
-fn check_endpoint_for_repo(repo_root: PathBuf, endpoint: LocalEndpoint) -> ComfyUiEndpointStatus {
+fn check_endpoint_for_repo(
+    repo_root: PathBuf,
+    endpoint: LocalEndpoint,
+    checkpoint_override: Option<String>,
+) -> ComfyUiEndpointStatus {
     let stats = match probe_system_stats(&endpoint) {
         Ok(stats) => stats,
         Err(error) => {
@@ -86,7 +91,7 @@ fn check_endpoint_for_repo(repo_root: PathBuf, endpoint: LocalEndpoint) -> Comfy
     let version = extract_version(&stats);
     let devices = extract_device_count(&stats);
     let object_info = probe_object_info(&endpoint);
-    let checks = phase4_readiness_checks(&repo_root, object_info.as_ref());
+    let checks = phase4_readiness_checks(&repo_root, object_info.as_ref(), checkpoint_override);
     let (state, detail) = summarize_readiness(&checks);
 
     status(&state, &detail, &endpoint, version, devices, checks)
@@ -238,6 +243,7 @@ fn extract_device_count(stats: &Value) -> usize {
 fn phase4_readiness_checks(
     repo_root: &Path,
     object_info: Result<&Value, &String>,
+    checkpoint_override: Option<String>,
 ) -> Vec<ComfyUiReadinessCheck> {
     let manifest_path = repo_root.join(MANIFEST_RELATIVE);
     let workflow_path = repo_root.join(WORKFLOW_RELATIVE);
@@ -261,7 +267,7 @@ fn phase4_readiness_checks(
     };
 
     let manifest_checkpoint = manifest_checkpoint(&manifest);
-    let checkpoint = selected_checkpoint(&manifest_checkpoint);
+    let checkpoint = selected_checkpoint(&manifest_checkpoint, checkpoint_override.as_deref());
     let required_classes = class_types(&workflow);
     let comfyui_root = comfyui_root();
 
@@ -292,11 +298,17 @@ fn manifest_checkpoint(manifest: &Value) -> String {
         .to_string()
 }
 
-fn selected_checkpoint(manifest_checkpoint: &str) -> String {
-    env::var("DRIVE16_COMFYUI_CHECKPOINT")
-        .ok()
-        .map(|value| value.trim().to_string())
+fn selected_checkpoint(manifest_checkpoint: &str, checkpoint_override: Option<&str>) -> String {
+    checkpoint_override
+        .map(str::trim)
         .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            env::var("DRIVE16_COMFYUI_CHECKPOINT")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
         .unwrap_or_else(|| manifest_checkpoint.to_string())
 }
 
@@ -640,13 +652,52 @@ mod tests {
 
         let (endpoint, handle) =
             spawn_comfyui_server(serde_json::Value::Object(object_info).to_string());
-        let status = check_endpoint(ComfyUiEndpointRequest { endpoint });
+        let status = check_endpoint(ComfyUiEndpointRequest {
+            endpoint,
+            checkpoint: None,
+        });
         handle.join().expect("test server should exit cleanly");
 
         assert_eq!(status.state, "ready");
         assert_eq!(status.detail, "ComfyUI sprite prerequisites ready");
         assert_eq!(status.checks.len(), 4);
         assert!(status.checks.iter().all(|check| check.state == "ready"));
+    }
+
+    #[test]
+    fn endpoint_check_uses_request_checkpoint_override() {
+        let workflow = read_json_file(&repo_root().join(WORKFLOW_RELATIVE))
+            .expect("workflow contract should load");
+        let mut object_info = serde_json::Map::new();
+        for class_name in class_types(&workflow) {
+            object_info.insert(class_name, serde_json::json!({}));
+        }
+        object_info.insert(
+            "CheckpointLoaderSimple".to_string(),
+            serde_json::json!({
+                "input": {
+                    "required": {
+                        "ckpt_name": [["alternate-pixel.safetensors"]]
+                    }
+                }
+            }),
+        );
+        object_info.insert("Quantizer".to_string(), serde_json::json!({}));
+
+        let (endpoint, handle) =
+            spawn_comfyui_server(serde_json::Value::Object(object_info).to_string());
+        let status = check_endpoint(ComfyUiEndpointRequest {
+            endpoint,
+            checkpoint: Some("alternate-pixel.safetensors".to_string()),
+        });
+        handle.join().expect("test server should exit cleanly");
+
+        assert_eq!(status.state, "ready");
+        assert!(status.checks.iter().any(|check| {
+            check.name == "Checkpoint"
+                && check.state == "ready"
+                && check.detail == "alternate-pixel.safetensors"
+        }));
     }
 
     fn spawn_comfyui_server(object_info: String) -> (String, thread::JoinHandle<()>) {

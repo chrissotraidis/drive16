@@ -32,6 +32,10 @@ API is not reachable.
 - The app's native `check_comfyui_endpoint` command now mirrors the same
   readiness concepts in the settings drawer: API, checkpoint, Pixydust, and
   workflow classes.
+- The settings drawer includes a checkpoint filename field. It defaults to
+  `pixel-art-diffusion-xl.safetensors`; a nonblank value is sent to the native
+  readiness command before the command falls back to
+  `DRIVE16_COMFYUI_CHECKPOINT` or the manifest default.
 
 ## Local Verification
 
@@ -58,6 +62,15 @@ cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
 
 Result: 11 passed.
 
+The app-side checkpoint field was verified with a focused native test that
+uses an alternate checkpoint name from the request:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
+```
+
+Result: 12 passed.
+
 The frontend production build was rerun:
 
 ```sh
@@ -65,6 +78,34 @@ npm run build
 ```
 
 Result: passed.
+
+The full non-ignored native suite was rerun:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture
+```
+
+Result: 25 passed, 4 ignored.
+
+The combined generated-assets harness was rerun:
+
+```sh
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Result: the focused tests passed, 5 passed and 2 ignored, then the harness
+exited `66` at the expected live ComfyUI sprite gate.
+
+The standalone readiness check was rerun:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+```
+
+Result: exit `68`. Pixydust was found under the local ComfyUI custom node
+directory, but the API was not reachable on `127.0.0.1:8188`, the default
+checkpoint was not found under the local ComfyUI model paths, and workflow
+classes could not be inspected without the API.
 
 The settings drawer readiness rows were verified in the in-app browser at
 `http://127.0.0.1:1420/`:

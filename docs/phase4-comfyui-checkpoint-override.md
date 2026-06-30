@@ -24,6 +24,10 @@ No model weights are downloaded or committed.
 - `scripts/setup-phase4-comfyui-prereqs.sh` accepts `--checkpoint <name>` and
   `DRIVE16_COMFYUI_CHECKPOINT=<name>` so validation requests print the selected
   checkpoint path.
+- The app settings drawer includes a `Checkpoint` field behind `AI sprites`.
+  Its nonblank value is sent to the native `check_comfyui_endpoint` command,
+  so the app can verify a compatible local checkpoint filename before the live
+  sprite workflow runs.
 
 ## Local Verification
 
@@ -62,6 +66,25 @@ COMFYUI_URL=http://127.0.0.1:65535 DRIVE16_COMFYUI_CHECKPOINT=alternate-pixel.sa
 
 Result: it wrote an ignored validation request whose command preserved the
 selected checkpoint override.
+
+The native app-side readiness path was tested with an alternate request
+checkpoint:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
+```
+
+Result: 12 passed.
+
+The app build and full native suite were rerun:
+
+```sh
+npm run build
+cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture
+```
+
+Result: frontend build passed; full native suite passed with 25 passed and 4
+ignored.
 
 ## Validation Request
 

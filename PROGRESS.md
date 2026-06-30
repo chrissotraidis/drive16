@@ -34,14 +34,15 @@ generated-assets validation harness now prints this checkpoint-aware readiness
 sequence when live sprite output is absent. The app-side AI-sprite prompt gate
 now returns the same readiness sequence before asking the user to retry the
 prompt. The settings drawer now surfaces the same ComfyUI readiness checks
-behind the `AI sprites` toggle, and the browser-preview failure path renders
-an API readiness row for local QA.
+behind the `AI sprites` toggle, accepts a checkpoint filename before testing,
+and the browser-preview failure path renders an API readiness row for local QA.
 
 ## Next Up
 
 VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint, set
-`DRIVE16_COMFYUI_CHECKPOINT` if the filename differs from the default, start
-ComfyUI with `scripts/launch-phase4-comfyui-api.sh`, make
+`DRIVE16_COMFYUI_CHECKPOINT` if the filename differs from the default, or type
+the compatible filename into the app's `Checkpoint` field before testing the
+endpoint. Start ComfyUI with `scripts/launch-phase4-comfyui-api.sh`, make
 `scripts/check-phase4-comfyui-readiness.py` pass in another shell, then run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
 then run `scripts/validate-phase4-generated-assets-prompt.sh`.
@@ -118,6 +119,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   readiness behind the `AI sprites` toggle.
 - [x] Browser-preview ComfyUI failure state renders the readiness-row UI and
   has been checked at desktop and mobile widths.
+- [x] Settings ComfyUI test now accepts a checkpoint filename and sends it to
+  native readiness before the environment or manifest fallback is used.
 
 ## Completed Phase 3 Work
 

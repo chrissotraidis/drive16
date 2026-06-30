@@ -15,6 +15,9 @@ Implemented behavior:
 - Phase 4 sprite-readiness checks through ComfyUI's `GET /object_info` route,
   the committed workflow contract, the selected checkpoint name, and local
   ComfyUI fallback paths.
+- Settings checkpoint field that defaults to
+  `pixel-art-diffusion-xl.safetensors` and sends the selected filename to the
+  native readiness command.
 - The endpoint status now reports compact readiness rows for API, checkpoint,
   Pixydust Quantizer, and workflow classes.
 - Settings endpoint field and `Test` action that only render after enabling
@@ -49,6 +52,17 @@ Result:
 
 - `11 passed; 0 failed; 0 ignored`.
 
+The focused native tests were rerun after adding the settings checkpoint
+request field:
+
+```sh
+cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture
+```
+
+Result:
+
+- `12 passed; 0 failed; 0 ignored`.
+
 Frontend build:
 
 ```sh
@@ -67,7 +81,17 @@ cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture
 
 Result:
 
-- `24 passed; 0 failed; 4 ignored`.
+- `25 passed; 0 failed; 4 ignored`.
+
+The frontend production build was rerun after the checkpoint field was added:
+
+```sh
+npm run build
+```
+
+Result:
+
+- Frontend build passed.
 
 Rendered browser check at `http://127.0.0.1:1420/`:
 

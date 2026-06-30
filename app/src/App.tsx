@@ -197,6 +197,7 @@ type DecodedFramebufferFrame = {
 const openRouterKeyUrl = "https://openrouter.ai/api/v1/key";
 const openRouterModelsUrl = "https://openrouter.ai/api/v1/models";
 const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
+const defaultComfyUiCheckpoint = "pixel-art-diffusion-xl.safetensors";
 
 const preferredOpenRouterModels = [
   "~anthropic/claude-sonnet-latest",
@@ -395,6 +396,7 @@ function App() {
     musicGeneration: false,
   });
   const [comfyUiEndpoint, setComfyUiEndpoint] = useState(defaultComfyUiEndpoint);
+  const [comfyUiCheckpoint, setComfyUiCheckpoint] = useState(defaultComfyUiCheckpoint);
   const [comfyUiConnection, setComfyUiConnection] = useState<ComfyUiEndpointStatus>({
     generatedAt: "0",
     state: "idle",
@@ -1017,16 +1019,19 @@ function App() {
         ...current,
         state: "warning",
         detail: "Enable AI sprites first",
+        checks: [],
       }));
       return;
     }
 
     const endpoint = comfyUiEndpoint.trim();
+    const checkpoint = comfyUiCheckpoint.trim() || defaultComfyUiCheckpoint;
     if (!endpoint) {
       setComfyUiConnection((current) => ({
         ...current,
         state: "missing",
         detail: "ComfyUI endpoint required",
+        checks: [],
       }));
       return;
     }
@@ -1035,14 +1040,15 @@ function App() {
       ...current,
       state: "testing",
       detail: "Checking ComfyUI",
+      checks: [],
     }));
 
     try {
       const result = isTauriRuntime()
         ? await invoke<ComfyUiEndpointStatus>("check_comfyui_endpoint", {
-            request: { endpoint },
+            request: { endpoint, checkpoint },
           })
-        : await checkComfyUiEndpointInBrowser(endpoint);
+        : await checkComfyUiEndpointInBrowser(endpoint, checkpoint);
 
       setComfyUiConnection(result);
       appendOpenCodeEvent(
@@ -1080,6 +1086,15 @@ function App() {
 
   function handleComfyUiEndpointChange(value: string) {
     setComfyUiEndpoint(value);
+    resetComfyUiConnectionIfChecked();
+  }
+
+  function handleComfyUiCheckpointChange(value: string) {
+    setComfyUiCheckpoint(value);
+    resetComfyUiConnectionIfChecked();
+  }
+
+  function resetComfyUiConnectionIfChecked() {
     if (
       comfyUiConnection.state === "ready" ||
       comfyUiConnection.state === "missing" ||
@@ -1479,6 +1494,7 @@ function App() {
       {settingsOpen ? (
         <SettingsPanel
           activeModel={activeModel}
+          comfyUiCheckpoint={comfyUiCheckpoint}
           comfyUiConnection={comfyUiConnection}
           comfyUiEndpoint={comfyUiEndpoint}
           connection={modelConnection}
@@ -1489,6 +1505,7 @@ function App() {
           openRouterKey={openRouterKey}
           showOpenRouterKey={showOpenRouterKey}
           onClose={() => setSettingsOpen(false)}
+          onComfyUiCheckpointChange={handleComfyUiCheckpointChange}
           onComfyUiEndpointChange={handleComfyUiEndpointChange}
           onEnhancementChange={handleEnhancementChange}
           onModelChange={setActiveModel}
@@ -1778,7 +1795,10 @@ function modelsSourceLabel(source: string) {
   return "Fallback models";
 }
 
-async function checkComfyUiEndpointInBrowser(endpoint: string): Promise<ComfyUiEndpointStatus> {
+async function checkComfyUiEndpointInBrowser(
+  endpoint: string,
+  _checkpoint: string,
+): Promise<ComfyUiEndpointStatus> {
   const baseUrl = normalizeComfyUiEndpoint(endpoint);
   const systemStatsUrl = `${baseUrl}/system_stats`;
   const response = await fetch(systemStatsUrl, {
@@ -1834,6 +1854,7 @@ function normalizeComfyUiEndpoint(endpoint: string) {
 
 function SettingsPanel({
   activeModel,
+  comfyUiCheckpoint,
   comfyUiConnection,
   comfyUiEndpoint,
   connection,
@@ -1844,6 +1865,7 @@ function SettingsPanel({
   openRouterKey,
   showOpenRouterKey,
   onClose,
+  onComfyUiCheckpointChange,
   onComfyUiEndpointChange,
   onEnhancementChange,
   onModelChange,
@@ -1855,6 +1877,7 @@ function SettingsPanel({
   onTestConnection,
 }: {
   activeModel: string;
+  comfyUiCheckpoint: string;
   comfyUiConnection: ComfyUiEndpointStatus;
   comfyUiEndpoint: string;
   connection: ModelConnectionReport;
@@ -1865,6 +1888,7 @@ function SettingsPanel({
   openRouterKey: string;
   showOpenRouterKey: boolean;
   onClose: () => void;
+  onComfyUiCheckpointChange: (value: string) => void;
   onComfyUiEndpointChange: (value: string) => void;
   onEnhancementChange: (key: keyof EnhancementSettings, enabled: boolean) => void;
   onModelChange: (value: string) => void;
@@ -2033,6 +2057,19 @@ function SettingsPanel({
                         {testingComfyUi ? "Checking" : "Test"}
                       </button>
                     </div>
+                  </label>
+
+                  <label className="field-row">
+                    <span>Checkpoint</span>
+                    <input
+                      aria-label="ComfyUI checkpoint"
+                      autoComplete="off"
+                      data-testid="comfyui-checkpoint-input"
+                      onChange={(event) => onComfyUiCheckpointChange(event.target.value)}
+                      spellCheck={false}
+                      type="text"
+                      value={comfyUiCheckpoint}
+                    />
                   </label>
 
                   <div
