@@ -23,12 +23,14 @@ still builds a working ROM.
 
 ## Current Task
 
-The RAG corpus now includes Drive16 `ctrmml` Megadrive MML notes and FM preset
-hooks. Live ComfyUI sprite validation is still awaiting local ComfyUI.
+The `MML music` toggle now selects a generated-MML prompt path in the app.
+Full generated-music ROM proof is awaiting Docker Desktop, and live ComfyUI
+sprite validation is still awaiting local ComfyUI.
 
 ## Next Up
 
-Wire the optional prompt path to use generated sprite and music assets.
+VALIDATION REQUEST: start Docker Desktop and run
+`scripts/validate-phase4-generated-music-prompt.sh`.
 
 ## Completed Phase 4 Work
 
@@ -67,6 +69,9 @@ Wire the optional prompt path to use generated sprite and music assets.
   `corpus/mml/ctrmml-megadrive.md`.
 - [x] Phase 4 MML RAG evidence recorded in
   `docs/phase4-mml-rag-corpus.md`.
+- [x] App prompt path calls generated-MML music when `MML music` is enabled.
+- [x] Phase 4 generated-music prompt evidence and validation request recorded
+  in `docs/phase4-generated-music-prompt.md`.
 
 ## Completed Phase 3 Work
 

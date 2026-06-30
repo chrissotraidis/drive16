@@ -1,5 +1,71 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 43 - Generated MML music prompt path
+
+Plan:
+
+- Task: wire the optional prompt path to use generated MML music when the
+  `MML music` toggle is enabled.
+- Files: `app/src-tauri/src/phase4_prompt.rs`, `app/src-tauri/src/main.rs`,
+  `app/src/App.tsx`, `scripts/validate-phase4-generated-music-prompt.sh`,
+  `docs/phase4-generated-music-prompt.md`, `scripts/README.md`,
+  `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: focused Rust tests, frontend build, generated MML to VGM
+  artifact check, full native SGDK and Genteel test when Docker is available,
+  secret scan, Markdown punctuation check, and `git diff --check`.
+
+Did:
+
+- Added `run_phase4_music_prompt` as a native command for the MML music
+  enhancement path.
+- The command writes an ignored generated SGDK project, compiles generated MML
+  with the pinned `ctrmml` sidecar, and wires `drive16_generated_music` into
+  SGDK resources.
+- Updated the React send path so the default CORE prompt remains unchanged
+  when `MML music` is off, while `MML music` on selects the generated music
+  path.
+- Added a validation script for the full generated-MML ROM proof.
+
+Evidence:
+
+- `cargo test --manifest-path app/src-tauri/Cargo.toml phase4_prompt --
+  --nocapture` passed: 2 tests passed and 1 ignored full-system test remained.
+- `npm run build` in `app/` passed.
+- `scripts/validate-phase4-generated-music-prompt.sh` ran the focused tests,
+  then exited `65` with the Docker Desktop validation request below.
+- The ignored full-system test reached the SGDK build step but failed because
+  Docker was installed and the Docker daemon was not reachable.
+- The generated prompt path wrote
+  `artifacts/phase4/generated-music-prompt/project/res/generated_music.mml`.
+- The generated prompt path wrote
+  `artifacts/phase4/generated-music-prompt/project/res/generated_music.vgm`.
+- `file` identified the generated VGM as VGM v1.61 with PSG and YM2612 chips.
+- Full non-ignored native test suite passed: 17 passed, 3 ignored.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+- Frontend build output and generated Phase 4 prompt artifacts were ignored.
+
+Gate:
+
+VALIDATION REQUEST: start Docker Desktop, then run:
+
+```sh
+scripts/validate-phase4-generated-music-prompt.sh
+```
+
+Expected result: the ignored native test builds the generated-MML SGDK project,
+runs it in Genteel, captures neutral and Right-input screenshots, proves
+Right-input sprite movement, and verifies non-silent audio.
+
+The broad prompt-path checklist item remains open until this generated-music
+ROM proof passes and the generated-sprite path has a real validated ComfyUI
+PNG.
+
+Next:
+
+- Run the generated-music prompt validation after Docker Desktop is available.
+
 ## 2026-06-30 - ITERATION 42 - MML RAG corpus reference
 
 Plan:

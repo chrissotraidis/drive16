@@ -174,6 +174,8 @@ type EnhancementSettings = {
   musicGeneration: boolean;
 };
 
+type PromptAssetMode = "core" | "generatedMusic";
+
 type ComfyUiEndpointStatus = {
   generatedAt: string;
   state: ConnectionState;
@@ -502,6 +504,7 @@ function App() {
     setDraft("");
     setOpenCodeBusy(true);
     const shouldRunV1 = isV1Prompt(trimmed);
+    const shouldRunGeneratedMusic = shouldRunV1 && enhancements.musicGeneration;
     if (shouldRunV1) {
       setBuildState("building");
       setV1PromptSource("running");
@@ -513,16 +516,16 @@ function App() {
       appendOpenCodeEvent("message.posted", result.detail);
 
       if (shouldRunV1) {
-        const promptResult = await runV1Prompt(trimmed);
-        applyV1PromptResult(promptResult);
+        const promptResult = shouldRunGeneratedMusic
+          ? await runPhase4MusicPrompt(trimmed)
+          : await runV1Prompt(trimmed);
+        applyV1PromptResult(promptResult, shouldRunGeneratedMusic ? "generatedMusic" : "core");
         const agentMessage = makeMessage(
           "agent",
-          isTauriRuntime()
-            ? "Built and verified the bundled sprite/music ROM. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
-            : "Previewed the bundled sprite/music ROM flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.",
+          promptReadyMessage(shouldRunGeneratedMusic),
         );
         setMessages((current) => [...current, agentMessage]);
-        appendOpenCodeEvent("v1.ready", promptResult.romPath);
+        appendOpenCodeEvent(shouldRunGeneratedMusic ? "phase4.music.ready" : "v1.ready", promptResult.romPath);
       } else {
         const agentMessage = makeMessage(
           "agent",
@@ -750,7 +753,31 @@ function App() {
     };
   }
 
-  function applyV1PromptResult(result: V1PromptResult) {
+  async function runPhase4MusicPrompt(text: string): Promise<V1PromptResult> {
+    if (isTauriRuntime()) {
+      return invoke<V1PromptResult>("run_phase4_music_prompt", { prompt: text });
+    }
+
+    const framebufferFrames = [
+      makePreviewFrame(0, 0x2b45),
+      makePreviewFrame(30, 0x3150),
+    ];
+    return {
+      ...previewV1PromptResult,
+      prompt: text,
+      projectPath: "artifacts/phase4/generated-music-prompt/project",
+      romPath: "artifacts/phase4/generated-music-prompt/project/out/rom.bin",
+      neutralScreenshotPath: "artifacts/phase4/generated-music-prompt/phase4-music-neutral.png",
+      rightScreenshotPath: "artifacts/phase4/generated-music-prompt/phase4-music-right.png",
+      audioDumpPath: "artifacts/phase4/generated-music-prompt/phase4-music-audio.wav",
+      frameStreamPath: "artifacts/phase4/generated-music-prompt/phase4-music-frames.rgb565",
+      framebufferFrames,
+      streamedFrames: framebufferFrames.length,
+      detail: "Preview Phase 4 generated MML music verification",
+    };
+  }
+
+  function applyV1PromptResult(result: V1PromptResult, assetMode: PromptAssetMode = "core") {
     setV1PromptResult(result);
     setV1PromptSource(isTauriRuntime() ? "tauri" : "preview");
     setStarterSource(isTauriRuntime() ? "tauri" : "preview");
@@ -774,7 +801,7 @@ function App() {
     });
     setProjectSummary({
       generatedAt: result.generatedAt,
-      name: "Generated CORE ROM",
+      name: assetMode === "generatedMusic" ? "Generated MML Music ROM" : "Generated CORE ROM",
       projectPath: result.projectPath,
       romPath: result.romPath,
       exportDirectory: "artifacts/phase3/exports",
@@ -797,8 +824,11 @@ function App() {
           state: "ready",
         },
         {
-          label: "Bundled loop",
-          path: "assets/core/loop.vgm",
+          label: assetMode === "generatedMusic" ? "Generated MML loop" : "Bundled loop",
+          path:
+            assetMode === "generatedMusic"
+              ? "artifacts/phase4/generated-music-prompt/project/res/generated_music.vgm"
+              : "assets/core/loop.vgm",
           state: "ready",
         },
       ],
@@ -1444,6 +1474,17 @@ function isV1Prompt(text: string) {
     normalized.includes("music") &&
     (normalized.includes("move") || normalized.includes("left") || normalized.includes("right"))
   );
+}
+
+function promptReadyMessage(generatedMusic: boolean) {
+  if (generatedMusic) {
+    return isTauriRuntime()
+      ? "Built and verified the bundled sprite with generated MML music. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
+      : "Previewed the generated MML music flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
+  }
+  return isTauriRuntime()
+    ? "Built and verified the bundled sprite/music ROM. Right input moved the sprite, audio is non-silent, and the ROM is running on the right."
+    : "Previewed the bundled sprite/music ROM flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
 }
 
 function summaryLabel(state: HealthState) {

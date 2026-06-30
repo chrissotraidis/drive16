@@ -1,5 +1,28 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Generated music prompt path stays separate from CORE
+
+Context:
+
+Phase 4 needs the app prompt path to use generated assets only when enhancement
+settings are enabled. The proven Phase 3 CORE prompt path must stay stable, and
+the generated sprite path still needs live ComfyUI validation before it can be
+treated as ROM-ready.
+
+Decision:
+
+Add a separate native `run_phase4_music_prompt` command and call it only when
+the `MML music` setting is enabled. The command generates a short deterministic
+MML loop from the committed FM presets, compiles it with the pinned `ctrmml`
+sidecar, and keeps using the proven bundled sprite until the generated sprite
+gate is closed.
+
+Consequence:
+
+The app can exercise generated MML music without changing the default CORE
+prompt path or claiming generated sprites are ready. Full generated-music ROM
+proof still requires Docker Desktop so SGDK can build the generated project.
+
 ## 2026-06-30 - MML RAG note is Drive16-authored
 
 Context:

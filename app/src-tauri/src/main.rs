@@ -1,5 +1,6 @@
 mod comfyui;
 mod opencode;
+mod phase4_prompt;
 mod preflight;
 mod project;
 mod starter_rom;
@@ -62,6 +63,13 @@ async fn run_v1_prompt(prompt: String) -> Result<v1_prompt::V1PromptResult, Stri
 }
 
 #[tauri::command]
+async fn run_phase4_music_prompt(prompt: String) -> Result<v1_prompt::V1PromptResult, String> {
+    tauri::async_runtime::spawn_blocking(move || phase4_prompt::run_phase4_music_prompt(prompt))
+        .await
+        .map_err(|error| format!("Phase 4 music prompt task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn check_comfyui_endpoint(
     request: comfyui::ComfyUiEndpointRequest,
 ) -> comfyui::ComfyUiEndpointStatus {
@@ -88,6 +96,7 @@ fn main() {
             load_project_summary,
             export_current_rom,
             run_v1_prompt,
+            run_phase4_music_prompt,
             check_comfyui_endpoint
         ])
         .run(tauri::generate_context!())
