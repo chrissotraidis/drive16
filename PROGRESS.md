@@ -17,7 +17,7 @@ Genteel proof path remains available and distinct.
 - [x] Add player controls without crowding the ROM viewport.
 - [x] Add or honestly gate audio.
 - [x] Add controller-ready input foundation.
-- [ ] Wire Drive16-generated ROMs into the same player.
+- [x] Wire Drive16-generated ROMs into the same player.
 - [ ] Run full polish, regression, and evidence pass.
 - [ ] Assemble Phase 6 evidence packet for human review.
 
@@ -83,6 +83,8 @@ player path, then run the final Phase 6 regression/evidence pass.
 - [x] Audio remains explicitly gated until verified.
 - [x] Controller-ready input shape documented without claiming controller
   support is finished.
+- [x] V1/CORE generated ROM proof harness passed locally.
+- [x] Generated CORE ROM fixture played through the same embedded player.
 
 ## Completed Phase 5 Work
 

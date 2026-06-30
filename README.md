@@ -59,9 +59,9 @@ core as a settled commercial distribution dependency.
 
 ## What to do next
 
-Current Phase 6 next step: verify a Drive16-generated ROM artifact through the
-same interactive player path, then run the final Phase 6 regression/evidence
-pass.
+Current Phase 6 next step: run the final Phase 6 regression/evidence pass,
+including a native-window click-through when Accessibility automation or a human
+tester is available.
 
 Current local validation:
 

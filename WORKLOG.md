@@ -1,5 +1,42 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 90 - Phase 6 generated ROM play check
+
+Plan:
+
+- Task: verify that a generated Drive16 ROM artifact can use the same embedded
+  player path.
+- Files: `docs/phase6-generated-rom-play.md`, `PROGRESS.md`, `README.md`, and
+  `WORKLOG.md`.
+- Verification: run the ignored V1/CORE proof harness explicitly and play the
+  generated CORE ROM fixture in the embedded player.
+
+Did:
+
+- Ran the V1/CORE generated ROM proof harness explicitly.
+- Confirmed the proof harness passed and git stayed clean afterward.
+- Played `examples/phase2-core-assets/out/rom.bin` through the embedded player.
+- Confirmed ArrowRight input, Stop feedback, and zero console warnings/errors.
+- Documented that direct native-window click automation is blocked by missing
+  macOS Accessibility permission for the shell process.
+
+Evidence:
+
+- `docs/phase6-generated-rom-play.md`.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml v1_prompt_runs_core_asset_rom_when_tools_are_available -- --ignored --nocapture` passed.
+- Browser player smoke for the generated CORE fixture passed with zero console
+  warnings/errors.
+
+Gate:
+
+Generated ROM artifacts are wired into the same player path in code, and the
+generated CORE fixture plays through the embedded player. Final Phase 6
+regression should still include a native-window click-through when available.
+
+Next:
+
+- Run final Phase 6 regression and assemble the evidence packet.
+
 ## 2026-06-30 - ITERATION 89 - Phase 6 embedded player adapter
 
 Plan:
