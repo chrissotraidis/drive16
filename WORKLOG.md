@@ -1,5 +1,78 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 73 - ComfyUI model dependency selection
+
+Plan:
+
+- Task: replace the unclear Pixel Art Diffusion XL checkpoint dependency with
+  a researched default ComfyUI model pair and install path.
+- Files: `assets/enhancements/comfyui/`, `scripts/`, `app/src/App.tsx`,
+  `app/src-tauri/src/comfyui.rs`, `app/src-tauri/src/phase4_prompt.rs`,
+  `README.md`, `docs/phase4-comfyui-model-selection.md`, `DECISIONS.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: check upstream model metadata, validate direct Hugging Face
+  file URLs by header request only, run the workflow validator, compile the
+  readiness scripts, build the frontend, run native ComfyUI tests, and check
+  shell syntax.
+
+Did:
+
+- Researched Hugging Face alternatives to the previous Civitai-style dedicated
+  Pixel Art Diffusion XL checkpoint.
+- Chose Stability AI SDXL Base plus `nerijs/pixel-art-xl` LoRA as the default
+  dependency pair.
+- Updated the ComfyUI workflow to load SDXL Base through
+  `CheckpointLoaderSimple` and apply `pixel-art-xl.safetensors` through
+  `LoraLoader`.
+- Added `scripts/install-phase4-comfyui-models.sh`, which downloads the default
+  model pair only after `--accept-model-licenses`.
+- Updated Python and native readiness checks to require API, checkpoint, LoRA,
+  Pixydust, and workflow classes.
+- Updated the app settings drawer to show both `SDXL checkpoint` and
+  `Pixel art LoRA` fields.
+- Updated the live runner, setup helper, README, prompt validation request, and
+  model-selection evidence docs.
+- Recorded the architecture deviation as a decision so the model-pair default
+  does not silently drift from the older dedicated-checkpoint preference.
+
+Evidence:
+
+- Hugging Face metadata reported `stabilityai/stable-diffusion-xl-base-1.0`
+  with license tag `openrail++` and file `sd_xl_base_1.0.safetensors`.
+- Hugging Face metadata reported `nerijs/pixel-art-xl` with license tag
+  `creativeml-openrail-m`, base model
+  `stabilityai/stable-diffusion-xl-base-1.0`, and file
+  `pixel-art-xl.safetensors`.
+- Header checks confirmed both default file URLs resolve without downloading
+  weights: SDXL Base about 6.94 GB and Pixel Art XL LoRA about 171 MB.
+- `scripts/install-phase4-comfyui-models.sh --dry-run` prints the default
+  install plan without downloading.
+- `scripts/validate-comfyui-workflow.py` passed.
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py scripts/run-comfyui-sprite-workflow.py` passed.
+- `bash -n scripts/install-phase4-comfyui-models.sh scripts/install-phase4-comfyui-checkpoint.sh scripts/setup-phase4-comfyui-prereqs.sh scripts/validate-phase4-generated-assets-prompt.sh scripts/validate-phase4-live-generated-assets.sh scripts/validate-phase4-comfyui-api-smoke.sh` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml comfyui -- --nocapture`
+  passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml phase4_prompt -- --nocapture`
+  passed with 5 tests and 2 live-environment tests ignored.
+- `pnpm --dir app build` passed.
+- Browser QA at `http://127.0.0.1:1420/` opened Agent Settings, enabled
+  `AI sprites`, and confirmed the rendered defaults
+  `sd_xl_base_1.0.safetensors` and `pixel-art-xl.safetensors`.
+- Browser console warnings and errors were empty on initial load, after opening
+  settings, and after the narrow-width settings check.
+- `git diff --check` passed.
+
+Gate:
+
+No Phase 4 generated-sprite gate closed. The remaining validation request is
+to run the installer with explicit model-license acceptance, then run
+`scripts/validate-phase4-live-generated-assets.sh`.
+
+Next:
+
+- Install the default model pair or point Drive16 at compatible local files,
+  then run the live generated-assets proof.
+
 ## 2026-06-30 - ITERATION 72 - App navigation hardening
 
 Plan:

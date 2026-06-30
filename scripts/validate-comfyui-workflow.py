@@ -98,6 +98,7 @@ def main() -> int:
         "CLIPTextEncode",
         "EmptyLatentImage",
         "KSampler",
+        "LoraLoader",
         "VAEDecode",
         "ImageScale",
         "Quantizer",
@@ -119,13 +120,20 @@ def main() -> int:
     checkpoint_name = checkpoint["inputs"].get("ckpt_name")
     require(checkpoint_name == manifest["model"]["checkpoint"], "Checkpoint name must match manifest.")
 
+    lora_id, lora = one_node(workflow, "LoraLoader")
+    require(lora["inputs"].get("lora_name") == manifest["model"]["lora"], "LoRA name must match manifest.")
+    input_link(workflow, lora, "model", checkpoint_id)
+    input_link(workflow, lora, "clip", checkpoint_id)
+    require(0.1 <= lora["inputs"].get("strength_model", 0) <= 2.0, "LoRA model strength must be in range.")
+    require(0.1 <= lora["inputs"].get("strength_clip", 0) <= 2.0, "LoRA clip strength must be in range.")
+
     prompt_nodes = nodes_by_class(workflow, "CLIPTextEncode")
     require(len(prompt_nodes) == 2, f"Expected two CLIPTextEncode nodes, found {len(prompt_nodes)}.")
     prompt_text = " ".join(str(node["inputs"].get("text", "")) for _, node in prompt_nodes).lower()
     for token in ["genesis", "sprite", "pixel", "32x32", "16 color"]:
         require(token in prompt_text, f"Prompt text must include {token!r}.")
     for _, prompt in prompt_nodes:
-        input_link(workflow, prompt, "clip", checkpoint_id)
+        input_link(workflow, prompt, "clip", lora_id)
 
     latent_id, latent = one_node(workflow, "EmptyLatentImage")
     source_size = manifest["generation"]["sourceSize"]
@@ -138,7 +146,7 @@ def main() -> int:
     sampler_id, sampler = one_node(workflow, "KSampler")
     for name in ["model", "positive", "negative", "latent_image"]:
         input_link(workflow, sampler, name)
-    require(sampler["inputs"]["model"][0] == checkpoint_id, "Sampler model must link from checkpoint.")
+    require(sampler["inputs"]["model"][0] == lora_id, "Sampler model must link from LoRA output.")
     require(sampler["inputs"]["latent_image"][0] == latent_id, "Sampler latent image must link from latent node.")
     require(12 <= sampler["inputs"].get("steps", 0) <= 40, "Sampler steps must be in the tuned sprite range.")
     require(4 <= sampler["inputs"].get("cfg", 0) <= 12, "Sampler cfg must be in the tuned sprite range.")
@@ -184,6 +192,7 @@ def main() -> int:
         "outputSize": output_size,
         "maxColors": palette["maxColors"],
         "checkpoint": checkpoint_name,
+        "lora": lora["inputs"].get("lora_name"),
     }
     VALIDATION_FILE.write_text(json.dumps(validation, indent=2) + "\n", encoding="utf-8")
     print(

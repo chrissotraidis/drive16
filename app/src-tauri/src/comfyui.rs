@@ -14,12 +14,14 @@ const OBJECT_INFO_PATH: &str = "/object_info";
 const MANIFEST_RELATIVE: &str = "assets/enhancements/comfyui/manifest.json";
 const WORKFLOW_RELATIVE: &str = "assets/enhancements/comfyui/drive16-genesis-sprite.workflow.json";
 const CHECKPOINT_SUFFIXES: [&str; 3] = ["safetensors", "ckpt", "pt"];
+const LORA_SUFFIXES: [&str; 3] = ["safetensors", "ckpt", "pt"];
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComfyUiEndpointRequest {
     pub endpoint: String,
     pub checkpoint: Option<String>,
+    pub lora: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -59,7 +61,9 @@ struct HttpResponse {
 
 pub fn check_endpoint(request: ComfyUiEndpointRequest) -> ComfyUiEndpointStatus {
     match normalize_endpoint(&request.endpoint) {
-        Ok(endpoint) => check_endpoint_for_repo(repo_root(), endpoint, request.checkpoint),
+        Ok(endpoint) => {
+            check_endpoint_for_repo(repo_root(), endpoint, request.checkpoint, request.lora)
+        }
         Err(error) => ComfyUiEndpointStatus {
             generated_at: unix_timestamp(),
             state: "missing".to_string(),
@@ -77,6 +81,7 @@ fn check_endpoint_for_repo(
     repo_root: PathBuf,
     endpoint: LocalEndpoint,
     checkpoint_override: Option<String>,
+    lora_override: Option<String>,
 ) -> ComfyUiEndpointStatus {
     let stats = match probe_system_stats(&endpoint) {
         Ok(stats) => stats,
@@ -85,6 +90,7 @@ fn check_endpoint_for_repo(
                 &repo_root,
                 Err(&error),
                 checkpoint_override,
+                lora_override,
                 readiness_check("API", "missing", &error),
             );
             return status("missing", &error, &endpoint, None, 0, checks);
@@ -97,6 +103,7 @@ fn check_endpoint_for_repo(
         &repo_root,
         object_info.as_ref(),
         checkpoint_override,
+        lora_override,
         readiness_check("API", "ready", "System stats available"),
     );
     let (state, detail) = summarize_readiness(&checks);
@@ -251,6 +258,7 @@ fn phase4_readiness_checks(
     repo_root: &Path,
     object_info: Result<&Value, &String>,
     checkpoint_override: Option<String>,
+    lora_override: Option<String>,
     api_check: ComfyUiReadinessCheck,
 ) -> Vec<ComfyUiReadinessCheck> {
     let manifest_path = repo_root.join(MANIFEST_RELATIVE);
@@ -269,7 +277,9 @@ fn phase4_readiness_checks(
     };
 
     let manifest_checkpoint = manifest_checkpoint(&manifest);
+    let manifest_lora = manifest_lora(&manifest);
     let checkpoint = selected_checkpoint(&manifest_checkpoint, checkpoint_override.as_deref());
+    let lora = selected_lora(&manifest_lora, lora_override.as_deref());
     let required_classes = class_types(&workflow);
     let comfyui_root = comfyui_root();
 
@@ -279,6 +289,7 @@ fn phase4_readiness_checks(
         &checkpoint,
         object_info.ok(),
     ));
+    checks.push(lora_readiness(&comfyui_root, &lora, object_info.ok()));
     checks.push(pixydust_readiness(&comfyui_root, object_info.ok()));
     checks.push(workflow_class_readiness(&required_classes, object_info));
     checks
@@ -296,7 +307,16 @@ fn manifest_checkpoint(manifest: &Value) -> String {
         .get("model")
         .and_then(|model| model.get("checkpoint"))
         .and_then(Value::as_str)
-        .unwrap_or("pixel-art-diffusion-xl.safetensors")
+        .unwrap_or("sd_xl_base_1.0.safetensors")
+        .to_string()
+}
+
+fn manifest_lora(manifest: &Value) -> String {
+    manifest
+        .get("model")
+        .and_then(|model| model.get("lora"))
+        .and_then(Value::as_str)
+        .unwrap_or("pixel-art-xl.safetensors")
         .to_string()
 }
 
@@ -312,6 +332,20 @@ fn selected_checkpoint(manifest_checkpoint: &str, checkpoint_override: Option<&s
                 .filter(|value| !value.is_empty())
         })
         .unwrap_or_else(|| manifest_checkpoint.to_string())
+}
+
+fn selected_lora(manifest_lora: &str, lora_override: Option<&str>) -> String {
+    lora_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            env::var("DRIVE16_COMFYUI_LORA")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        })
+        .unwrap_or_else(|| manifest_lora.to_string())
 }
 
 fn class_types(workflow: &Value) -> Vec<String> {
@@ -358,6 +392,25 @@ fn checkpoint_names_from_object_info(object_info: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn lora_names_from_object_info(object_info: &Value) -> Vec<String> {
+    object_info
+        .get("LoraLoader")
+        .and_then(|lora| lora.get("input"))
+        .and_then(|input| input.get("required"))
+        .and_then(|required| required.get("lora_name"))
+        .and_then(Value::as_array)
+        .and_then(|entries| entries.first())
+        .and_then(Value::as_array)
+        .map(|names| {
+            names
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
 fn checkpoint_readiness(
     comfyui_root: &Path,
     checkpoint: &str,
@@ -385,6 +438,33 @@ fn checkpoint_readiness(
     )
 }
 
+fn lora_readiness(
+    comfyui_root: &Path,
+    lora: &str,
+    object_info: Option<&Value>,
+) -> ComfyUiReadinessCheck {
+    if let Some(object_info) = object_info {
+        if lora_names_from_object_info(object_info)
+            .iter()
+            .any(|name| name == lora)
+        {
+            return readiness_check("LoRA", "ready", lora);
+        }
+    }
+
+    let candidates = lora_candidates(comfyui_root, lora);
+    if let Some(existing) = candidates.iter().find(|path| path.is_file()) {
+        return readiness_check("LoRA", "ready", &existing.display().to_string());
+    }
+
+    readiness_check_with_hints(
+        "LoRA",
+        "missing",
+        lora,
+        nearby_lora_hints(comfyui_root, &candidates),
+    )
+}
+
 fn checkpoint_candidates(comfyui_root: &Path, checkpoint: &str) -> Vec<PathBuf> {
     let checkpoint_path = PathBuf::from(checkpoint);
     if checkpoint_path.is_absolute() {
@@ -397,6 +477,19 @@ fn checkpoint_candidates(comfyui_root: &Path, checkpoint: &str) -> Vec<PathBuf> 
             .join("checkpoints")
             .join(checkpoint),
         comfyui_root.join("models").join(checkpoint),
+    ]
+}
+
+fn lora_candidates(comfyui_root: &Path, lora: &str) -> Vec<PathBuf> {
+    let lora_path = PathBuf::from(lora);
+    if lora_path.is_absolute() {
+        return vec![lora_path];
+    }
+
+    vec![
+        comfyui_root.join("models").join("loras").join(lora),
+        comfyui_root.join("models").join("lora").join(lora),
+        comfyui_root.join("models").join(lora),
     ]
 }
 
@@ -419,13 +512,41 @@ fn checkpoint_hint_directories(comfyui_root: &Path) -> Vec<PathBuf> {
     directories
 }
 
+fn lora_hint_directories(comfyui_root: &Path) -> Vec<PathBuf> {
+    vec![
+        comfyui_root.join("models").join("loras"),
+        comfyui_root.join("models").join("lora"),
+        comfyui_root.join("models"),
+    ]
+}
+
 fn nearby_checkpoint_hints(comfyui_root: &Path, checked_paths: &[PathBuf]) -> Vec<String> {
+    nearby_model_hints(
+        checkpoint_hint_directories(comfyui_root),
+        checked_paths,
+        &CHECKPOINT_SUFFIXES,
+    )
+}
+
+fn nearby_lora_hints(comfyui_root: &Path, checked_paths: &[PathBuf]) -> Vec<String> {
+    nearby_model_hints(
+        lora_hint_directories(comfyui_root),
+        checked_paths,
+        &LORA_SUFFIXES,
+    )
+}
+
+fn nearby_model_hints(
+    directories: Vec<PathBuf>,
+    checked_paths: &[PathBuf],
+    suffixes: &[&str],
+) -> Vec<String> {
     let checked = checked_paths
         .iter()
         .map(|path| path.to_string_lossy().to_string())
         .collect::<Vec<_>>();
     let mut hints = Vec::new();
-    for directory in checkpoint_hint_directories(comfyui_root) {
+    for directory in directories {
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
             Err(_) => continue,
@@ -441,7 +562,7 @@ fn nearby_checkpoint_hints(comfyui_root: &Path, checked_paths: &[PathBuf]) -> Ve
                 .map(str::to_ascii_lowercase);
             if !extension
                 .as_deref()
-                .map(|value| CHECKPOINT_SUFFIXES.contains(&value))
+                .map(|value| suffixes.contains(&value))
                 .unwrap_or(false)
             {
                 continue;
@@ -671,6 +792,7 @@ mod tests {
                     "required": {
                         "ckpt_name": [[
                             "pixel-art-diffusion-xl.safetensors",
+                            "sd_xl_base_1.0.safetensors",
                             "alternate-pixel.safetensors"
                         ]]
                     }
@@ -682,7 +804,32 @@ mod tests {
             checkpoint_names_from_object_info(&object_info),
             vec![
                 "pixel-art-diffusion-xl.safetensors".to_string(),
+                "sd_xl_base_1.0.safetensors".to_string(),
                 "alternate-pixel.safetensors".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn extracts_lora_names_from_object_info() {
+        let object_info: Value = serde_json::json!({
+            "LoraLoader": {
+                "input": {
+                    "required": {
+                        "lora_name": [[
+                            "pixel-art-xl.safetensors",
+                            "alternate-pixel-lora.safetensors"
+                        ]]
+                    }
+                }
+            }
+        });
+
+        assert_eq!(
+            lora_names_from_object_info(&object_info),
+            vec![
+                "pixel-art-xl.safetensors".to_string(),
+                "alternate-pixel-lora.safetensors".to_string()
             ]
         );
     }
@@ -691,18 +838,15 @@ mod tests {
     fn summarizes_warning_when_sprite_prereqs_are_missing() {
         let checks = vec![
             readiness_check("API", "ready", "System stats available"),
-            readiness_check(
-                "Checkpoint",
-                "missing",
-                "pixel-art-diffusion-xl.safetensors",
-            ),
+            readiness_check("Checkpoint", "missing", "sd_xl_base_1.0.safetensors"),
+            readiness_check("LoRA", "missing", "pixel-art-xl.safetensors"),
             readiness_check("Pixydust", "ready", "Quantizer node available"),
         ];
 
         let (state, detail) = summarize_readiness(&checks);
 
         assert_eq!(state, "warning");
-        assert_eq!(detail, "ComfyUI reachable, check Checkpoint");
+        assert_eq!(detail, "ComfyUI reachable, check Checkpoint, LoRA");
     }
 
     #[test]
@@ -713,7 +857,7 @@ mod tests {
         fs::write(checkpoints.join("nearby.safetensors"), b"fixture")
             .expect("hint checkpoint should be written");
 
-        let check = checkpoint_readiness(&root, "pixel-art-diffusion-xl.safetensors", None);
+        let check = checkpoint_readiness(&root, "sd_xl_base_1.0.safetensors", None);
 
         assert_eq!(check.name, "Checkpoint");
         assert_eq!(check.state, "missing");
@@ -738,7 +882,17 @@ mod tests {
             serde_json::json!({
                 "input": {
                     "required": {
-                        "ckpt_name": [["pixel-art-diffusion-xl.safetensors"]]
+                        "ckpt_name": [["sd_xl_base_1.0.safetensors"]]
+                    }
+                }
+            }),
+        );
+        object_info.insert(
+            "LoraLoader".to_string(),
+            serde_json::json!({
+                "input": {
+                    "required": {
+                        "lora_name": [["pixel-art-xl.safetensors"]]
                     }
                 }
             }),
@@ -750,12 +904,13 @@ mod tests {
         let status = check_endpoint(ComfyUiEndpointRequest {
             endpoint,
             checkpoint: None,
+            lora: None,
         });
         handle.join().expect("test server should exit cleanly");
 
         assert_eq!(status.state, "ready");
         assert_eq!(status.detail, "ComfyUI sprite prerequisites ready");
-        assert_eq!(status.checks.len(), 4);
+        assert_eq!(status.checks.len(), 5);
         assert!(status.checks.iter().all(|check| check.state == "ready"));
     }
 
@@ -777,6 +932,16 @@ mod tests {
                 }
             }),
         );
+        object_info.insert(
+            "LoraLoader".to_string(),
+            serde_json::json!({
+                "input": {
+                    "required": {
+                        "lora_name": [["alternate-pixel-lora.safetensors"]]
+                    }
+                }
+            }),
+        );
         object_info.insert("Quantizer".to_string(), serde_json::json!({}));
 
         let (endpoint, handle) =
@@ -784,6 +949,7 @@ mod tests {
         let status = check_endpoint(ComfyUiEndpointRequest {
             endpoint,
             checkpoint: Some("alternate-pixel.safetensors".to_string()),
+            lora: Some("alternate-pixel-lora.safetensors".to_string()),
         });
         handle.join().expect("test server should exit cleanly");
 
@@ -792,6 +958,11 @@ mod tests {
             check.name == "Checkpoint"
                 && check.state == "ready"
                 && check.detail == "alternate-pixel.safetensors"
+        }));
+        assert!(status.checks.iter().any(|check| {
+            check.name == "LoRA"
+                && check.state == "ready"
+                && check.detail == "alternate-pixel-lora.safetensors"
         }));
     }
 

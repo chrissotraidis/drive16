@@ -29,22 +29,26 @@ Toolchain and validation scripts live here.
 - `run-comfyui-sprite-workflow.py`: enqueues the Phase 4 ComfyUI workflow
   through `drive16-comfyui`, downloads the PNG output, and runs the generated
   sprite validator. It first runs the Phase 4 readiness check so missing API,
-  checkpoint, Pixydust, or workflow-class prerequisites stop before enqueueing.
+  checkpoint, LoRA, Pixydust, or workflow-class prerequisites stop before
+  enqueueing.
 - `check-phase4-comfyui-readiness.py`: checks the local ComfyUI API,
-  committed workflow classes, Pixel Art Diffusion XL checkpoint, and Pixydust
-  Quantizer node before live sprite generation. Set
-  `DRIVE16_COMFYUI_CHECKPOINT` when the compatible checkpoint uses a different
-  local filename. When the required checkpoint is missing, the report includes
-  nearby local checkpoint hints without accepting them automatically.
+  committed workflow classes, SDXL base checkpoint, Pixel Art XL LoRA, and
+  Pixydust Quantizer node before live sprite generation. Set
+  `DRIVE16_COMFYUI_CHECKPOINT` or `DRIVE16_COMFYUI_LORA` when compatible local
+  files use different filenames. When required files are missing, the report
+  includes nearby local hints without accepting them automatically.
 - `launch-phase4-comfyui-api.sh`: fetches a pinned ComfyUI source checkout
   into ignored artifacts and launches it against the local ComfyUI data folder.
 - `validate-phase4-comfyui-api-smoke.sh`: starts the local ComfyUI API
   temporarily when needed, runs readiness, and proves API, workflow-class, and
   Pixydust availability without requiring the checkpoint.
 - `setup-phase4-comfyui-prereqs.sh`: dry-run-first helper for installing the
-  Pixydust Quantizer custom node and showing the required checkpoint path for
-  the live Phase 4 sprite workflow. It can also install Pixydust's Python
-  requirements explicitly and accepts the same checkpoint override.
+  Pixydust Quantizer custom node and showing the required model paths for the
+  live Phase 4 sprite workflow. It can also install Pixydust's Python
+  requirements explicitly and accepts model filename overrides.
+- `install-phase4-comfyui-models.sh`: downloads Drive16's default Hugging Face
+  ComfyUI model pair after explicit license acceptance: Stability AI SDXL Base
+  checkpoint plus the `nerijs/pixel-art-xl` LoRA.
 - `install-phase4-comfyui-checkpoint.sh`: places a user-provided compatible
   checkpoint file or URL into the local ComfyUI checkpoints folder, with an
   optional SHA-256 check and local-file symlink mode for large model weights.

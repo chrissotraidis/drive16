@@ -9,8 +9,9 @@ short MML track in place of bundled assets, and still builds a working ROM.
 
 Phase 4 is not complete. All app, script, wrapper, validator, prompt-path, and
 fixture proofs are in place, but the real live ComfyUI sprite gate remains
-open until a compatible Pixel Art Diffusion XL checkpoint is installed and
-local ComfyUI produces a PNG that passes the generated-sprite validator.
+open until the default SDXL Base checkpoint plus Pixel Art XL LoRA are
+installed and local ComfyUI produces a PNG that passes the generated-sprite
+validator.
 
 ## Completed Evidence
 
@@ -27,6 +28,7 @@ local ComfyUI produces a PNG that passes the generated-sprite validator.
 | ComfyUI API launch and smoke path exists | `docs/phase4-comfyui-api-launch.md`, `docs/phase4-comfyui-api-smoke.md` |
 | Checkpoint override and install helper exist for local filenames and user-provided sources | `docs/phase4-comfyui-checkpoint-override.md`, `docs/phase4-comfyui-checkpoint-install.md` |
 | Pixel Art Diffusion XL source metadata was audited without auto-downloading weights | `docs/phase4-comfyui-checkpoint-source-audit.md` |
+| Default ComfyUI model pair selected with explicit installer | `docs/phase4-comfyui-model-selection.md` |
 | ctrmml MML music MCP wrapper exists | `docs/phase4-mml-music-mcp.md` |
 | FM preset library is committed | `docs/phase4-mml-presets.md` |
 | MML reference is in the RAG corpus | `docs/phase4-mml-rag-corpus.md` |
@@ -41,13 +43,13 @@ The remaining live gate is the real ComfyUI sprite output:
 
 - `scripts/validate-phase4-comfyui-api-smoke.sh` passes and records
   `apiOk: true`, `workflowClassesOk: true`, and `pixydustOk: true`, while
-  keeping `checkpointOk: false`. The smoke was rerun on 2026-06-30 and
+  keeping model-file readiness separate. The smoke was rerun on 2026-06-30 and
   confirmed the API, workflow classes, and Pixydust are ready in the current
   local setup.
 - `scripts/validate-phase4-live-generated-assets.sh` now launches local
   ComfyUI if the API is not already reachable, reaches readiness with
   `api.ok: true`, `workflowClasses.ok: true`, and `pixydustQuantizer.ok: true`,
-  then exits `68` because the compatible checkpoint is missing.
+  then exits `68` until the SDXL checkpoint and Pixel Art XL LoRA are present.
 - `scripts/validate-phase4-generated-assets-prompt.sh` exits `66` because
   `artifacts/phase4/live-comfyui-sprite/last-run.json` does not record a
   successful live sprite run.
@@ -55,22 +57,21 @@ The remaining live gate is the real ComfyUI sprite output:
   Civitai Pixel Art Diffusion XL source currently has metadata that conflicts
   with the architecture appendix's open CreativeML assumption, so Drive16 must
   keep the checkpoint source user-selected.
+- `docs/phase4-comfyui-model-selection.md` records the replacement default:
+  Stability AI SDXL Base plus `nerijs/pixel-art-xl` LoRA from Hugging Face,
+  with explicit model-license acceptance before download.
 
 ## Validation Request
 
-Install a compatible checkpoint from an explicit source:
+Install the default local ComfyUI model pair after reviewing the upstream
+model licenses:
 
 ```sh
-scripts/install-phase4-comfyui-checkpoint.sh \
-  --source /path-or-url/to/compatible-checkpoint.safetensors \
-  --checkpoint pixel-art-diffusion-xl.safetensors \
-  --sha256 <optional-known-hash> \
-  --check
+scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
 ```
 
-If using the Civitai Pixel Art Diffusion XL checkpoint, treat it as a
-user-selected external model under its own license. Do not redistribute or
-commit the model weights.
+Do not redistribute or commit the model weights. For custom local files, set
+`DRIVE16_COMFYUI_CHECKPOINT` and `DRIVE16_COMFYUI_LORA`.
 
 Then run the live gate sequence:
 

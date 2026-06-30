@@ -6,8 +6,10 @@ COMFYUI_ROOT="${COMFYUI_ROOT:-$HOME/Documents/ComfyUI}"
 PIXYDUST_REPO="${DRIVE16_PIXYDUST_REPO:-https://github.com/sousakujikken/ComfyUI-PixydustQuantizer.git}"
 PIXYDUST_REV="${DRIVE16_PIXYDUST_REV:-6ffbb1ca23637f61559c3bd13f7be2b37d1dae03}"
 PIXYDUST_DIR="$COMFYUI_ROOT/custom_nodes/ComfyUI-PixydustQuantizer"
-CHECKPOINT_NAME="${DRIVE16_COMFYUI_CHECKPOINT:-pixel-art-diffusion-xl.safetensors}"
+CHECKPOINT_NAME="${DRIVE16_COMFYUI_CHECKPOINT:-sd_xl_base_1.0.safetensors}"
+LORA_NAME="${DRIVE16_COMFYUI_LORA:-pixel-art-xl.safetensors}"
 CHECKPOINT_PATH="$COMFYUI_ROOT/models/checkpoints/$CHECKPOINT_NAME"
+LORA_PATH="$COMFYUI_ROOT/models/loras/$LORA_NAME"
 INSTALL_PIXYDUST=0
 INSTALL_PIXYDUST_REQUIREMENTS=0
 RUN_CHECK=0
@@ -32,7 +34,8 @@ Options:
   --install-pixydust-requirements
                        Install Pixydust Python requirements into the selected
                        ComfyUI Python environment.
-  --checkpoint <name>  Pixel Art Diffusion XL compatible checkpoint filename.
+  --checkpoint <name>  SDXL-compatible checkpoint filename.
+  --lora <name>        Pixel Art XL LoRA filename.
   --check              Run scripts/check-phase4-comfyui-readiness.py afterward.
 
 Environment:
@@ -40,7 +43,9 @@ Environment:
   DRIVE16_COMFYUI_PYTHON
                        Python executable. Default: COMFYUI_ROOT/.venv/bin/python
   DRIVE16_COMFYUI_CHECKPOINT
-                       Checkpoint filename. Default: pixel-art-diffusion-xl.safetensors
+                       Checkpoint filename. Default: sd_xl_base_1.0.safetensors
+  DRIVE16_COMFYUI_LORA
+                       LoRA filename. Default: pixel-art-xl.safetensors
   DRIVE16_PIXYDUST_REPO
   DRIVE16_PIXYDUST_REV
 EOF
@@ -65,6 +70,15 @@ while [ "$#" -gt 0 ]; do
       CHECKPOINT_PATH="$COMFYUI_ROOT/models/checkpoints/$CHECKPOINT_NAME"
       shift 2
       ;;
+    --lora)
+      if [ "$#" -lt 2 ]; then
+        echo "--lora requires a filename." >&2
+        exit 64
+      fi
+      LORA_NAME="$2"
+      LORA_PATH="$COMFYUI_ROOT/models/loras/$LORA_NAME"
+      shift 2
+      ;;
     --check)
       RUN_CHECK=1
       shift
@@ -85,6 +99,7 @@ echo "Drive16 Phase 4 ComfyUI prerequisite setup"
 echo "ComfyUI root: $COMFYUI_ROOT"
 echo "Pixydust node: $PIXYDUST_DIR"
 echo "Checkpoint path: $CHECKPOINT_PATH"
+echo "LoRA path: $LORA_PATH"
 echo
 
 if [ ! -d "$COMFYUI_ROOT" ]; then
@@ -145,28 +160,33 @@ if [ "$INSTALL_PIXYDUST_REQUIREMENTS" -eq 1 ]; then
   echo "Pixydust requirements installed with: $PYTHON_BIN"
 fi
 
-if [ ! -f "$CHECKPOINT_PATH" ]; then
+if [ ! -f "$CHECKPOINT_PATH" ] || [ ! -f "$LORA_PATH" ]; then
   cat <<EOF
 
-VALIDATION REQUEST: Pixel Art Diffusion XL checkpoint is still required.
+VALIDATION REQUEST: Drive16's default ComfyUI model files are still required.
 
-Place a Pixel Art Diffusion XL compatible checkpoint at:
+Default files:
 
 $CHECKPOINT_PATH
+$LORA_PATH
 
-Or install a user-provided compatible checkpoint with:
+Install them from the reviewed Hugging Face sources after accepting the
+upstream model licenses:
 
-scripts/install-phase4-comfyui-checkpoint.sh --source /path-or-url/to/checkpoint.safetensors --checkpoint $CHECKPOINT_NAME --check
+scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
 
-Drive16 does not download this model automatically because model license,
-source, size, and hardware fit need to remain explicit.
+Or use custom local files with:
+
+export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+export DRIVE16_COMFYUI_LORA=your-lora-name.safetensors
 EOF
 else
   echo
   echo "Checkpoint present: $CHECKPOINT_PATH"
+  echo "LoRA present: $LORA_PATH"
 fi
 
 if [ "$RUN_CHECK" -eq 1 ]; then
   echo
-  COMFYUI_ROOT="$COMFYUI_ROOT" DRIVE16_COMFYUI_CHECKPOINT="$CHECKPOINT_NAME" "$ROOT/scripts/check-phase4-comfyui-readiness.py"
+  COMFYUI_ROOT="$COMFYUI_ROOT" DRIVE16_COMFYUI_CHECKPOINT="$CHECKPOINT_NAME" DRIVE16_COMFYUI_LORA="$LORA_NAME" "$ROOT/scripts/check-phase4-comfyui-readiness.py"
 fi

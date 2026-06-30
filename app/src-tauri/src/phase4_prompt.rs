@@ -450,7 +450,7 @@ fn validate_generated_sprite(paths: &Phase4MusicPaths, source: &Path) -> Result<
 
 fn generated_sprite_validation_request(reason: &str) -> String {
     format!(
-        "{} Place a Pixel Art Diffusion XL compatible checkpoint at ~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors, or set DRIVE16_COMFYUI_CHECKPOINT for a compatible local filename. Start ComfyUI with scripts/launch-phase4-comfyui-api.sh, run scripts/check-phase4-comfyui-readiness.py, then run COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py. Retry the prompt with AI sprites enabled after the live sprite run records ok: true.",
+        "{} Install the default SDXL base checkpoint plus Pixel Art XL LoRA with scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check, or set DRIVE16_COMFYUI_CHECKPOINT and DRIVE16_COMFYUI_LORA for compatible local filenames. Start ComfyUI with scripts/launch-phase4-comfyui-api.sh, run scripts/check-phase4-comfyui-readiness.py, then run COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py. Retry the prompt with AI sprites enabled after the live sprite run records ok: true.",
         reason
     )
 }

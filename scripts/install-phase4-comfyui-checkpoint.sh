@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMFYUI_ROOT="${COMFYUI_ROOT:-$HOME/Documents/ComfyUI}"
-CHECKPOINT_NAME="${DRIVE16_COMFYUI_CHECKPOINT:-pixel-art-diffusion-xl.safetensors}"
+CHECKPOINT_NAME="${DRIVE16_COMFYUI_CHECKPOINT:-sd_xl_base_1.0.safetensors}"
 SOURCE=""
 SHA256_EXPECTED=""
 RUN_CHECK=0
@@ -13,12 +13,11 @@ usage() {
   cat <<EOF
 Usage: scripts/install-phase4-comfyui-checkpoint.sh --source <path-or-url> [options]
 
-Places a user-provided Pixel Art Diffusion XL compatible checkpoint into the
-local ComfyUI checkpoints folder. Drive16 does not choose or bundle model
-weights automatically.
+Places a user-provided SDXL-compatible checkpoint into the local ComfyUI
+checkpoints folder. Drive16 does not bundle model weights.
 
 Options:
-  --source <path-or-url>  Local file or https URL to a compatible checkpoint.
+  --source <path-or-url>  Local file or https URL to an SDXL-compatible checkpoint.
   --checkpoint <name>     Destination checkpoint filename.
                          Default: $CHECKPOINT_NAME
   --sha256 <hash>         Optional SHA-256 to verify after copy/download.
@@ -89,7 +88,7 @@ Example:
 
 scripts/install-phase4-comfyui-checkpoint.sh \
   --source /path/to/compatible-checkpoint.safetensors \
-  --checkpoint pixel-art-diffusion-xl.safetensors \
+  --checkpoint sd_xl_base_1.0.safetensors \
   --sha256 <optional-known-hash> \
   --check
 EOF

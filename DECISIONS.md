@@ -1,5 +1,31 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Default ComfyUI model pair is SDXL Base plus Pixel Art XL LoRA
+
+Context:
+
+Phase 4 originally preferred a dedicated Pixel Art Diffusion XL checkpoint for
+cleaner sprite output. The likely public source metadata for that checkpoint
+now makes it a poor default for an open repo installer, because Drive16 should
+not silently auto-download model weights with unclear redistribution and
+derivative terms. The user asked for a better open dependency path that a fresh
+clone can install or be told how to install.
+
+Decision:
+
+Use Stability AI SDXL Base as the default checkpoint and `nerijs/pixel-art-xl`
+as the default pixel-art LoRA. Keep both model files outside git. Ship an
+installer that downloads them only after `--accept-model-licenses`, and let
+advanced users override the filenames with `DRIVE16_COMFYUI_CHECKPOINT` and
+`DRIVE16_COMFYUI_LORA`.
+
+Consequence:
+
+The default Phase 4 path becomes easier to document and install from upstream
+Hugging Face sources, while still preserving explicit license acceptance and
+local-only model storage. Sprite quality remains a live ComfyUI validation
+gate, so this decision does not mark Phase 4 complete by itself.
+
 ## 2026-06-30 - Pixel Art Diffusion XL source remains user-selected
 
 Context:

@@ -18,7 +18,8 @@ Phase 4 validation unit.
 
 The workflow keeps the generator local-only:
 
-- Generate with a dedicated Pixel Art Diffusion XL compatible checkpoint.
+- Generate with SDXL Base plus the `nerijs/pixel-art-xl` LoRA in local
+  ComfyUI.
 - Decode at a model-friendly size.
 - Downscale to 32x32 with nearest-neighbor scaling.
 - Quantize through Pixydust `Quantizer` to 16 colors.

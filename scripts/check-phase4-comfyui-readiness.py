@@ -18,6 +18,7 @@ WORKFLOW = ROOT / "assets" / "enhancements" / "comfyui" / "drive16-genesis-sprit
 ARTIFACT_DIR = ROOT / "artifacts" / "phase4" / "comfyui-readiness"
 REPORT = ARTIFACT_DIR / "latest.json"
 CHECKPOINT_SUFFIXES = {".safetensors", ".ckpt", ".pt"}
+LORA_SUFFIXES = {".safetensors", ".ckpt", ".pt"}
 
 
 def load_json(path: Path) -> Any:
@@ -40,6 +41,17 @@ def checkpoint_candidates(comfyui_root: Path, checkpoint: str) -> list[Path]:
     ]
 
 
+def lora_candidates(comfyui_root: Path, lora: str) -> list[Path]:
+    lora_path = Path(lora)
+    if lora_path.is_absolute():
+        return [lora_path]
+    return [
+        comfyui_root / "models" / "loras" / lora,
+        comfyui_root / "models" / "lora" / lora,
+        comfyui_root / "models" / lora,
+    ]
+
+
 def checkpoint_hint_directories(comfyui_root: Path) -> list[Path]:
     return [
         comfyui_root / "models" / "checkpoints",
@@ -49,15 +61,35 @@ def checkpoint_hint_directories(comfyui_root: Path) -> list[Path]:
     ]
 
 
+def lora_hint_directories(comfyui_root: Path) -> list[Path]:
+    return [
+        comfyui_root / "models" / "loras",
+        comfyui_root / "models" / "lora",
+        comfyui_root / "models",
+    ]
+
+
 def nearby_checkpoint_hints(comfyui_root: Path, checked_paths: list[Path]) -> list[dict[str, str]]:
+    return nearby_model_hints(checkpoint_hint_directories(comfyui_root), checked_paths, CHECKPOINT_SUFFIXES)
+
+
+def nearby_lora_hints(comfyui_root: Path, checked_paths: list[Path]) -> list[dict[str, str]]:
+    return nearby_model_hints(lora_hint_directories(comfyui_root), checked_paths, LORA_SUFFIXES)
+
+
+def nearby_model_hints(
+    directories: list[Path],
+    checked_paths: list[Path],
+    suffixes: set[str],
+) -> list[dict[str, str]]:
     checked = {str(path.expanduser()) for path in checked_paths}
     seen: set[str] = set()
     hints: list[dict[str, str]] = []
-    for directory in checkpoint_hint_directories(comfyui_root):
+    for directory in directories:
         if not directory.is_dir():
             continue
         for path in sorted(directory.iterdir(), key=lambda item: item.name.lower()):
-            if not path.is_file() or path.suffix.lower() not in CHECKPOINT_SUFFIXES:
+            if not path.is_file() or path.suffix.lower() not in suffixes:
                 continue
             path_text = str(path.expanduser())
             if path_text in checked or path_text in seen:
@@ -121,6 +153,23 @@ def checkpoint_names_from_object_info(object_info: Any) -> set[str]:
     return set()
 
 
+def lora_names_from_object_info(object_info: Any) -> set[str]:
+    if not isinstance(object_info, dict):
+        return set()
+    lora = object_info.get("LoraLoader")
+    if not isinstance(lora, dict):
+        return set()
+    inputs = lora.get("input", {}).get("required", {})
+    lora_name = inputs.get("lora_name") if isinstance(inputs, dict) else None
+    if (
+        isinstance(lora_name, list)
+        and lora_name
+        and isinstance(lora_name[0], list)
+    ):
+        return {str(name) for name in lora_name[0]}
+    return set()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -134,7 +183,12 @@ def main() -> int:
     parser.add_argument(
         "--checkpoint",
         default=os.environ.get("DRIVE16_COMFYUI_CHECKPOINT"),
-        help="Pixel Art Diffusion XL compatible checkpoint filename to require.",
+        help="SDXL-compatible checkpoint filename to require.",
+    )
+    parser.add_argument(
+        "--lora",
+        default=os.environ.get("DRIVE16_COMFYUI_LORA"),
+        help="Pixel Art XL LoRA filename to require.",
     )
     parser.add_argument("--timeout", type=float, default=5)
     args = parser.parse_args()
@@ -143,7 +197,9 @@ def main() -> int:
     workflow = load_json(WORKFLOW)
     comfyui_root = Path(args.comfyui_root).expanduser()
     manifest_checkpoint = str(manifest.get("model", {}).get("checkpoint", ""))
+    manifest_lora = str(manifest.get("model", {}).get("lora", ""))
     checkpoint = str(args.checkpoint or manifest_checkpoint)
+    lora = str(args.lora or manifest_lora)
     custom_nodes = manifest.get("customNodes", [])
     pixydust_source = ""
     if custom_nodes and isinstance(custom_nodes[0], dict):
@@ -156,6 +212,12 @@ def main() -> int:
             "name": checkpoint,
             "manifestName": manifest_checkpoint,
             "override": checkpoint != manifest_checkpoint,
+        },
+        "lora": {
+            "ok": False,
+            "name": lora,
+            "manifestName": manifest_lora,
+            "override": lora != manifest_lora,
         },
         "pixydustQuantizer": {"ok": False, "source": pixydust_source},
         "workflowClasses": {"ok": False, "classes": class_types(workflow)},
@@ -185,6 +247,11 @@ def main() -> int:
         if checkpoint in api_checkpoints:
             checks["checkpoint"]["ok"] = True
             checks["checkpoint"]["source"] = "api"
+        api_loras = lora_names_from_object_info(object_info)
+        checks["lora"]["availableViaApi"] = sorted(api_loras)
+        if lora in api_loras:
+            checks["lora"]["ok"] = True
+            checks["lora"]["source"] = "api"
         if "Quantizer" in available_classes:
             checks["pixydustQuantizer"]["ok"] = True
             checks["pixydustQuantizer"]["source"] = "api"
@@ -209,6 +276,22 @@ def main() -> int:
             checks["checkpoint"]["source"] = "filesystem"
             checks["checkpoint"]["path"] = str(existing[0])
 
+    if not checks["lora"]["ok"]:
+        candidates = lora_candidates(comfyui_root, lora)
+        existing = [path for path in candidates if path.is_file()]
+        hints = nearby_lora_hints(comfyui_root, candidates)
+        checks["lora"].update(
+            {
+                "ok": bool(existing),
+                "checkedPaths": [str(path) for path in candidates],
+                "nearbyCandidates": hints[:12],
+                "nearbyCandidatesAreHintsOnly": True,
+            }
+        )
+        if existing:
+            checks["lora"]["source"] = "filesystem"
+            checks["lora"]["path"] = str(existing[0])
+
     if not checks["pixydustQuantizer"]["ok"]:
         candidates = find_pixydust_candidates(comfyui_root, pixydust_source)
         checks["pixydustQuantizer"].update(
@@ -223,7 +306,7 @@ def main() -> int:
 
     ok = all(
         checks[name]["ok"]
-        for name in ["api", "checkpoint", "pixydustQuantizer", "workflowClasses"]
+        for name in ["api", "checkpoint", "lora", "pixydustQuantizer", "workflowClasses"]
     )
     report = {
         "ok": ok,
@@ -246,7 +329,7 @@ def main() -> int:
 
     print("VALIDATION REQUEST: Phase 4 ComfyUI sprite prerequisites are not ready.")
     print(f"Readiness report: {REPORT.relative_to(ROOT)}")
-    for name in ["api", "checkpoint", "pixydustQuantizer", "workflowClasses"]:
+    for name in ["api", "checkpoint", "lora", "pixydustQuantizer", "workflowClasses"]:
         check = checks[name]
         if not check["ok"]:
             reason = (
@@ -256,13 +339,13 @@ def main() -> int:
                 or check.get("checkedDirectory")
             )
             print(f"- {name}: {reason}")
-            if name == "checkpoint" and check.get("nearbyCandidates"):
-                print("  Nearby checkpoint hints, not accepted automatically:")
+            if name in {"checkpoint", "lora"} and check.get("nearbyCandidates"):
+                print(f"  Nearby {name} hints, not accepted automatically:")
                 for candidate in check["nearbyCandidates"][:5]:
                     print(f"  - {candidate['name']}: {candidate['path']}")
     print(
         "Expected: local ComfyUI API on 127.0.0.1:8188, "
-        "Pixel Art Diffusion XL checkpoint, and Pixydust Quantizer node."
+        "SDXL base checkpoint, Pixel Art XL LoRA, and Pixydust Quantizer node."
     )
     return 68
 

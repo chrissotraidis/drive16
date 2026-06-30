@@ -26,17 +26,20 @@ still builds a working ROM.
 The generated-MML ROM proof now passes with Docker, SGDK, and Genteel. Full
 generated-asset ROM proof is awaiting live ComfyUI sprite output. The local
 ComfyUI API launch path now starts on `127.0.0.1:8188`, Pixydust loads through
-the API, and the committed workflow classes are present. The remaining local
-prerequisite is a Pixel Art Diffusion XL compatible checkpoint. The default
-filename is `pixel-art-diffusion-xl.safetensors`, or
-`DRIVE16_COMFYUI_CHECKPOINT` can name a compatible local checkpoint. The
-generated-assets validation harness now prints this checkpoint-aware readiness
-sequence when live sprite output is absent. The app-side AI-sprite prompt gate
-now returns the same readiness sequence before asking the user to retry the
-prompt. The settings drawer now surfaces the same ComfyUI readiness checks
-behind the `AI sprites` toggle, accepts a checkpoint filename before testing,
-and the browser-preview failure path renders an API readiness row for local QA.
-A validator-accepted synthetic generated-sprite PNG has also been proven
+the API, and the committed workflow classes are present. The earlier dedicated
+Pixel Art Diffusion XL checkpoint assumption has been replaced with a clearer
+default dependency pair: Stability AI SDXL Base as the checkpoint and
+`nerijs/pixel-art-xl` as the LoRA. The default filenames are
+`sd_xl_base_1.0.safetensors` and `pixel-art-xl.safetensors`, or
+`DRIVE16_COMFYUI_CHECKPOINT` and `DRIVE16_COMFYUI_LORA` can name compatible
+local files. The generated-assets validation harness now prints this model-pair
+readiness sequence when live sprite output is absent. The app-side AI-sprite
+prompt gate now returns the same readiness sequence before asking the user to
+retry the prompt. The settings drawer now surfaces the same ComfyUI readiness
+checks behind the `AI sprites` toggle, accepts checkpoint and LoRA filenames
+before testing, and the browser-preview failure path renders an API readiness
+row for local QA. A validator-accepted synthetic generated-sprite PNG has also
+been proven
 through SGDK `rescomp`, a ROM build, and a Genteel screenshot. Live ComfyUI
 output is still required before the generated-sprite checklist item can close.
 The combined prompt path has been fixture-proven with that validated generated
@@ -48,37 +51,28 @@ The current Phase 4 evidence packet is recorded in `docs/phase4-evidence.md`;
 it keeps Phase 4 open on the real live ComfyUI sprite gate. The repeatable
 ComfyUI API smoke was rerun on 2026-06-30 and confirms the API can start, the
 committed workflow classes are present, and Pixydust is loaded. The remaining
-ComfyUI prerequisite is the compatible checkpoint. The likely Civitai Pixel Art
-Diffusion XL source has also been audited, and its current metadata conflicts
-with the architecture appendix's open CreativeML assumption, so Drive16 continues to
-require an explicit user-selected checkpoint source instead of auto-downloading
-model weights. The readiness report now also surfaces nearby local checkpoint
-hints without accepting them automatically. The checkpoint installer now also
-supports explicit local-file symlinks for large user-selected model weights.
-The native app settings readiness path now mirrors the checkpoint hints and
-keeps filesystem checks visible even when the ComfyUI API is not running.
-The live ComfyUI sprite runner now reuses the same readiness gate before
-enqueueing so missing checkpoint/API prerequisites stop with a checkpoint-aware
-validation request. A single live proof wrapper now runs readiness, live sprite
-generation, and the generated-assets ROM proof in order. It now launches the
-local ComfyUI API automatically when needed and stops the process it launched,
-leaving the compatible checkpoint as the remaining prerequisite.
+ComfyUI prerequisites are the SDXL base checkpoint and Pixel Art XL LoRA model
+files. The readiness report now surfaces nearby local checkpoint and LoRA hints
+without accepting them automatically. The native app settings readiness path
+mirrors those checks and keeps filesystem rows visible even when the ComfyUI
+API is not running. The live ComfyUI sprite runner now reuses the same readiness
+gate before enqueueing so missing model/API prerequisites stop with a validation
+request. A single live proof wrapper now runs readiness, live sprite generation,
+and the generated-assets ROM proof in order. It now launches the local ComfyUI
+API automatically when needed and stops the process it launched, leaving the
+model files as the remaining local prerequisites.
 
 ## Next Up
 
-VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint. The
-ComfyUI API, Pixydust Quantizer, and workflow classes have been smoke-tested as
-ready in the current local setup; `checkpointOk` is the remaining miss. Set
-`DRIVE16_COMFYUI_CHECKPOINT` if the filename differs from the default, or type
-the compatible filename into the app's `Checkpoint` field before testing the
-endpoint. You can use
-`scripts/install-phase4-comfyui-checkpoint.sh --source /path-or-url/to/compatible-checkpoint.safetensors --checkpoint pixel-art-diffusion-xl.safetensors --check`
-to place an explicit user-provided checkpoint. If the source is the Civitai
-Pixel Art Diffusion XL checkpoint, treat it as a user-selected external model
-under its own license. Then run
-`scripts/validate-phase4-live-generated-assets.sh`; the wrapper will launch
-local ComfyUI if needed, run readiness, run the live sprite workflow, and run
-the generated-assets ROM proof.
+VALIDATION REQUEST: install Drive16's default ComfyUI model pair after reviewing
+the upstream model licenses. The ComfyUI API, Pixydust Quantizer, and workflow
+classes have been smoke-tested as ready in the current local setup; the model
+files are the remaining local prerequisite. Use
+`scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check`, or
+set `DRIVE16_COMFYUI_CHECKPOINT` and `DRIVE16_COMFYUI_LORA` for compatible
+local filenames. Then run `scripts/validate-phase4-live-generated-assets.sh`;
+the wrapper will launch local ComfyUI if needed, run readiness, run the live
+sprite workflow, and run the generated-assets ROM proof.
 
 ## Completed Phase 4 Work
 
@@ -165,8 +159,10 @@ the generated-assets ROM proof.
   Pixydust without masking the missing checkpoint.
 - [x] Pixel Art Diffusion XL source metadata audited without auto-downloading
   model weights.
-- [x] ComfyUI readiness report now includes nearby checkpoint hints without
-  relaxing the real Pixel Art checkpoint gate.
+- [x] Phase 4 default ComfyUI dependency moved to SDXL Base plus Pixel Art XL
+  LoRA with an explicit license-accepting installer.
+- [x] ComfyUI readiness report now includes nearby model-file hints without
+  relaxing the real live sprite gate.
 - [x] Checkpoint installer supports explicit local-file symlink mode for large
   user-selected model weights.
 - [x] Native app ComfyUI readiness rows surface checkpoint hints without

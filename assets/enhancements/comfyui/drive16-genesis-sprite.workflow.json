@@ -2,17 +2,36 @@
   "1": {
     "class_type": "CheckpointLoaderSimple",
     "inputs": {
-      "ckpt_name": "pixel-art-diffusion-xl.safetensors"
+      "ckpt_name": "sd_xl_base_1.0.safetensors"
     },
     "_meta": {
-      "title": "Pixel Art Diffusion XL checkpoint"
+      "title": "SDXL base checkpoint"
+    }
+  },
+  "10": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "1",
+        1
+      ],
+      "lora_name": "pixel-art-xl.safetensors",
+      "strength_model": 1.2,
+      "strength_clip": 1.2
+    },
+    "_meta": {
+      "title": "Pixel Art XL LoRA"
     }
   },
   "2": {
     "class_type": "CLIPTextEncode",
     "inputs": {
       "clip": [
-        "1",
+        "10",
         1
       ],
       "text": "single 32x32 Sega Genesis Mega Drive character sprite, full body, centered, clean pixel art silhouette, flat magenta background for transparency, limited 16 color game palette, readable at small size, crisp hard edges"
@@ -25,7 +44,7 @@
     "class_type": "CLIPTextEncode",
     "inputs": {
       "clip": [
-        "1",
+        "10",
         1
       ],
       "text": "blurry, antialiasing, smooth gradients, noisy background, text, watermark, signature, realistic lighting, tiny unreadable details, too many colors, cropped body, shadow"
@@ -49,7 +68,7 @@
     "class_type": "KSampler",
     "inputs": {
       "model": [
-        "1",
+        "10",
         0
       ],
       "positive": [

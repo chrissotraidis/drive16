@@ -11,7 +11,7 @@
   },
   "workflow": {
     "path": "assets/enhancements/comfyui/drive16-genesis-sprite.workflow.json",
-    "nodeCount": 9,
+    "nodeCount": 10,
     "outputPrefix": "drive16/generated/drive16_genesis_sprite"
   },
   "validator": {
@@ -24,9 +24,15 @@
     ]
   },
   "model": {
-    "checkpoint": "pixel-art-diffusion-xl.safetensors",
-    "role": "dedicated pixel checkpoint",
-    "install": "Install a Pixel Art Diffusion XL compatible checkpoint under the local ComfyUI checkpoints folder and update ckpt_name if the filename differs."
+    "checkpoint": "sd_xl_base_1.0.safetensors",
+    "checkpointRole": "SDXL base model",
+    "checkpointSource": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
+    "checkpointLicense": "CreativeML Open RAIL++-M",
+    "lora": "pixel-art-xl.safetensors",
+    "loraRole": "pixel-art style adapter",
+    "loraSource": "https://huggingface.co/nerijs/pixel-art-xl",
+    "loraLicense": "CreativeML OpenRAIL-M",
+    "install": "Run scripts/install-phase4-comfyui-models.sh after reviewing the upstream model licenses, or place compatible local files under ComfyUI models/checkpoints and models/loras."
   },
   "customNodes": [
     {

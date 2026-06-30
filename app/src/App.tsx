@@ -212,7 +212,8 @@ type DecodedFramebufferFrame = {
 const openRouterKeyUrl = "https://openrouter.ai/api/v1/key";
 const openRouterModelsUrl = "https://openrouter.ai/api/v1/models";
 const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
-const defaultComfyUiCheckpoint = "pixel-art-diffusion-xl.safetensors";
+const defaultComfyUiCheckpoint = "sd_xl_base_1.0.safetensors";
+const defaultComfyUiLora = "pixel-art-xl.safetensors";
 
 const preferredOpenRouterModels = [
   "~anthropic/claude-sonnet-latest",
@@ -428,6 +429,7 @@ function App() {
   });
   const [comfyUiEndpoint, setComfyUiEndpoint] = useState(defaultComfyUiEndpoint);
   const [comfyUiCheckpoint, setComfyUiCheckpoint] = useState(defaultComfyUiCheckpoint);
+  const [comfyUiLora, setComfyUiLora] = useState(defaultComfyUiLora);
   const [comfyUiConnection, setComfyUiConnection] = useState<ComfyUiEndpointStatus>({
     generatedAt: "0",
     state: "idle",
@@ -1086,6 +1088,7 @@ function App() {
 
     const endpoint = comfyUiEndpoint.trim();
     const checkpoint = comfyUiCheckpoint.trim() || defaultComfyUiCheckpoint;
+    const lora = comfyUiLora.trim() || defaultComfyUiLora;
     if (!endpoint) {
       setComfyUiConnection((current) => ({
         ...current,
@@ -1106,9 +1109,9 @@ function App() {
     try {
       const result = isTauriRuntime()
         ? await invoke<ComfyUiEndpointStatus>("check_comfyui_endpoint", {
-            request: { endpoint, checkpoint },
+            request: { endpoint, checkpoint, lora },
           })
-        : await checkComfyUiEndpointInBrowser(endpoint, checkpoint);
+        : await checkComfyUiEndpointInBrowser(endpoint, checkpoint, lora);
 
       setComfyUiConnection(result);
       appendOpenCodeEvent(
@@ -1151,6 +1154,11 @@ function App() {
 
   function handleComfyUiCheckpointChange(value: string) {
     setComfyUiCheckpoint(value);
+    resetComfyUiConnectionIfChecked();
+  }
+
+  function handleComfyUiLoraChange(value: string) {
+    setComfyUiLora(value);
     resetComfyUiConnectionIfChecked();
   }
 
@@ -1676,6 +1684,7 @@ function App() {
           comfyUiCheckpoint={comfyUiCheckpoint}
           comfyUiConnection={comfyUiConnection}
           comfyUiEndpoint={comfyUiEndpoint}
+          comfyUiLora={comfyUiLora}
           connection={modelConnection}
           enhancements={enhancements}
           modelOptions={modelOptions}
@@ -1686,6 +1695,7 @@ function App() {
           onClose={() => setSettingsOpen(false)}
           onComfyUiCheckpointChange={handleComfyUiCheckpointChange}
           onComfyUiEndpointChange={handleComfyUiEndpointChange}
+          onComfyUiLoraChange={handleComfyUiLoraChange}
           onEnhancementChange={handleEnhancementChange}
           onModelChange={setActiveModel}
           onOpenRouterKeyChange={handleOpenRouterKeyChange}
@@ -2005,6 +2015,7 @@ function modelsSourceLabel(source: string) {
 async function checkComfyUiEndpointInBrowser(
   endpoint: string,
   _checkpoint: string,
+  _lora: string,
 ): Promise<ComfyUiEndpointStatus> {
   const baseUrl = normalizeComfyUiEndpoint(endpoint);
   const systemStatsUrl = `${baseUrl}/system_stats`;
@@ -2064,6 +2075,7 @@ function SettingsPanel({
   comfyUiCheckpoint,
   comfyUiConnection,
   comfyUiEndpoint,
+  comfyUiLora,
   connection,
   enhancements,
   modelOptions,
@@ -2074,6 +2086,7 @@ function SettingsPanel({
   onClose,
   onComfyUiCheckpointChange,
   onComfyUiEndpointChange,
+  onComfyUiLoraChange,
   onEnhancementChange,
   onModelChange,
   onOpenRouterKeyChange,
@@ -2087,6 +2100,7 @@ function SettingsPanel({
   comfyUiCheckpoint: string;
   comfyUiConnection: ComfyUiEndpointStatus;
   comfyUiEndpoint: string;
+  comfyUiLora: string;
   connection: ModelConnectionReport;
   enhancements: EnhancementSettings;
   modelOptions: ModelOption[];
@@ -2097,6 +2111,7 @@ function SettingsPanel({
   onClose: () => void;
   onComfyUiCheckpointChange: (value: string) => void;
   onComfyUiEndpointChange: (value: string) => void;
+  onComfyUiLoraChange: (value: string) => void;
   onEnhancementChange: (key: keyof EnhancementSettings, enabled: boolean) => void;
   onModelChange: (value: string) => void;
   onOpenRouterKeyChange: (value: string) => void;
@@ -2267,7 +2282,7 @@ function SettingsPanel({
                   </label>
 
                   <label className="field-row">
-                    <span>Checkpoint</span>
+                    <span>SDXL checkpoint</span>
                     <input
                       aria-label="ComfyUI checkpoint"
                       autoComplete="off"
@@ -2276,6 +2291,19 @@ function SettingsPanel({
                       spellCheck={false}
                       type="text"
                       value={comfyUiCheckpoint}
+                    />
+                  </label>
+
+                  <label className="field-row">
+                    <span>Pixel art LoRA</span>
+                    <input
+                      aria-label="ComfyUI LoRA"
+                      autoComplete="off"
+                      data-testid="comfyui-lora-input"
+                      onChange={(event) => onComfyUiLoraChange(event.target.value)}
+                      spellCheck={false}
+                      type="text"
+                      value={comfyUiLora}
                     />
                   </label>
 

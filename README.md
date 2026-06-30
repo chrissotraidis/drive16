@@ -31,19 +31,16 @@ generated sprite validation, MML music generation, and the combined
 generated-assets proof harness.
 
 Phase 4 is not complete yet. The remaining gate is live ComfyUI sprite output
-from a user-selected Pixel Art Diffusion XL compatible checkpoint.
+from the default local model pair: Stability AI SDXL Base plus the
+`nerijs/pixel-art-xl` LoRA.
 
 ## What to do next
 
-The next best step is to install or link a compatible checkpoint, then run the
-one-command live Phase 4 proof:
+The next best step is to install the local ComfyUI model dependencies after
+reviewing their upstream licenses, then run the one-command live Phase 4 proof:
 
 ```sh
-scripts/install-phase4-comfyui-checkpoint.sh \
-  --source /path-or-url/to/compatible-checkpoint.safetensors \
-  --checkpoint pixel-art-diffusion-xl.safetensors \
-  --sha256 <optional-known-hash> \
-  --check
+scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
 
 scripts/validate-phase4-live-generated-assets.sh
 ```
@@ -91,7 +88,7 @@ pnpm --dir app tauri dev
 - Phase 2: agent-produced CORE ROM with bundled sprite and bundled music.
 - Phase 3: core v1 app flow, complete and approved.
 - Phase 4: optional AI sprites and generated MML music, currently gated on the
-  compatible ComfyUI checkpoint.
+  local SDXL checkpoint plus pixel-art LoRA ComfyUI dependencies.
 - Phase 5: hardening and fully local path, not started.
 
 ## Model stance

@@ -37,7 +37,7 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def workflow_with_checkpoint(workflow: Any, checkpoint: str) -> Any:
+def workflow_with_models(workflow: Any, checkpoint: str, lora: str) -> Any:
     updated = copy.deepcopy(workflow)
     if not isinstance(updated, dict):
         raise RunnerError("Workflow must be a ComfyUI API prompt object.")
@@ -54,6 +54,18 @@ def workflow_with_checkpoint(workflow: Any, checkpoint: str) -> Any:
     if not isinstance(inputs, dict):
         raise RunnerError("CheckpointLoaderSimple inputs must be an object.")
     inputs["ckpt_name"] = checkpoint
+
+    lora_nodes = [
+        node
+        for node in updated.values()
+        if isinstance(node, dict) and node.get("class_type") == "LoraLoader"
+    ]
+    if len(lora_nodes) != 1:
+        raise RunnerError(f"Expected exactly one LoraLoader node, found {len(lora_nodes)}.")
+    lora_inputs = lora_nodes[0].setdefault("inputs", {})
+    if not isinstance(lora_inputs, dict):
+        raise RunnerError("LoraLoader inputs must be an object.")
+    lora_inputs["lora_name"] = lora
     return updated
 
 
@@ -224,6 +236,8 @@ def run_readiness(args: argparse.Namespace) -> subprocess.CompletedProcess[str]:
             args.comfyui_url,
             "--checkpoint",
             args.checkpoint,
+            "--lora",
+            args.lora,
         ],
         cwd=ROOT,
         text=True,
@@ -242,6 +256,7 @@ def validation_request(
     command = (
         f"COMFYUI_URL={shlex.quote(args.comfyui_url)} "
         f"DRIVE16_COMFYUI_CHECKPOINT={shlex.quote(args.checkpoint)} "
+        f"DRIVE16_COMFYUI_LORA={shlex.quote(args.lora)} "
         "scripts/run-comfyui-sprite-workflow.py"
     )
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -249,7 +264,7 @@ def validation_request(
         "ok": False,
         "reason": message,
         "validationRequest": {
-            "startComfyUI": "Start local ComfyUI on http://127.0.0.1:8188 with the Pixel Art Diffusion XL checkpoint and Pixydust Quantizer custom node installed.",
+            "startComfyUI": "Start local ComfyUI on http://127.0.0.1:8188 with the SDXL base checkpoint, Pixel Art XL LoRA, and Pixydust Quantizer custom node installed.",
             "command": command,
             "expected": "The command enqueues through drive16-comfyui, downloads a PNG, and prints Generated sprite ok.",
         },
@@ -286,15 +301,22 @@ def main() -> int:
     parser.add_argument(
         "--checkpoint",
         default=os.environ.get("DRIVE16_COMFYUI_CHECKPOINT"),
-        help="Pixel Art Diffusion XL compatible checkpoint filename to use.",
+        help="SDXL-compatible checkpoint filename to use.",
+    )
+    parser.add_argument(
+        "--lora",
+        default=os.environ.get("DRIVE16_COMFYUI_LORA"),
+        help="Pixel Art XL LoRA filename to use.",
     )
     args = parser.parse_args()
 
     manifest = load_json(MANIFEST)
     workflow = load_json(WORKFLOW)
     manifest_checkpoint = str(manifest.get("model", {}).get("checkpoint", ""))
+    manifest_lora = str(manifest.get("model", {}).get("lora", ""))
     args.checkpoint = str(args.checkpoint or manifest_checkpoint)
-    workflow = workflow_with_checkpoint(workflow, args.checkpoint)
+    args.lora = str(args.lora or manifest_lora)
+    workflow = workflow_with_models(workflow, args.checkpoint, args.lora)
     validator = manifest.get("validator", {})
     symbol = args.symbol or (
         validator.get("defaultSymbol") if isinstance(validator, dict) else None
@@ -337,6 +359,7 @@ def main() -> int:
             "ok": True,
             "promptId": prompt_id,
             "checkpoint": args.checkpoint,
+            "lora": args.lora,
             "downloadedPng": str(png.relative_to(ROOT)),
             "validatorOutput": validator_output,
         }

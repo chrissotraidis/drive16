@@ -23,13 +23,20 @@ if grep -E "Live ComfyUI sprite run|scripts/run-comfyui-sprite-workflow.py|local
   cat <<'EOF'
 VALIDATION REQUEST: live ComfyUI sprite output is required for the generated-assets ROM proof.
 
-Place a Pixel Art Diffusion XL compatible checkpoint at:
+Install the default SDXL base checkpoint plus Pixel Art XL LoRA after
+reviewing their upstream licenses:
 
-~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
 
-If the compatible checkpoint uses a different local filename, set:
+Or place compatible local files at:
+
+~/Documents/ComfyUI/models/checkpoints/sd_xl_base_1.0.safetensors
+~/Documents/ComfyUI/models/loras/pixel-art-xl.safetensors
+
+If compatible files use different local filenames, set:
 
 export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+export DRIVE16_COMFYUI_LORA=your-lora-name.safetensors
 
 Start local ComfyUI:
 

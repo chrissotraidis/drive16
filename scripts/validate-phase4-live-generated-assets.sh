@@ -97,7 +97,8 @@ This runs the real gate in order:
 3. Generated-sprite plus generated-MML ROM proof
 
 ComfyUI URL: $COMFYUI_URL
-Checkpoint: ${DRIVE16_COMFYUI_CHECKPOINT:-pixel-art-diffusion-xl.safetensors}
+Checkpoint: ${DRIVE16_COMFYUI_CHECKPOINT:-sd_xl_base_1.0.safetensors}
+LoRA: ${DRIVE16_COMFYUI_LORA:-pixel-art-xl.safetensors}
 EOF
 
 echo

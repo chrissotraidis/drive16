@@ -79,6 +79,7 @@ checks = readiness.get("checks", {})
 api_ok = bool(checks.get("api", {}).get("ok"))
 workflow_ok = bool(checks.get("workflowClasses", {}).get("ok"))
 checkpoint_ok = bool(checks.get("checkpoint", {}).get("ok"))
+lora_ok = bool(checks.get("lora", {}).get("ok"))
 pixydust_ok = bool(checks.get("pixydustQuantizer", {}).get("ok"))
 
 payload = {
@@ -87,9 +88,10 @@ payload = {
     "workflowClassesOk": workflow_ok,
     "pixydustOk": pixydust_ok,
     "checkpointOk": checkpoint_ok,
+    "loraOk": lora_ok,
     "readinessStatus": readiness_status,
     "readinessReport": "artifacts/phase4/comfyui-readiness/latest.json",
-    "remainingGate": None if checkpoint_ok else "Pixel Art Diffusion XL compatible checkpoint",
+    "remainingGate": None if checkpoint_ok and lora_ok else "SDXL base checkpoint plus Pixel Art XL LoRA",
 }
 report.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -104,6 +106,6 @@ if not pixydust_ok:
     raise SystemExit(68)
 
 print(f"ComfyUI API smoke ok: report saved to {report.relative_to(root)}")
-if not checkpoint_ok:
-    print("VALIDATION REQUEST: install the compatible checkpoint, then run the live sprite workflow.")
+if not checkpoint_ok or not lora_ok:
+    print("VALIDATION REQUEST: install the ComfyUI model files, then run the live sprite workflow.")
 PY
