@@ -1,5 +1,50 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 67 - Live generated-assets proof wrapper
+
+Plan:
+
+- Task: add a one-command wrapper for the remaining live Phase 4 gate sequence.
+- Files: `scripts/validate-phase4-live-generated-assets.sh`,
+  `scripts/README.md`, `docs/phase4-live-generated-assets-proof.md`,
+  `docs/phase4-generated-assets-validation.md`, `docs/phase4-evidence.md`,
+  `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: run shell syntax checks, execute the wrapper in the current
+  not-ready state, confirm it stops at readiness, and run hygiene scans.
+
+Did:
+
+- Added `scripts/validate-phase4-live-generated-assets.sh`.
+- The wrapper runs ComfyUI readiness, live sprite generation, then the
+  generated-assets ROM proof in order.
+- It respects `COMFYUI_URL` and `DRIVE16_COMFYUI_CHECKPOINT`.
+- Existing scripts still own the readiness checks, live sprite validation, ROM
+  proof, and validation-request exit codes.
+
+Evidence:
+
+- `bash -n scripts/validate-phase4-live-generated-assets.sh` passed.
+- `scripts/validate-phase4-live-generated-assets.sh` exited `68` in the
+  current not-ready environment.
+- The wrapper printed the three-step live proof sequence, then stopped at
+  Step 1, `ComfyUI readiness`.
+- The readiness output reported the local ComfyUI API was not reachable, the
+  selected compatible checkpoint was missing, and nearby checkpoint hints were
+  listed without being accepted automatically.
+- `git diff --check` passed.
+- Markdown punctuation and secret scans found no matches in the diff.
+
+Gate:
+
+VALIDATION REQUEST remains: provide or install a compatible checkpoint as a
+user-selected external model, then run the live ComfyUI sprite workflow and the
+real generated-assets ROM proof.
+
+Next:
+
+- Install the compatible checkpoint, run the live generated-assets proof
+  wrapper, and use its output as the Phase 4 gate evidence.
+
 ## 2026-06-30 - ITERATION 66 - Live sprite runner readiness preflight
 
 Plan:

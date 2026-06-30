@@ -33,7 +33,7 @@ local ComfyUI produces a PNG that passes the generated-sprite validator.
 | Generated-MML prompt path builds and verifies a ROM | `docs/phase4-generated-music-prompt.md` |
 | App prompt path gates generated sprites on a successful live ComfyUI PNG | `docs/phase4-generated-sprite-prompt-gate.md` |
 | Combined generated-sprite plus generated-MML prompt path is wired | `docs/phase4-generated-assets-fixture-prompt.md` |
-| Real combined generated-assets proof script exists and stops at honest live gates | `docs/phase4-generated-assets-validation.md` |
+| Real combined generated-assets proof scripts exist and stop at honest live gates | `docs/phase4-generated-assets-validation.md`, `docs/phase4-live-generated-assets-proof.md` |
 
 ## Open Gate
 
@@ -80,6 +80,12 @@ In another shell, run:
 scripts/check-phase4-comfyui-readiness.py
 COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
 scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Or run the same gate sequence with:
+
+```sh
+scripts/validate-phase4-live-generated-assets.sh
 ```
 
 Expected result: readiness records `ok: true`, the live sprite run records

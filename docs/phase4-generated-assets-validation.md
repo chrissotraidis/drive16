@@ -135,6 +135,12 @@ Then run the combined generated-assets proof:
 scripts/validate-phase4-generated-assets-prompt.sh
 ```
 
+Or run the full live gate in one command:
+
+```sh
+scripts/validate-phase4-live-generated-assets.sh
+```
+
 Expected result: the ignored native test builds the generated-assets SGDK
 project, runs it in Genteel, captures neutral and Right-input screenshots,
 proves Right-input sprite movement, and verifies non-silent generated music.

@@ -59,7 +59,9 @@ The native app settings readiness path now mirrors the checkpoint hints and
 keeps filesystem checks visible even when the ComfyUI API is not running.
 The live ComfyUI sprite runner now reuses the same readiness gate before
 enqueueing so missing checkpoint/API prerequisites stop with a checkpoint-aware
-validation request.
+validation request. A single live proof wrapper now runs readiness, live sprite
+generation, and the generated-assets ROM proof in order once the compatible
+checkpoint is available.
 
 ## Next Up
 
@@ -169,6 +171,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   relaxing the required selected-checkpoint gate.
 - [x] Live ComfyUI sprite runner preflights Phase 4 readiness before enqueueing
   the generation workflow.
+- [x] One-command live generated-assets proof wrapper added for the final
+  checkpoint-to-ROM gate sequence.
 
 ## Completed Phase 3 Work
 
