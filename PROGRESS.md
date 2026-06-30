@@ -23,12 +23,13 @@ still builds a working ROM.
 
 ## Current Task
 
-The tuned Genesis palette ComfyUI workflow is committed under
-`assets/enhancements/comfyui/`.
+Generated-sprite PNG validation is available through
+`scripts/validate-generated-sprite.py`, but no live ComfyUI output has passed
+it yet.
 
 ## Next Up
 
-Validate generated sprites as palette-legal SGDK SPRITE resources.
+Run the ComfyUI workflow and validate a live generated sprite PNG.
 
 ## Completed Phase 4 Work
 
@@ -48,6 +49,10 @@ Validate generated sprites as palette-legal SGDK SPRITE resources.
   `assets/enhancements/comfyui/`.
 - [x] Phase 4 ComfyUI workflow evidence recorded in
   `docs/phase4-comfyui-workflow.md`.
+- [x] Generated-sprite PNG validator added at
+  `scripts/validate-generated-sprite.py`.
+- [x] Phase 4 generated-sprite validator evidence recorded in
+  `docs/phase4-generated-sprite-validator.md`.
 
 ## Completed Phase 3 Work
 

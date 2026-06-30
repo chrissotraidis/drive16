@@ -14,6 +14,15 @@
     "nodeCount": 9,
     "outputPrefix": "drive16/generated/drive16_genesis_sprite"
   },
+  "validator": {
+    "path": "scripts/validate-generated-sprite.py",
+    "defaultSymbol": "drive16_generated_sprite",
+    "transparentRgb": [
+      255,
+      0,
+      255
+    ]
+  },
   "model": {
     "checkpoint": "pixel-art-diffusion-xl.safetensors",
     "role": "dedicated pixel checkpoint",

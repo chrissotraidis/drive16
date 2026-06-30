@@ -1,5 +1,48 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 38 - Generated sprite validator
+
+Plan:
+
+- Task: add the local PNG validator for generated ComfyUI sprites.
+- Files: `scripts/validate-generated-sprite.py`,
+  `docs/phase4-generated-sprite-validator.md`,
+  `assets/enhancements/comfyui/manifest.json`,
+  `assets/enhancements/comfyui/README.md`, `scripts/README.md`,
+  `PROGRESS.md`, `WORKLOG.md`, and `DECISIONS.md`.
+- Verification: validator self-test with synthetic accepted and rejected PNGs,
+  Python syntax check, secret scan, Markdown punctuation check, and
+  `git diff --check`.
+
+Did:
+
+- Added a generated sprite PNG validator that parses PNG data directly.
+- The validator enforces 32x32 output, 4x4 tile maximum, binary transparency,
+  and at most 16 palette slots including transparency.
+- The validator reports the SGDK `SPRITE` resource line for accepted output.
+- Added a self-test that accepts a synthetic valid sprite and rejects a
+  synthetic over-palette sprite under ignored artifacts.
+
+Evidence:
+
+- `scripts/validate-generated-sprite.py --self-test` passed and accepted the
+  synthetic valid 32x32 sprite while rejecting the 18-slot invalid fixture.
+- `python3 -m py_compile scripts/validate-generated-sprite.py` passed.
+- `scripts/validate-comfyui-workflow.py` still passed after adding the
+  validator metadata to the ComfyUI manifest.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+
+Gate:
+
+None. The Phase 4 generated-sprite checklist item remains open until a live
+ComfyUI output is validated.
+
+Next:
+
+- Run the ComfyUI workflow and validate a live generated sprite PNG.
+
 ## 2026-06-30 - ITERATION 37 - ComfyUI Genesis sprite workflow
 
 Plan:

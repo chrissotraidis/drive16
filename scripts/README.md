@@ -19,6 +19,8 @@ Toolchain and validation scripts live here.
   initialize and expose the expected ComfyUI tools.
 - `validate-comfyui-workflow.py`: verifies the Phase 4 ComfyUI Genesis sprite
   workflow contract before live generated-sprite validation.
+- `validate-generated-sprite.py`: checks a generated ComfyUI PNG against the
+  Phase 4 SGDK sprite limits and reports its `SPRITE` resource line.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.

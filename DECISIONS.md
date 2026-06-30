@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Generated sprite validation accepts ComfyUI PNG shapes
+
+Context:
+
+ComfyUI SaveImage output may be RGB or RGBA PNG data rather than the indexed
+PNG format used by the bundled CORE sprite. Phase 4 still needs to enforce the
+Genesis limits before any generated image is handed to SGDK.
+
+Decision:
+
+Validate generated sprites with a Drive16 script that reads indexed, RGB,
+grayscale, or RGBA PNGs and enforces the hardware-facing contract: 32x32
+pixels, 4x4 tiles, binary transparency, and no more than 16 palette slots
+including transparency. For RGB output, reserve `255,0,255` as the transparent
+background color until a later normalization step writes indexed PNG output.
+
+Consequence:
+
+Generated ComfyUI output can be rejected or accepted locally before SGDK build
+wiring. The current validator proves the gate exists, but the Phase 4 generated
+sprite task remains open until an actual ComfyUI-generated PNG passes it.
+
 ## 2026-06-30 - ComfyUI sprite workflow is an API prompt contract
 
 Context:
