@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMFYUI_ROOT="${COMFYUI_ROOT:-$HOME/Documents/ComfyUI}"
+PIXYDUST_REPO="${DRIVE16_PIXYDUST_REPO:-https://github.com/sousakujikken/ComfyUI-PixydustQuantizer.git}"
+PIXYDUST_REV="${DRIVE16_PIXYDUST_REV:-6ffbb1ca23637f61559c3bd13f7be2b37d1dae03}"
+PIXYDUST_DIR="$COMFYUI_ROOT/custom_nodes/ComfyUI-PixydustQuantizer"
+CHECKPOINT_NAME="pixel-art-diffusion-xl.safetensors"
+CHECKPOINT_PATH="$COMFYUI_ROOT/models/checkpoints/$CHECKPOINT_NAME"
+INSTALL_PIXYDUST=0
+RUN_CHECK=0
+
+usage() {
+  cat <<EOF
+Usage: scripts/setup-phase4-comfyui-prereqs.sh [--install-pixydust] [--check]
+
+Dry-run by default. Prints the local ComfyUI prerequisites for the Phase 4
+generated-sprite workflow.
+
+Options:
+  --install-pixydust   Clone the Pixydust Quantizer node into COMFYUI_ROOT.
+  --check              Run scripts/check-phase4-comfyui-readiness.py afterward.
+
+Environment:
+  COMFYUI_ROOT         Local ComfyUI data folder. Default: $HOME/Documents/ComfyUI
+  DRIVE16_PIXYDUST_REPO
+  DRIVE16_PIXYDUST_REV
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --install-pixydust)
+      INSTALL_PIXYDUST=1
+      shift
+      ;;
+    --check)
+      RUN_CHECK=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 64
+      ;;
+  esac
+done
+
+echo "Drive16 Phase 4 ComfyUI prerequisite setup"
+echo "ComfyUI root: $COMFYUI_ROOT"
+echo "Pixydust node: $PIXYDUST_DIR"
+echo "Checkpoint path: $CHECKPOINT_PATH"
+echo
+
+if [ ! -d "$COMFYUI_ROOT" ]; then
+  cat <<EOF
+VALIDATION REQUEST: local ComfyUI data folder was not found.
+
+Create or select a local ComfyUI data folder, then rerun with:
+
+COMFYUI_ROOT=/path/to/ComfyUI scripts/setup-phase4-comfyui-prereqs.sh
+EOF
+  exit 68
+fi
+
+if [ "$INSTALL_PIXYDUST" -eq 1 ]; then
+  if ! command -v git >/dev/null 2>&1; then
+    echo "git is required to install the Pixydust custom node." >&2
+    exit 127
+  fi
+  mkdir -p "$COMFYUI_ROOT/custom_nodes"
+  if [ -e "$PIXYDUST_DIR" ]; then
+    echo "Pixydust directory already exists, leaving it untouched:"
+    echo "$PIXYDUST_DIR"
+  else
+    git clone "$PIXYDUST_REPO" "$PIXYDUST_DIR"
+    git -C "$PIXYDUST_DIR" checkout "$PIXYDUST_REV"
+  fi
+else
+  cat <<EOF
+Dry run: Pixydust was not installed.
+
+To install the required Pixydust Quantizer custom node:
+
+scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust
+EOF
+fi
+
+if [ ! -f "$CHECKPOINT_PATH" ]; then
+  cat <<EOF
+
+VALIDATION REQUEST: Pixel Art Diffusion XL checkpoint is still required.
+
+Place a Pixel Art Diffusion XL compatible checkpoint at:
+
+$CHECKPOINT_PATH
+
+Drive16 does not download this model automatically because model license,
+source, size, and hardware fit need to remain explicit.
+EOF
+else
+  echo
+  echo "Checkpoint present: $CHECKPOINT_PATH"
+fi
+
+if [ "$RUN_CHECK" -eq 1 ]; then
+  echo
+  COMFYUI_ROOT="$COMFYUI_ROOT" "$ROOT/scripts/check-phase4-comfyui-readiness.py"
+fi

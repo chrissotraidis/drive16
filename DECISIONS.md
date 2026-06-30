@@ -1,5 +1,29 @@
 # Drive16 Decisions
 
+## 2026-06-30 - ComfyUI prerequisite setup stays explicit
+
+Context:
+
+The Phase 4 generated-sprite path needs a local ComfyUI server, the Pixydust
+Quantizer custom node, and a Pixel Art Diffusion XL compatible checkpoint.
+The custom node is source code that can be pinned and installed, while the
+checkpoint is a large external model asset with separate license, source, size,
+and hardware considerations.
+
+Decision:
+
+Add a dry-run-first setup helper that can install the Pixydust Quantizer custom
+node only when explicitly requested. Pin the Pixydust install to
+`6ffbb1ca23637f61559c3bd13f7be2b37d1dae03`. Do not download the model
+checkpoint automatically; print the required checkpoint path and keep it as a
+validation request.
+
+Consequence:
+
+Drive16 can help prepare the local ComfyUI gate without silently pulling model
+weights or mutating existing custom-node installs. The generated-sprite
+checklist item remains open until a real live ComfyUI output passes validation.
+
 ## 2026-06-30 - Generated sprite prompt path consumes only live validated output
 
 Context:

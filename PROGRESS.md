@@ -25,12 +25,14 @@ still builds a working ROM.
 
 The generated-MML ROM proof now passes with Docker, SGDK, and Genteel. Full
 generated-asset ROM proof is awaiting live ComfyUI sprite output. A readiness
-check now reports the missing local ComfyUI prerequisites explicitly.
+check and dry-run setup helper now report the missing local ComfyUI
+prerequisites explicitly.
 
 ## Next Up
 
-VALIDATION REQUEST: make `scripts/check-phase4-comfyui-readiness.py` pass,
-then run
+VALIDATION REQUEST: run
+`scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust --check`, make
+`scripts/check-phase4-comfyui-readiness.py` pass, then run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
 then run `scripts/validate-phase4-generated-assets-prompt.sh`.
 
@@ -88,6 +90,10 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   `scripts/check-phase4-comfyui-readiness.py`.
 - [x] Phase 4 ComfyUI readiness evidence recorded in
   `docs/phase4-comfyui-readiness.md`.
+- [x] Dry-run ComfyUI prerequisite setup helper added at
+  `scripts/setup-phase4-comfyui-prereqs.sh`.
+- [x] Phase 4 ComfyUI prerequisite setup evidence recorded in
+  `docs/phase4-comfyui-prereq-setup.md`.
 
 ## Completed Phase 3 Work
 

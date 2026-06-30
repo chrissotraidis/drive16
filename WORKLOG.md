@@ -1,5 +1,77 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 48 - ComfyUI prerequisite setup helper
+
+Plan:
+
+- Task: add a dry-run-first helper for preparing the remaining local ComfyUI
+  sprite prerequisites.
+- Files: `scripts/setup-phase4-comfyui-prereqs.sh`, `scripts/README.md`,
+  `docs/phase4-comfyui-prereq-setup.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: upstream Pixydust commit lookup, shell syntax check, dry run,
+  readiness check, full native test suite, frontend build, secret scan,
+  Markdown punctuation check, ignored artifact check, and `git diff --check`.
+
+Did:
+
+- Added `scripts/setup-phase4-comfyui-prereqs.sh`.
+- The helper is dry-run by default.
+- `--install-pixydust` clones Pixydust Quantizer into the local ComfyUI
+  `custom_nodes` folder and pins it to
+  `6ffbb1ca23637f61559c3bd13f7be2b37d1dae03`.
+- Existing Pixydust custom-node directories are left untouched.
+- The helper prints the required Pixel Art Diffusion XL checkpoint path rather
+  than downloading model weights automatically.
+- Documented the setup helper in `scripts/README.md` and
+  `docs/phase4-comfyui-prereq-setup.md`.
+
+Evidence:
+
+- `git ls-remote https://github.com/sousakujikken/ComfyUI-PixydustQuantizer.git HEAD`
+  returned `6ffbb1ca23637f61559c3bd13f7be2b37d1dae03`.
+- `bash -n scripts/setup-phase4-comfyui-prereqs.sh` passed.
+- `scripts/setup-phase4-comfyui-prereqs.sh` dry run printed the local ComfyUI
+  root, Pixydust install command, and checkpoint validation request.
+- `scripts/check-phase4-comfyui-readiness.py` still exited `68`, confirming
+  the live ComfyUI API, checkpoint, and Pixydust node are not ready yet.
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture`
+  passed: 20 passed, 4 ignored.
+- `npm run build` in `app/` passed.
+- Secret scan returned no matches for OpenRouter key patterns.
+- Markdown punctuation and emoji guard returned no matches.
+- Ignored-artifact checks confirmed `app/dist/`,
+  `artifacts/phase4/comfyui-readiness/latest.json`, and
+  `artifacts/phase4/live-comfyui-sprite/last-run.json` are ignored.
+- `git diff --check` passed.
+
+Gate:
+
+VALIDATION REQUEST: run:
+
+```sh
+scripts/setup-phase4-comfyui-prereqs.sh --install-pixydust --check
+```
+
+Place a Pixel Art Diffusion XL compatible checkpoint at:
+
+```text
+~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+Then start ComfyUI on `http://127.0.0.1:8188` and run:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Next:
+
+- Prepare local ComfyUI prerequisites, then run the live sprite workflow.
+
 ## 2026-06-30 - ITERATION 47 - ComfyUI readiness check
 
 Plan:
