@@ -7,11 +7,12 @@ short MML track in place of bundled assets, and still builds a working ROM.
 
 ## Current Status
 
-Phase 4 is not complete. All app, script, wrapper, validator, prompt-path, and
-fixture proofs are in place, but the real live ComfyUI sprite gate remains
-open until the default SDXL Base checkpoint plus Pixel Art XL LoRA are
-installed and local ComfyUI produces a PNG that passes the generated-sprite
-validator.
+Phase 4 exit evidence is complete and ready for human sign-off. The default
+SDXL Base checkpoint plus Pixel Art XL LoRA were installed locally after human
+license acceptance. The live proof wrapper launched ComfyUI, generated a
+sprite, repaired the dominant generated background into SGDK palette-index-0
+transparency, validated the PNG, built the generated-sprite plus generated-MML
+ROM, ran it in Genteel, and passed the generated-assets proof.
 
 ## Completed Evidence
 
@@ -35,58 +36,42 @@ validator.
 | Generated-MML prompt path builds and verifies a ROM | `docs/phase4-generated-music-prompt.md` |
 | App prompt path gates generated sprites on a successful live ComfyUI PNG | `docs/phase4-generated-sprite-prompt-gate.md` |
 | Combined generated-sprite plus generated-MML prompt path is wired | `docs/phase4-generated-assets-fixture-prompt.md` |
-| Real combined generated-assets proof scripts exist and stop at honest live gates | `docs/phase4-generated-assets-validation.md`, `docs/phase4-live-generated-assets-proof.md` |
+| Real combined generated-assets proof passes with live ComfyUI output | `docs/phase4-generated-assets-validation.md`, `docs/phase4-live-generated-assets-proof.md` |
 
-## Open Gate
+## Live Gate Evidence
 
-The remaining live gate is the real ComfyUI sprite output:
+The live gate was run successfully on 2026-06-30:
 
-- `scripts/validate-phase4-comfyui-api-smoke.sh` passes and records
-  `apiOk: true`, `workflowClassesOk: true`, and `pixydustOk: true`, while
-  keeping model-file readiness separate. The smoke was rerun on 2026-06-30 and
-  confirmed the API, workflow classes, and Pixydust are ready in the current
-  local setup.
-- `scripts/validate-phase4-live-generated-assets.sh` now launches local
-  ComfyUI if the API is not already reachable, reaches readiness with
-  `api.ok: true`, `workflowClasses.ok: true`, and `pixydustQuantizer.ok: true`,
-  then exits `68` until the SDXL checkpoint and Pixel Art XL LoRA are present.
-- `scripts/validate-phase4-generated-assets-prompt.sh` exits `66` because
-  `artifacts/phase4/live-comfyui-sprite/last-run.json` does not record a
-  successful live sprite run.
-- `docs/phase4-comfyui-checkpoint-source-audit.md` records that the likely
-  Civitai Pixel Art Diffusion XL source currently has metadata that conflicts
-  with the architecture appendix's open CreativeML assumption, so Drive16 must
-  keep the checkpoint source user-selected.
-- `docs/phase4-comfyui-model-selection.md` records the replacement default:
-  Stability AI SDXL Base plus `nerijs/pixel-art-xl` LoRA from Hugging Face,
-  with explicit model-license acceptance before download.
+- `scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check`
+  installed the local model files:
+  `~/Documents/ComfyUI/models/checkpoints/sd_xl_base_1.0.safetensors` and
+  `~/Documents/ComfyUI/models/loras/pixel-art-xl.safetensors`.
+- `scripts/validate-phase4-live-generated-assets.sh` passed end to end.
+- The wrapper launched local ComfyUI because the API was not already running.
+- Readiness passed with API, checkpoint, LoRA, Pixydust Quantizer, and
+  workflow classes ready.
+- The live sprite run recorded prompt id
+  `66752e6a-a6bd-44ae-92f1-fe5e4fa893bc`.
+- Raw ComfyUI output had no transparent pixels, so the runner wrote an
+  SGDK-ready repaired PNG:
+  `artifacts/phase4/live-comfyui-sprite/66752e6a-a6bd-44ae-92f1-fe5e4fa893bc/drive16_genesis_sprite_00003_-sgdk.png`.
+- The repaired PNG validated as 32x32, 16 palette slots, and 360 transparent
+  pixels.
+- The generated-assets native proof passed, including generated sprite,
+  generated MML music, SGDK build, Genteel run, movement proof, and non-silent
+  audio proof.
+- The wrapper printed `Phase 4 live generated-assets proof ok`.
 
-## Validation Request
+## Repro Command
 
-Install the default local ComfyUI model pair after reviewing the upstream
-model licenses:
+On a machine with the model licenses accepted and Docker Desktop available:
 
 ```sh
 scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
-```
-
-Do not redistribute or commit the model weights. For custom local files, set
-`DRIVE16_COMFYUI_CHECKPOINT` and `DRIVE16_COMFYUI_LORA`.
-
-Then run the live gate sequence:
-
-```sh
 scripts/validate-phase4-live-generated-assets.sh
 ```
 
-Expected result: readiness records `ok: true`, the live sprite run records
-`ok: true` with a downloaded PNG that passes
-`scripts/validate-generated-sprite.py`, and the generated-assets prompt proof
-builds a ROM, runs it in Genteel, captures neutral and Right-input
-screenshots, proves Right-input sprite movement, and verifies non-silent
-generated audio.
-
 ## Phase Gate
 
-Do not mark Phase 4 complete until the validation request above passes with
-real live ComfyUI output.
+Phase 4 is at the human sign-off gate. Do not begin Phase 5 until the human
+approves this evidence.

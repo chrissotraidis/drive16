@@ -2,10 +2,9 @@
 
 ## Scope
 
-This slice adds a one-command wrapper for the remaining live Phase 4 gate. It
-does not claim Phase 4 is complete. It runs the existing strict proof steps in
-order so the final checkpoint-to-ROM path is repeatable after the compatible
-checkpoint is installed.
+This slice adds a one-command wrapper for the remaining live Phase 4 gate. The
+wrapper now passes locally with the default SDXL Base checkpoint and Pixel Art
+XL LoRA installed.
 
 ## Implemented Behavior
 
@@ -18,7 +17,8 @@ checkpoint is installed.
 - If readiness passes, it runs `scripts/run-comfyui-sprite-workflow.py`.
 - If the live sprite run passes, it runs
   `scripts/validate-phase4-generated-assets-prompt.sh`.
-- The wrapper respects `COMFYUI_URL` and `DRIVE16_COMFYUI_CHECKPOINT`.
+- The wrapper respects `COMFYUI_URL`, `DRIVE16_COMFYUI_CHECKPOINT`, and
+  `DRIVE16_COMFYUI_LORA`.
 - Existing scripts still own the strict checks and validation-request exit
   codes.
 
@@ -50,15 +50,39 @@ Result:
 - After the wrapper exited, `http://127.0.0.1:8188/system_stats` was not
   reachable, confirming the wrapper stopped the process it launched.
 
-## Validation Request
+Successful live proof:
 
-After installing or linking a compatible checkpoint, run:
+```sh
+scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
+scripts/validate-phase4-live-generated-assets.sh
+```
+
+Result:
+
+- The installer placed `sd_xl_base_1.0.safetensors` and
+  `pixel-art-xl.safetensors` in the local ComfyUI model folders.
+- The wrapper launched local ComfyUI because the API was not already
+  reachable.
+- Readiness passed for API, checkpoint, LoRA, Pixydust Quantizer, and workflow
+  classes.
+- Live ComfyUI generated prompt id
+  `66752e6a-a6bd-44ae-92f1-fe5e4fa893bc`.
+- The runner wrote the SGDK-ready generated sprite at
+  `artifacts/phase4/live-comfyui-sprite/66752e6a-a6bd-44ae-92f1-fe5e4fa893bc/drive16_genesis_sprite_00003_-sgdk.png`.
+- The repaired PNG validated as 32x32, 16 palette slots, and 360 transparent
+  pixels.
+- `scripts/validate-phase4-generated-assets-prompt.sh` passed after Docker
+  Desktop was started.
+- The wrapper printed `Phase 4 live generated-assets proof ok`.
+
+## Repro Command
+
+After accepting the model licenses and making Docker Desktop available, run:
 
 ```sh
 scripts/validate-phase4-live-generated-assets.sh
 ```
 
 Expected result: the wrapper launches local ComfyUI if needed, readiness
-passes, the live sprite runner records `ok: true` with a PNG accepted by
-`scripts/validate-generated-sprite.py`, and the generated-assets ROM proof
-builds and verifies the ROM through SGDK and Genteel.
+passes, the live sprite runner records `ok: true`, and the generated-assets ROM
+proof builds and verifies the ROM through SGDK and Genteel.

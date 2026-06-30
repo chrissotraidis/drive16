@@ -2,9 +2,9 @@
 
 ## Scope
 
-This slice adds the live runner for generated sprite validation. It does not
-claim that live generation passed in this environment, because local ComfyUI was
-not running on `http://127.0.0.1:8188`.
+This slice adds the live runner for generated sprite validation. It now passes
+in the local Phase 4 setup after the SDXL Base checkpoint and Pixel Art XL LoRA
+are installed.
 
 Implemented behavior:
 
@@ -18,6 +18,9 @@ Implemented behavior:
   `enqueue_workflow`.
 - It polls ComfyUI history, downloads the first PNG output from `/view`, and
   runs `scripts/validate-generated-sprite.py` on that PNG.
+- If the raw generated PNG has no transparent pixels, the runner asks the
+  validator to write an SGDK-ready indexed PNG that treats the dominant edge
+  color as transparent palette index 0, then validates that repaired PNG.
 - It writes ignored run records under
   `artifacts/phase4/live-comfyui-sprite/`.
 - It accepts `DRIVE16_COMFYUI_CHECKPOINT` or `--checkpoint` to use a
@@ -80,27 +83,32 @@ Result:
 - The validator still accepted the synthetic valid sprite and rejected the
   over-palette fixture.
 
-## Validation Request
-
-Run this when local ComfyUI is available with the Pixel Art Diffusion XL
-checkpoint and Pixydust Quantizer custom node installed:
+Live SDXL Base plus Pixel Art XL LoRA run:
 
 ```sh
-COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-live-generated-assets.sh
 ```
 
-If the compatible checkpoint has a different local filename, set:
+Result:
+
+- The wrapper launched local ComfyUI.
+- Readiness passed for API, checkpoint, LoRA, Pixydust Quantizer, and workflow
+  classes.
+- The runner generated prompt id
+  `66752e6a-a6bd-44ae-92f1-fe5e4fa893bc`.
+- Raw output had no transparent pixels, so the runner repaired the background
+  into indexed palette transparency.
+- The SGDK-ready PNG validated as 32x32, 16 palette slots, and 360 transparent
+  pixels:
+  `artifacts/phase4/live-comfyui-sprite/66752e6a-a6bd-44ae-92f1-fe5e4fa893bc/drive16_genesis_sprite_00003_-sgdk.png`.
+
+## Repro Command
+
+Run this when local ComfyUI dependencies and Docker Desktop are available:
 
 ```sh
-DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+scripts/validate-phase4-live-generated-assets.sh
 ```
 
-Expected result:
-
-- The command enqueues through `drive16-comfyui`.
-- It downloads a generated PNG under
-  `artifacts/phase4/live-comfyui-sprite/`.
-- `scripts/validate-generated-sprite.py` prints `Generated sprite ok`.
-
-Paste the command output back into the worklog before marking the generated
-sprite checklist item complete.
+Expected result: the live sprite runner records `ok: true`, and the wrapper
+continues into the generated-assets ROM proof.

@@ -7,6 +7,7 @@ import argparse
 import json
 import struct
 import zlib
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -263,6 +264,83 @@ def write_indexed_png(path: Path, width: int, height: int, rows: Iterable[bytes]
     path.write_bytes(data)
 
 
+def dominant_edge_rgb(png: DecodedPng) -> tuple[int, int, int]:
+    edge_pixels: list[tuple[int, int, int]] = []
+    for y in range(png.height):
+        for x in range(png.width):
+            if x not in (0, png.width - 1) and y not in (0, png.height - 1):
+                continue
+            red, green, blue, alpha = png.pixels[y * png.width + x]
+            if alpha == 255:
+                edge_pixels.append((red, green, blue))
+    if not edge_pixels:
+        raise SpriteValidationError(f"{png.path} has no opaque edge pixels to treat as background.")
+    return Counter(edge_pixels).most_common(1)[0][0]
+
+
+def repair_background_transparency(
+    source: Path,
+    destination: Path,
+    *,
+    max_colors: int,
+    transparent_rgb: tuple[int, int, int],
+    symbol: str,
+) -> tuple[SpriteReport, tuple[int, int, int]]:
+    png = decode_png(source)
+    background_rgb = dominant_edge_rgb(png)
+
+    opaque_counts: Counter[tuple[int, int, int]] = Counter()
+    indexed_pixels: list[int] = []
+    for red, green, blue, alpha in png.pixels:
+        if alpha not in (0, 255):
+            raise SpriteValidationError(f"{source} has partial alpha {alpha}; repair expects binary alpha.")
+        rgb = (red, green, blue)
+        if alpha == 0 or rgb == transparent_rgb or rgb == background_rgb:
+            indexed_pixels.append(0)
+            continue
+        opaque_counts[rgb] += 1
+        indexed_pixels.append(-1)
+
+    if not opaque_counts:
+        raise SpriteValidationError(f"{source} has no opaque sprite colors after background repair.")
+    if len(opaque_counts) + 1 > max_colors:
+        raise SpriteValidationError(
+            f"{source} uses {len(opaque_counts) + 1} palette slots after background repair, "
+            f"expected at most {max_colors}."
+        )
+
+    opaque_palette = [rgb for rgb, _ in opaque_counts.most_common()]
+    palette_lookup = {rgb: index + 1 for index, rgb in enumerate(opaque_palette)}
+    cursor = 0
+    rows: list[bytes] = []
+    for _ in range(png.height):
+        row = bytearray()
+        for _ in range(png.width):
+            palette_index = indexed_pixels[cursor]
+            if palette_index == -1:
+                red, green, blue, _ = png.pixels[cursor]
+                palette_index = palette_lookup[(red, green, blue)]
+            row.append(palette_index)
+            cursor += 1
+        rows.append(bytes(row))
+
+    palette_bytes = bytearray(transparent_rgb)
+    for red, green, blue in opaque_palette:
+        palette_bytes.extend([red, green, blue])
+    transparency = bytes([0] + [255] * len(opaque_palette))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    write_indexed_png(destination, png.width, png.height, rows, bytes(palette_bytes), transparency)
+    report = validate_sprite(
+        destination,
+        width=png.width,
+        height=png.height,
+        max_colors=max_colors,
+        transparent_rgb=transparent_rgb,
+        symbol=symbol,
+    )
+    return report, background_rgb
+
+
 def make_valid_fixture(path: Path) -> None:
     width = height = 32
     rows: list[bytes] = []
@@ -402,6 +480,11 @@ def main() -> int:
         default=(255, 0, 255),
         help="reserved transparent RGB color for truecolor ComfyUI output",
     )
+    parser.add_argument(
+        "--repair-background-output",
+        type=Path,
+        help="write an indexed PNG that treats the dominant edge color as transparent, then validate it",
+    )
     parser.add_argument("--self-test", action="store_true", help="run validator against ignored synthetic fixtures")
     args = parser.parse_args()
 
@@ -411,6 +494,29 @@ def main() -> int:
             return 0
         if args.png is None:
             raise SpriteValidationError("Provide a generated PNG path or use --self-test.")
+        if args.repair_background_output is not None:
+            report, background_rgb = repair_background_transparency(
+                args.png,
+                args.repair_background_output,
+                max_colors=args.max_colors,
+                transparent_rgb=args.transparent_rgb,
+                symbol=args.symbol,
+            )
+            ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+            payload = report_payload(report, manifest)
+            payload["repair"] = {
+                "source": str(args.png.relative_to(ROOT)) if args.png.is_relative_to(ROOT) else str(args.png),
+                "backgroundRgb": "#{:02x}{:02x}{:02x}".format(*background_rgb),
+            }
+            VALIDATION_FILE.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            print(
+                "Generated sprite repaired ok: "
+                f"{report.path} {report.width}x{report.height}, "
+                f"{report.palette_slots} palette slots, {report.transparent_pixels} transparent pixels, "
+                f"background #{background_rgb[0]:02x}{background_rgb[1]:02x}{background_rgb[2]:02x}"
+            )
+            print(report.rescomp)
+            return 0
         report = validate_sprite(
             args.png,
             width=args.width,

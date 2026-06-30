@@ -1,5 +1,68 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 74 - Live generated sprite transparency repair
+
+Plan:
+
+- Task: close the live ComfyUI sprite validation failure where raw generated
+  PNGs had no transparent pixels.
+- Files: `scripts/validate-generated-sprite.py`,
+  `scripts/run-comfyui-sprite-workflow.py`, `DECISIONS.md`, `PROGRESS.md`,
+  `README.md`, and Phase 4 evidence docs.
+- Verification: repair the actual failed live PNG, rerun the generated sprite
+  self-test, run the generated-assets ROM proof, then run the full
+  `scripts/validate-phase4-live-generated-assets.sh` wrapper.
+
+Did:
+
+- Added a validator repair mode that writes an indexed PNG with palette index
+  0 transparent by treating the dominant edge color as the generated
+  background.
+- Updated the live ComfyUI runner to keep the raw PNG but use the repaired
+  SGDK-ready PNG when raw output lacks transparency.
+- Installed the default SDXL Base checkpoint and Pixel Art XL LoRA locally
+  after human license acceptance.
+- Started Docker Desktop when the ROM proof reported the daemon was not
+  reachable.
+- Recorded the background-repair behavior as a Drive16 decision.
+- Updated Phase 4 progress and evidence from an open live gate to a human
+  sign-off gate.
+
+Evidence:
+
+- `scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check`
+  installed:
+  `~/Documents/ComfyUI/models/checkpoints/sd_xl_base_1.0.safetensors` and
+  `~/Documents/ComfyUI/models/loras/pixel-art-xl.safetensors`.
+- The installer readiness check initially exited `68` only because the ComfyUI
+  API was not running.
+- `scripts/validate-generated-sprite.py artifacts/phase4/live-comfyui-sprite/82d0c7e3-fef5-402b-979f-0bcb0d24a8a6/drive16_genesis_sprite_00001_.png --symbol drive16_player --repair-background-output artifacts/phase4/live-comfyui-sprite/82d0c7e3-fef5-402b-979f-0bcb0d24a8a6/drive16_genesis_sprite_00001_-sgdk-test.png`
+  passed with 16 palette slots and 537 transparent pixels.
+- `python3 -m py_compile scripts/validate-generated-sprite.py scripts/run-comfyui-sprite-workflow.py`
+  passed.
+- `scripts/validate-generated-sprite.py --self-test` passed.
+- First rerun of `scripts/validate-phase4-live-generated-assets.sh` passed
+  ComfyUI readiness and live sprite validation, then stopped at the generated
+  ROM proof because Docker Desktop was not running.
+- `open -a Docker` plus `docker info --format '{{.ServerVersion}}'` confirmed
+  Docker daemon version `29.5.3`.
+- `scripts/validate-phase4-generated-assets-prompt.sh` passed.
+- Final `scripts/validate-phase4-live-generated-assets.sh` passed end to end.
+  It launched ComfyUI, reached readiness, generated prompt id
+  `66752e6a-a6bd-44ae-92f1-fe5e4fa893bc`, wrote
+  `artifacts/phase4/live-comfyui-sprite/66752e6a-a6bd-44ae-92f1-fe5e4fa893bc/drive16_genesis_sprite_00003_-sgdk.png`,
+  validated it as 32x32 with 16 palette slots and 360 transparent pixels, and
+  printed `Phase 4 live generated-assets proof ok`.
+
+Gate:
+
+Phase 4 evidence is ready for human sign-off. Do not begin Phase 5 until the
+human approves Phase 4 complete.
+
+Next:
+
+- Present the Phase 4 evidence and ask for sign-off before Phase 5 hardening.
+
 ## 2026-06-30 - ITERATION 73 - ComfyUI model dependency selection
 
 Plan:

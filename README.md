@@ -25,19 +25,20 @@ Evidence:
 - Iteration journal: `WORKLOG.md`
 
 The active work is Phase 4, which is optional enhancement work beyond core v1.
-Most Phase 4 plumbing is in place: default-off settings toggles, ComfyUI
+The Phase 4 proof now passes locally: default-off settings toggles, ComfyUI
 readiness checks, the `comfyui-mcp` wrapper, the tuned Genesis sprite workflow,
 generated sprite validation, MML music generation, and the combined
-generated-assets proof harness.
+generated-assets proof harness are all in place.
 
-Phase 4 is not complete yet. The remaining gate is live ComfyUI sprite output
-from the default local model pair: Stability AI SDXL Base plus the
-`nerijs/pixel-art-xl` LoRA.
+Phase 4 is at the human sign-off gate. The live proof generated an AI sprite
+with Stability AI SDXL Base plus the `nerijs/pixel-art-xl` LoRA, repaired the
+generated background into SGDK-ready palette transparency, built the generated
+sprite plus generated-MML ROM, and passed the Genteel movement and audio proof.
 
 ## What to do next
 
-The next best step is to install the local ComfyUI model dependencies after
-reviewing their upstream licenses, then run the one-command live Phase 4 proof:
+To reproduce the one-command live Phase 4 proof after reviewing and accepting
+the upstream model licenses:
 
 ```sh
 scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
@@ -48,10 +49,8 @@ scripts/validate-phase4-live-generated-assets.sh
 The live proof wrapper launches local ComfyUI if needed, checks readiness, runs
 the live sprite workflow, validates the generated PNG, builds the generated
 sprite plus generated-MML ROM, runs it in Genteel, verifies movement, and
-verifies non-silent audio.
-
-If that passes, record the evidence in the Phase 4 docs and ask for Phase 4
-sign-off before moving to Phase 5 hardening.
+verifies non-silent audio. If the evidence is accepted, Phase 5 hardening is
+next.
 
 ## Running the app locally
 
@@ -87,8 +86,8 @@ pnpm --dir app tauri dev
 - Phase 1: text-only agent build loop with OpenRouter and CORE MCP servers.
 - Phase 2: agent-produced CORE ROM with bundled sprite and bundled music.
 - Phase 3: core v1 app flow, complete and approved.
-- Phase 4: optional AI sprites and generated MML music, currently gated on the
-  local SDXL checkpoint plus pixel-art LoRA ComfyUI dependencies.
+- Phase 4: optional AI sprites and generated MML music, proof passed locally
+  and awaiting human sign-off.
 - Phase 5: hardening and fully local path, not started.
 
 ## Model stance

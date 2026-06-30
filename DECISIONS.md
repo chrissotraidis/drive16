@@ -1,5 +1,30 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Generated sprite background repair is part of the ComfyUI path
+
+Context:
+
+The first live SDXL Base plus Pixel Art XL LoRA sprite outputs were valid
+32x32 RGB pixel-art images, but the raw PNGs had no alpha channel or reserved
+transparent color. SGDK sprite resources need a transparent palette slot, and
+the Phase 4 validator correctly rejected raw generated PNGs with no
+transparent pixels.
+
+Decision:
+
+Keep the raw ComfyUI output as evidence, but have the live runner write a
+separate SGDK-ready indexed PNG when the raw output has no transparency. The
+repair treats the dominant edge color as the generated background, maps it to
+palette index 0 with alpha 0, preserves the remaining opaque colors, and then
+reruns the strict generated-sprite validator.
+
+Consequence:
+
+The Phase 4 pipeline stays honest about raw model output while producing a
+palette-legal SGDK sprite artifact for the ROM proof. If a generated image
+uses too many opaque colors after background repair, the validator still
+rejects it and the gate remains open.
+
 ## 2026-06-30 - Default ComfyUI model pair is SDXL Base plus Pixel Art XL LoRA
 
 Context:

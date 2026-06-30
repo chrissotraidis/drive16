@@ -14,65 +14,34 @@ still builds a working ROM.
   sprites toggle.
 - [x] Wrap ComfyUI via `comfyui-mcp`.
 - [x] Ship the tuned Genesis palette ComfyUI workflow.
-- [ ] Validate generated sprites as palette-legal SGDK SPRITE resources.
+- [x] Validate generated sprites as palette-legal SGDK SPRITE resources.
 - [x] Wrap ctrmml as the MML music MCP server.
 - [x] Ship the FM preset library.
 - [x] Add the MML reference to the RAG corpus.
 - [x] Wire the optional prompt path to use generated sprite and music assets.
-- [ ] Build the generated-asset ROM and verify it still works.
+- [x] Build the generated-asset ROM and verify it still works.
 
 ## Current Task
 
-The generated-MML ROM proof now passes with Docker, SGDK, and Genteel. Full
-generated-asset ROM proof is awaiting live ComfyUI sprite output. The local
-ComfyUI API launch path now starts on `127.0.0.1:8188`, Pixydust loads through
-the API, and the committed workflow classes are present. The earlier dedicated
-Pixel Art Diffusion XL checkpoint assumption has been replaced with a clearer
-default dependency pair: Stability AI SDXL Base as the checkpoint and
-`nerijs/pixel-art-xl` as the LoRA. The default filenames are
-`sd_xl_base_1.0.safetensors` and `pixel-art-xl.safetensors`, or
-`DRIVE16_COMFYUI_CHECKPOINT` and `DRIVE16_COMFYUI_LORA` can name compatible
-local files. The generated-assets validation harness now prints this model-pair
-readiness sequence when live sprite output is absent. The app-side AI-sprite
-prompt gate now returns the same readiness sequence before asking the user to
-retry the prompt. The settings drawer now surfaces the same ComfyUI readiness
-checks behind the `AI sprites` toggle, accepts checkpoint and LoRA filenames
-before testing, and the browser-preview failure path renders an API readiness
-row for local QA. A validator-accepted synthetic generated-sprite PNG has also
-been proven
-through SGDK `rescomp`, a ROM build, and a Genteel screenshot. Live ComfyUI
-output is still required before the generated-sprite checklist item can close.
-The combined prompt path has been fixture-proven with that validated generated
-sprite plus generated MML music, including ROM build, Genteel screenshots,
-Right-input movement, and non-silent audio. A checkpoint install helper now
-places a user-provided compatible checkpoint file or URL into the local ComfyUI
-checkpoints folder with optional SHA-256 verification.
-The current Phase 4 evidence packet is recorded in `docs/phase4-evidence.md`;
-it keeps Phase 4 open on the real live ComfyUI sprite gate. The repeatable
-ComfyUI API smoke was rerun on 2026-06-30 and confirms the API can start, the
-committed workflow classes are present, and Pixydust is loaded. The remaining
-ComfyUI prerequisites are the SDXL base checkpoint and Pixel Art XL LoRA model
-files. The readiness report now surfaces nearby local checkpoint and LoRA hints
-without accepting them automatically. The native app settings readiness path
-mirrors those checks and keeps filesystem rows visible even when the ComfyUI
-API is not running. The live ComfyUI sprite runner now reuses the same readiness
-gate before enqueueing so missing model/API prerequisites stop with a validation
-request. A single live proof wrapper now runs readiness, live sprite generation,
-and the generated-assets ROM proof in order. It now launches the local ComfyUI
-API automatically when needed and stops the process it launched, leaving the
-model files as the remaining local prerequisites.
+The Phase 4 exit proof now passes locally. The default SDXL Base checkpoint and
+Pixel Art XL LoRA were installed into the local ComfyUI model folders after
+human license acceptance. The live proof wrapper launches local ComfyUI on
+`127.0.0.1:8188`, verifies API, checkpoint, LoRA, Pixydust, and workflow
+classes, generates a sprite, repairs the dominant edge background into SGDK
+palette-index-0 transparency, validates the PNG as a 32x32 Genesis sprite with
+16 palette slots, and then runs the generated-sprite plus generated-MML ROM
+proof through Docker SGDK and Genteel. The final end-to-end command
+`scripts/validate-phase4-live-generated-assets.sh` passed on 2026-06-30 with
+prompt id `66752e6a-a6bd-44ae-92f1-fe5e4fa893bc`; the SGDK-ready generated
+sprite recorded 360 transparent pixels, the generated-assets native proof
+passed, and the wrapper printed `Phase 4 live generated-assets proof ok`.
+Phase 4 should not advance to Phase 5 until the human reviews this evidence
+and signs off.
 
 ## Next Up
 
-VALIDATION REQUEST: install Drive16's default ComfyUI model pair after reviewing
-the upstream model licenses. The ComfyUI API, Pixydust Quantizer, and workflow
-classes have been smoke-tested as ready in the current local setup; the model
-files are the remaining local prerequisite. Use
-`scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check`, or
-set `DRIVE16_COMFYUI_CHECKPOINT` and `DRIVE16_COMFYUI_LORA` for compatible
-local filenames. Then run `scripts/validate-phase4-live-generated-assets.sh`;
-the wrapper will launch local ComfyUI if needed, run readiness, run the live
-sprite workflow, and run the generated-assets ROM proof.
+PHASE GATE: Phase 4 evidence is ready for human review. If accepted, approve
+Phase 4 complete and explicitly start Phase 5 hardening and local-path work.
 
 ## Completed Phase 4 Work
 
@@ -161,6 +130,14 @@ sprite workflow, and run the generated-assets ROM proof.
   model weights.
 - [x] Phase 4 default ComfyUI dependency moved to SDXL Base plus Pixel Art XL
   LoRA with an explicit license-accepting installer.
+- [x] Default SDXL Base checkpoint and Pixel Art XL LoRA installed locally
+  after human license acceptance.
+- [x] Live ComfyUI sprite runner repairs dominant generated backgrounds into
+  SGDK palette-index-0 transparency before final validation.
+- [x] Live ComfyUI generated sprite validated as a 32x32 SGDK sprite resource.
+- [x] Phase 4 live generated-assets proof passed end to end with ComfyUI,
+  Docker SGDK, Genteel screenshots, Right-input movement, and non-silent
+  generated audio.
 - [x] ComfyUI readiness report now includes nearby model-file hints without
   relaxing the real live sprite gate.
 - [x] Checkpoint installer supports explicit local-file symlink mode for large

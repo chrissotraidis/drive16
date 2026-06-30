@@ -2,9 +2,9 @@
 
 ## Scope
 
-This slice adds the proof command for the remaining generated-assets prompt
-path. It does not claim Phase 4 is complete, because live ComfyUI sprite output
-is still required to produce the final evidence.
+This slice adds the proof command for the generated-assets prompt path. The
+real live-gated proof now passes after live ComfyUI sprite output is available
+and Docker Desktop is running.
 
 The new validation script runs the focused Phase 4 prompt tests, then runs an
 ignored native test that requests both generated assets:
@@ -29,7 +29,7 @@ ignored native test that requests both generated assets:
   checkpoint-aware readiness sequence:
   `scripts/launch-phase4-comfyui-api.sh`,
   `scripts/check-phase4-comfyui-readiness.py`, and the optional
-  `DRIVE16_COMFYUI_CHECKPOINT` override.
+  `DRIVE16_COMFYUI_CHECKPOINT` and `DRIVE16_COMFYUI_LORA` overrides.
 - Documented the script in `scripts/README.md`.
 
 ## Local Verification
@@ -102,28 +102,28 @@ scripts/validate-phase4-generated-assets-prompt.sh
 Result: exit `66`, still gated on live ComfyUI sprite output. This confirms
 the fixture proof did not mask the remaining live checkpoint and ComfyUI gate.
 
-## Validation Request
-
-Place a Pixel Art Diffusion XL compatible checkpoint at the default path:
-
-```text
-~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
-```
-
-If the compatible checkpoint uses a different local filename, set:
+The real live-gated proof was rerun after installing SDXL Base plus Pixel Art
+XL LoRA and generating a validated live sprite:
 
 ```sh
-export DRIVE16_COMFYUI_CHECKPOINT=your-checkpoint-name.safetensors
+scripts/validate-phase4-generated-assets-prompt.sh
 ```
 
-Then run the full live gate:
+Result: passed. The focused tests passed, then the ignored generated-assets
+proof built the generated-assets SGDK project, ran it in Genteel, captured
+neutral and Right-input screenshots, proved Right-input sprite movement, and
+verified non-silent generated music.
+
+The full wrapper was then rerun:
 
 ```sh
 scripts/validate-phase4-live-generated-assets.sh
 ```
 
-Expected result: the wrapper launches local ComfyUI if needed, readiness
-passes, the live sprite workflow records `ok: true`, and the ignored native
-test builds the generated-assets SGDK project, runs it in Genteel, captures
-neutral and Right-input screenshots, proves Right-input sprite movement, and
-verifies non-silent generated music.
+Result: passed end to end and printed `Phase 4 live generated-assets proof ok`.
+
+## Repro Command
+
+```sh
+scripts/validate-phase4-live-generated-assets.sh
+```

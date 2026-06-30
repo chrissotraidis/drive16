@@ -211,20 +211,40 @@ def wait_for_history(base_url: str, prompt_id: str, *, timeout: float, interval:
     raise RunnerError(f"Timed out waiting for ComfyUI history after {timeout:.0f}s.")
 
 
-def run_validator(png: Path, symbol: str) -> str:
-    result = subprocess.run(
-        [sys.executable, str(VALIDATOR), str(png), "--symbol", symbol],
+def run_validator_process(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(VALIDATOR), *args],
         cwd=ROOT,
         text=True,
         capture_output=True,
         timeout=60,
         check=False,
     )
-    if result.returncode != 0:
-        raise RunnerError(
-            f"{VALIDATOR.relative_to(ROOT)} rejected {png}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return result.stdout.strip()
+
+
+def run_validator_with_repair(png: Path, symbol: str) -> tuple[Path, str, str | None]:
+    result = run_validator_process([str(png), "--symbol", symbol])
+    if result.returncode == 0:
+        return png, result.stdout.strip(), None
+
+    repaired = png.with_name(f"{png.stem}-sgdk.png")
+    repair_result = run_validator_process(
+        [
+            str(png),
+            "--symbol",
+            symbol,
+            "--repair-background-output",
+            str(repaired),
+        ]
+    )
+    if repair_result.returncode == 0:
+        return repaired, repair_result.stdout.strip(), result.stdout.strip()
+
+    raise RunnerError(
+        f"{VALIDATOR.relative_to(ROOT)} rejected {png}\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n"
+        f"Repair STDOUT:\n{repair_result.stdout}\nRepair STDERR:\n{repair_result.stderr}"
+    )
 
 
 def run_readiness(args: argparse.Namespace) -> subprocess.CompletedProcess[str]:
@@ -352,7 +372,7 @@ def main() -> int:
         image = find_first_image(history, prompt_id)
         output_dir = ARTIFACT_DIR / prompt_id
         png = download_image(args.comfyui_url, image, output_dir, timeout=60)
-        validator_output = run_validator(png, symbol)
+        validated_png, validator_output, raw_validator_rejection = run_validator_with_repair(png, symbol)
 
         ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -360,12 +380,17 @@ def main() -> int:
             "promptId": prompt_id,
             "checkpoint": args.checkpoint,
             "lora": args.lora,
-            "downloadedPng": str(png.relative_to(ROOT)),
+            "downloadedPng": str(validated_png.relative_to(ROOT)),
+            "rawPng": str(png.relative_to(ROOT)),
             "validatorOutput": validator_output,
         }
+        if raw_validator_rejection:
+            payload["rawValidatorRejection"] = raw_validator_rejection
         RUN_LOG.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         print(f"ComfyUI live sprite workflow ok: prompt_id={prompt_id}")
         print(f"Downloaded PNG: {png.relative_to(ROOT)}")
+        if validated_png != png:
+            print(f"SGDK-ready PNG: {validated_png.relative_to(ROOT)}")
         print(validator_output)
         return 0
     except Exception as exc:  # noqa: BLE001
