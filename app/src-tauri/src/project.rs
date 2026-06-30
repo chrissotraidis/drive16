@@ -1,4 +1,5 @@
-use serde::Serialize;
+use base64::{engine::general_purpose, Engine as _};
+use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -75,6 +76,25 @@ pub struct RomImportReadiness {
     pub accepted_extensions: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RomImportRequest {
+    pub file_name: String,
+    pub data_base64: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RomImportResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub source_name: String,
+    pub import_path: String,
+    pub bytes: u64,
+    pub accepted_extensions: Vec<String>,
+}
+
 struct ProjectPaths {
     repo_root: PathBuf,
     project_path: PathBuf,
@@ -103,6 +123,18 @@ pub fn list_project_snapshots() -> Vec<ProjectSnapshot> {
 
 pub fn prepare_rom_import() -> Result<RomImportReadiness, String> {
     prepare_rom_import_for_repo(repo_root())
+}
+
+pub fn import_rom_bytes(request: RomImportRequest) -> Result<RomImportResult, String> {
+    import_rom_bytes_for_repo(repo_root(), request)
+}
+
+pub fn import_test_rom() -> Result<RomImportResult, String> {
+    import_test_rom_for_repo(repo_root())
+}
+
+pub fn export_rom_path(source_rom_path: String) -> Result<RomExportResult, String> {
+    export_rom_path_for_repo(repo_root(), source_rom_path)
 }
 
 fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
@@ -152,6 +184,34 @@ fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
 fn export_current_rom_for_repo(repo_root: PathBuf) -> Result<RomExportResult, String> {
     let paths = ProjectPaths::new(repo_root);
     ensure_rom(&paths)?;
+    export_rom_file(&paths, &paths.rom_path)
+}
+
+fn export_rom_path_for_repo(
+    repo_root: PathBuf,
+    source_rom_path: String,
+) -> Result<RomExportResult, String> {
+    let paths = ProjectPaths::new(repo_root);
+    let source_path = resolve_repo_path(&paths.repo_root, &source_rom_path)?;
+    export_rom_file(&paths, &source_path)
+}
+
+fn export_rom_file(paths: &ProjectPaths, source_path: &Path) -> Result<RomExportResult, String> {
+    if !source_path.is_file() {
+        return Err(format!("ROM is missing: {}", source_path.display()));
+    }
+    let source_name = source_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| format!("ROM path has no file name: {}", source_path.display()))?;
+    let extension = accepted_rom_extension(source_name).ok_or_else(|| {
+        format!(
+            "Unsupported ROM extension for {}. Accepted: {}",
+            source_name,
+            accepted_extensions().join(", ")
+        )
+    })?;
+
     fs::create_dir_all(&paths.export_directory).map_err(|error| {
         format!(
             "Could not create export directory {}: {}",
@@ -160,13 +220,22 @@ fn export_current_rom_for_repo(repo_root: PathBuf) -> Result<RomExportResult, St
         )
     })?;
 
-    let export_path = paths
-        .export_directory
-        .join(format!("drive16-starter-{}.bin", unique_stamp()));
-    let bytes = fs::copy(&paths.rom_path, &export_path).map_err(|error| {
+    let source_stem = Path::new(source_name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .map(sanitize_file_stem)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "rom".to_string());
+    let export_path = paths.export_directory.join(format!(
+        "drive16-{}-{}{}",
+        source_stem,
+        unique_stamp(),
+        extension
+    ));
+    let bytes = fs::copy(source_path, &export_path).map_err(|error| {
         format!(
             "Could not export ROM from {} to {}: {}",
-            paths.rom_path.display(),
+            source_path.display(),
             export_path.display(),
             error
         )
@@ -176,7 +245,7 @@ fn export_current_rom_for_repo(repo_root: PathBuf) -> Result<RomExportResult, St
         generated_at: unix_timestamp(),
         status: "ready".to_string(),
         detail: "ROM exported".to_string(),
-        source_rom_path: repo_relative(&paths.repo_root, &paths.rom_path),
+        source_rom_path: repo_relative(&paths.repo_root, source_path),
         export_path: repo_relative(&paths.repo_root, &export_path),
         bytes,
     })
@@ -264,13 +333,90 @@ fn prepare_rom_import_for_repo(repo_root: PathBuf) -> Result<RomImportReadiness,
 
     Ok(RomImportReadiness {
         generated_at: unix_timestamp(),
-        status: "warning".to_string(),
-        detail: "Import storage ready; file picker and ROM copy are next".to_string(),
+        status: "ready".to_string(),
+        detail: "Import storage ready".to_string(),
         import_directory: repo_relative(&paths.repo_root, &paths.rom_import_directory),
-        accepted_extensions: ROM_IMPORT_EXTENSIONS
-            .iter()
-            .map(|extension| extension.to_string())
-            .collect(),
+        accepted_extensions: accepted_extensions(),
+    })
+}
+
+fn import_rom_bytes_for_repo(
+    repo_root: PathBuf,
+    request: RomImportRequest,
+) -> Result<RomImportResult, String> {
+    let data = general_purpose::STANDARD
+        .decode(request.data_base64.trim())
+        .map_err(|error| format!("ROM data was not valid base64: {}", error))?;
+    import_rom_data_for_repo(repo_root, &request.file_name, &data)
+}
+
+fn import_test_rom_for_repo(repo_root: PathBuf) -> Result<RomImportResult, String> {
+    let paths = ProjectPaths::new(repo_root.clone());
+    ensure_rom(&paths)?;
+    let data = fs::read(&paths.rom_path).map_err(|error| {
+        format!(
+            "Could not read starter test ROM {}: {}",
+            paths.rom_path.display(),
+            error
+        )
+    })?;
+    import_rom_data_for_repo(repo_root, "starter-test-rom.bin", &data)
+}
+
+fn import_rom_data_for_repo(
+    repo_root: PathBuf,
+    source_name: &str,
+    data: &[u8],
+) -> Result<RomImportResult, String> {
+    if data.is_empty() {
+        return Err("ROM file was empty".to_string());
+    }
+
+    let paths = ProjectPaths::new(repo_root);
+    let safe_name = sanitize_rom_file_name(source_name)?;
+    let extension = accepted_rom_extension(&safe_name).ok_or_else(|| {
+        format!(
+            "Unsupported ROM extension for {}. Accepted: {}",
+            safe_name,
+            accepted_extensions().join(", ")
+        )
+    })?;
+    fs::create_dir_all(&paths.rom_import_directory).map_err(|error| {
+        format!(
+            "Could not create import directory {}: {}",
+            paths.rom_import_directory.display(),
+            error
+        )
+    })?;
+
+    let stem = Path::new(&safe_name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .map(sanitize_file_stem)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "rom".to_string());
+    let import_path = paths.rom_import_directory.join(format!(
+        "drive16-import-{}-{}{}",
+        unique_stamp(),
+        stem,
+        extension
+    ));
+    fs::write(&import_path, data).map_err(|error| {
+        format!(
+            "Could not copy ROM into {}: {}",
+            import_path.display(),
+            error
+        )
+    })?;
+
+    Ok(RomImportResult {
+        generated_at: unix_timestamp(),
+        status: "ready".to_string(),
+        detail: "Imported ROM copied into ignored local storage".to_string(),
+        source_name: safe_name,
+        import_path: repo_relative(&paths.repo_root, &import_path),
+        bytes: data.len() as u64,
+        accepted_extensions: accepted_extensions(),
     })
 }
 
@@ -326,6 +472,95 @@ fn file_entry(repo_root: &Path, path: PathBuf, label: &str) -> ProjectFileEntry 
         path: repo_relative(repo_root, &path),
         state: if path.is_file() { "ready" } else { "missing" }.to_string(),
     }
+}
+
+fn resolve_repo_path(repo_root: &Path, source_rom_path: &str) -> Result<PathBuf, String> {
+    let trimmed = source_rom_path.trim();
+    if trimmed.is_empty() {
+        return Err("ROM path is empty".to_string());
+    }
+
+    let requested = PathBuf::from(trimmed);
+    if requested.is_absolute() {
+        return Err("ROM path must be inside the Drive16 workspace".to_string());
+    }
+
+    let candidate = repo_root.join(requested);
+    let canonical_repo = repo_root.canonicalize().map_err(|error| {
+        format!(
+            "Could not resolve repo root {}: {}",
+            repo_root.display(),
+            error
+        )
+    })?;
+    let canonical_candidate = candidate.canonicalize().map_err(|error| {
+        format!(
+            "Could not resolve ROM path {}: {}",
+            candidate.display(),
+            error
+        )
+    })?;
+    if !canonical_candidate.starts_with(&canonical_repo) {
+        return Err("ROM path must stay inside the Drive16 workspace".to_string());
+    }
+
+    Ok(candidate)
+}
+
+fn sanitize_rom_file_name(source_name: &str) -> Result<String, String> {
+    let file_name = Path::new(source_name)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "ROM file name is missing".to_string())?;
+    let sanitized = file_name
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+
+    if sanitized
+        .trim_matches(|character| character == '.' || character == '-')
+        .is_empty()
+    {
+        Err("ROM file name is not usable".to_string())
+    } else {
+        Ok(sanitized)
+    }
+}
+
+fn sanitize_file_stem(source_name: &str) -> String {
+    source_name
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string()
+}
+
+fn accepted_rom_extension(file_name: &str) -> Option<&'static str> {
+    let lower_name = file_name.to_ascii_lowercase();
+    ROM_IMPORT_EXTENSIONS
+        .iter()
+        .copied()
+        .find(|extension| lower_name.ends_with(extension))
+}
+
+fn accepted_extensions() -> Vec<String> {
+    ROM_IMPORT_EXTENSIONS
+        .iter()
+        .map(|extension| extension.to_string())
+        .collect()
 }
 
 fn copy_project_tree(source: &Path, destination: &Path) -> Result<u64, String> {
@@ -554,7 +789,7 @@ mod tests {
         let import_directory_exists = import_directory.is_dir();
         fs::remove_dir_all(temp_dir).unwrap();
 
-        assert_eq!(readiness.status, "warning");
+        assert_eq!(readiness.status, "ready");
         assert_eq!(readiness.import_directory, ROM_IMPORT_DIRECTORY);
         assert_eq!(
             readiness.accepted_extensions,
@@ -564,6 +799,98 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(import_directory_exists);
+    }
+
+    #[test]
+    fn import_rom_bytes_copies_selected_rom_to_ignored_storage() {
+        let temp_dir = temp_repo("import-bytes");
+        let result = import_rom_bytes_for_repo(
+            temp_dir.clone(),
+            RomImportRequest {
+                file_name: "../My Test ROM.BIN".to_string(),
+                data_base64: general_purpose::STANDARD.encode(b"DRIVE16 IMPORT"),
+            },
+        )
+        .expect("ROM import should copy bytes");
+        let imported_bytes = fs::read(temp_dir.join(&result.import_path)).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.source_name, "My-Test-ROM.BIN");
+        assert!(result.import_path.starts_with(ROM_IMPORT_DIRECTORY));
+        assert!(result.import_path.ends_with(".bin"));
+        assert_eq!(result.bytes, 14);
+        assert_eq!(imported_bytes, b"DRIVE16 IMPORT");
+    }
+
+    #[test]
+    fn import_rom_bytes_rejects_unsupported_extensions() {
+        let temp_dir = temp_repo("import-reject");
+        let result = import_rom_bytes_for_repo(
+            temp_dir.clone(),
+            RomImportRequest {
+                file_name: "notes.txt".to_string(),
+                data_base64: general_purpose::STANDARD.encode(b"not a rom"),
+            },
+        );
+        let import_directory_exists = temp_dir.join(ROM_IMPORT_DIRECTORY).exists();
+        let _ = fs::remove_dir_all(temp_dir);
+
+        assert!(result.is_err());
+        assert!(!import_directory_exists);
+    }
+
+    #[test]
+    fn import_test_rom_copies_starter_rom_fixture() {
+        let temp_dir = temp_repo("import-test-rom");
+        let rom_path = temp_dir.join(STARTER_ROM);
+        fs::create_dir_all(rom_path.parent().unwrap()).unwrap();
+        fs::write(&rom_path, b"STARTER TEST ROM").unwrap();
+
+        let result = import_test_rom_for_repo(temp_dir.clone()).expect("test ROM should import");
+        let imported_bytes = fs::read(temp_dir.join(&result.import_path)).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(result.source_name, "starter-test-rom.bin");
+        assert_eq!(imported_bytes, b"STARTER TEST ROM");
+    }
+
+    #[test]
+    fn export_rom_path_copies_imported_rom() {
+        let temp_dir = temp_repo("export-imported");
+        let imported_path = temp_dir
+            .join(ROM_IMPORT_DIRECTORY)
+            .join("drive16-import-test.gen");
+        fs::create_dir_all(imported_path.parent().unwrap()).unwrap();
+        fs::write(&imported_path, b"IMPORTED GENESIS").unwrap();
+
+        let result = export_rom_path_for_repo(
+            temp_dir.clone(),
+            "artifacts/phase5/imports/drive16-import-test.gen".to_string(),
+        )
+        .expect("imported ROM should export");
+        let exported_bytes = fs::read(temp_dir.join(&result.export_path)).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(
+            result.source_rom_path,
+            "artifacts/phase5/imports/drive16-import-test.gen"
+        );
+        assert!(result.export_path.ends_with(".gen"));
+        assert_eq!(result.bytes, 16);
+        assert_eq!(exported_bytes, b"IMPORTED GENESIS");
+    }
+
+    #[test]
+    fn export_rom_path_rejects_paths_outside_repo() {
+        let temp_dir = temp_repo("export-reject");
+        fs::create_dir_all(&temp_dir).unwrap();
+        let result = export_rom_path_for_repo(temp_dir.clone(), "../outside.bin".to_string());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert!(result.is_err());
     }
 
     fn temp_repo(label: &str) -> PathBuf {

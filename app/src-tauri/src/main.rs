@@ -20,6 +20,13 @@ async fn launch_starter_rom() -> Result<starter_rom::StarterRomPreview, String> 
 }
 
 #[tauri::command]
+async fn launch_rom_path(rom_path: String) -> Result<starter_rom::StarterRomPreview, String> {
+    tauri::async_runtime::spawn_blocking(move || starter_rom::launch_rom_path(rom_path))
+        .await
+        .map_err(|error| format!("ROM launch task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn connect_opencode() -> opencode::OpenCodeBridgeStatus {
     tauri::async_runtime::spawn_blocking(opencode::connect_opencode)
         .await
@@ -62,8 +69,31 @@ async fn prepare_rom_import() -> Result<project::RomImportReadiness, String> {
 }
 
 #[tauri::command]
+async fn import_rom_bytes(
+    request: project::RomImportRequest,
+) -> Result<project::RomImportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || project::import_rom_bytes(request))
+        .await
+        .map_err(|error| format!("ROM import task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn import_test_rom() -> Result<project::RomImportResult, String> {
+    tauri::async_runtime::spawn_blocking(project::import_test_rom)
+        .await
+        .map_err(|error| format!("Test ROM import task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn export_current_rom() -> Result<project::RomExportResult, String> {
     tauri::async_runtime::spawn_blocking(project::export_current_rom)
+        .await
+        .map_err(|error| format!("ROM export task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn export_rom_path(source_rom_path: String) -> Result<project::RomExportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || project::export_rom_path(source_rom_path))
         .await
         .map_err(|error| format!("ROM export task failed: {}", error))?
 }
@@ -131,12 +161,16 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             run_preflight,
             launch_starter_rom,
+            launch_rom_path,
             connect_opencode,
             send_opencode_message,
             load_project_summary,
             list_project_snapshots,
             prepare_rom_import,
+            import_rom_bytes,
+            import_test_rom,
             export_current_rom,
+            export_rom_path,
             save_current_project,
             run_v1_prompt,
             run_phase4_music_prompt,

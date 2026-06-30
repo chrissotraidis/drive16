@@ -58,10 +58,52 @@ pub fn launch_starter_rom() -> Result<StarterRomPreview, String> {
     launch_starter_rom_for_repo(repo_root())
 }
 
+pub fn launch_rom_path(source_rom_path: String) -> Result<StarterRomPreview, String> {
+    launch_rom_path_for_repo(repo_root(), source_rom_path)
+}
+
 fn launch_starter_rom_for_repo(repo_root: PathBuf) -> Result<StarterRomPreview, String> {
     let paths = StarterPaths::new(repo_root);
     paths.ensure_artifact_dir()?;
     ensure_rom(&paths)?;
+    let project_path = paths.project_path.clone();
+    let rom_path = paths.rom_path.clone();
+    launch_rom_for_paths(
+        paths,
+        project_path,
+        rom_path,
+        "Starter ROM captured from Genteel",
+    )
+}
+
+fn launch_rom_path_for_repo(
+    repo_root: PathBuf,
+    source_rom_path: String,
+) -> Result<StarterRomPreview, String> {
+    let paths = StarterPaths::new(repo_root);
+    paths.ensure_artifact_dir()?;
+    let rom_path = resolve_repo_path(&paths.repo_root, &source_rom_path)?;
+    if !rom_path.is_file() {
+        return Err(format!("ROM is missing: {}", rom_path.display()));
+    }
+    let project_path = rom_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| paths.repo_root.clone());
+    launch_rom_for_paths(
+        paths,
+        project_path,
+        rom_path,
+        "Active ROM captured from Genteel",
+    )
+}
+
+fn launch_rom_for_paths(
+    paths: StarterPaths,
+    project_path: PathBuf,
+    rom_path: PathBuf,
+    detail: &str,
+) -> Result<StarterRomPreview, String> {
     let genteel_bin = find_genteel_bin(&paths)?;
 
     remove_if_exists(&paths.screenshot_path)?;
@@ -78,7 +120,7 @@ fn launch_starter_rom_for_repo(repo_root: PathBuf) -> Result<StarterRomPreview, 
         .arg(STREAM_EVERY.to_string())
         .arg("--screenshot")
         .arg(&paths.screenshot_path)
-        .arg(&paths.rom_path);
+        .arg(&rom_path);
 
     run_command(&mut command, "Genteel starter ROM launch")?;
 
@@ -110,10 +152,10 @@ fn launch_starter_rom_for_repo(repo_root: PathBuf) -> Result<StarterRomPreview, 
 
     Ok(StarterRomPreview {
         status: "ready".to_string(),
-        detail: "Starter ROM captured from Genteel".to_string(),
+        detail: detail.to_string(),
         generated_at: unix_timestamp(),
-        project_path: repo_relative(&paths.repo_root, &paths.project_path),
-        rom_path: repo_relative(&paths.repo_root, &paths.rom_path),
+        project_path: repo_relative(&paths.repo_root, &project_path),
+        rom_path: repo_relative(&paths.repo_root, &rom_path),
         screenshot_path: repo_relative(&paths.repo_root, &paths.screenshot_path),
         frame_stream_path: repo_relative(&paths.repo_root, &paths.frame_stream_path),
         screenshot_data_url,
@@ -347,6 +389,39 @@ fn remove_if_exists(path: &Path) -> Result<(), String> {
     }
 }
 
+fn resolve_repo_path(repo_root: &Path, source_rom_path: &str) -> Result<PathBuf, String> {
+    let trimmed = source_rom_path.trim();
+    if trimmed.is_empty() {
+        return Err("ROM path is empty".to_string());
+    }
+
+    let requested = PathBuf::from(trimmed);
+    if requested.is_absolute() {
+        return Err("ROM path must be inside the Drive16 workspace".to_string());
+    }
+
+    let candidate = repo_root.join(requested);
+    let canonical_repo = repo_root.canonicalize().map_err(|error| {
+        format!(
+            "Could not resolve repo root {}: {}",
+            repo_root.display(),
+            error
+        )
+    })?;
+    let canonical_candidate = candidate.canonicalize().map_err(|error| {
+        format!(
+            "Could not resolve ROM path {}: {}",
+            candidate.display(),
+            error
+        )
+    })?;
+    if !canonical_candidate.starts_with(&canonical_repo) {
+        return Err("ROM path must stay inside the Drive16 workspace".to_string());
+    }
+
+    Ok(candidate)
+}
+
 fn find_command(command_name: &Path) -> Option<PathBuf> {
     env::var_os("PATH")
         .into_iter()
@@ -426,6 +501,20 @@ mod tests {
             .iter()
             .all(|frame| frame.format == "RGB565"));
         assert_eq!(preview.rom_path, "examples/app-starter-blank/out/rom.bin");
+    }
+
+    #[test]
+    fn launch_rom_path_rejects_paths_outside_repo() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "drive16-rom-path-test-{}-{}",
+            unix_timestamp(),
+            std::process::id()
+        ));
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        let result = launch_rom_path_for_repo(temp_dir.clone(), "../outside.bin".to_string());
+        fs::remove_dir_all(&temp_dir).expect("temp dir should be removed");
+
+        assert!(result.is_err());
     }
 
     #[test]

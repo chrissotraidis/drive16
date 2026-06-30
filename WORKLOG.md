@@ -1,5 +1,68 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 78 - Phase 5 imported ROM flow
+
+Plan:
+
+- Task: implement Phase 5 Unit 4 so local Genesis ROM imports become an active
+  app state instead of a prepared folder.
+- Files: `app/src/App.tsx`, `app/src-tauri/src/main.rs`,
+  `app/src-tauri/src/project.rs`, `app/src-tauri/src/starter_rom.rs`,
+  `DECISIONS.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `docs/phase5-rom-import-flow.md`.
+- Verification: run native tests, build the frontend, import the repo-generated
+  starter ROM through the browser UI, run/export the active imported ROM, run an
+  ignored imported ROM copy through Genteel, and confirm git does not track
+  imported ROM artifacts.
+
+Did:
+
+- Added native ROM import requests that copy selected file bytes into
+  `artifacts/phase5/imports`.
+- Validated `.bin`, `.gen`, `.md`, and `.smd` extensions and sanitized imported
+  file names before writing local storage.
+- Added native export of a specific active ROM path with repo-bound path
+  validation.
+- Added active-ROM launching so Genteel can run an imported ROM path instead of
+  only the starter ROM path.
+- Added a standard app file input for Import ROM and a repo-generated Import
+  Test ROM action for safe verification without commercial ROMs.
+- Updated the project/menu/runtime UI to show `Imported ROM` and to make Run,
+  rerun, and Export follow the imported ROM path.
+
+Evidence:
+
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 41 tests
+  and 4 live-environment tests ignored.
+- `pnpm --dir app build` passed.
+- Browser proof at `http://127.0.0.1:1420/`:
+  - Project menu showed `Import Test ROM`.
+  - Clicking it changed action status to `Imported ROM active`.
+  - Project summary changed to `Imported ROM`.
+  - Runtime metadata pointed at
+    `artifacts/phase5/imports/drive16-import-preview-starter-test-rom.bin`.
+  - Run logged `run.started` with the imported ROM path.
+  - Export reported `artifacts/phase3/exports/drive16-import-preview.bin`.
+- Local Genteel proof:
+  - Copied `examples/app-starter-blank/out/rom.bin` into ignored
+    `artifacts/phase5/imports/drive16-import-cli-starter-test.bin`.
+  - Ran that imported copy through Genteel for 180 frames.
+  - Produced `artifacts/phase5/import-verification/imported-test-frame.png`,
+    a valid 320x240 PNG.
+  - Produced
+    `artifacts/phase5/import-verification/imported-test-frames.rgb565`.
+- `git status --short --ignored artifacts/phase5/imports
+  artifacts/phase5/import-verification` showed ignored `artifacts/` only.
+
+Gate:
+
+Phase 5 Unit 4 is complete. Phase 5 remains open.
+
+Next:
+
+- Unit 5: add visible ROM controls and keyboard/controller mapping.
+
 ## 2026-06-30 - ITERATION 77 - Project menu actions and import entry point
 
 Plan:

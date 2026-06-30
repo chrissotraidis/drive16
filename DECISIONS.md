@@ -1,5 +1,28 @@
 # Drive16 Decisions
 
+## 2026-06-30 - Imported ROMs are active local artifacts, not repo assets
+
+Context:
+
+Phase 5 Unit 4 moved Import ROM from a prepared folder into an actual app
+workflow. The app needs to accept user-selected Genesis ROM files, run them, and
+export the active ROM without ever treating imported binaries as source files.
+
+Decision:
+
+Copy selected ROM bytes into ignored `artifacts/phase5/imports` after
+extension validation and filename sanitization. The frontend tracks the copied
+path as the active Imported ROM. Native run and export commands accept active
+ROM paths only after resolving them inside the Drive16 workspace, so arbitrary
+absolute paths or path traversal are rejected.
+
+Consequence:
+
+Drive16 can run and export an imported ROM through the same visible app
+controls used for generated ROMs. Imported user ROMs stay outside git, and
+commercial ROMs are neither required nor committed for validation. The verified
+test path uses the repo-generated starter ROM copied into ignored storage.
+
 ## 2026-06-30 - Imported ROM storage starts in ignored Phase 5 artifacts
 
 Context:

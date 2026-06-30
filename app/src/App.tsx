@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type BuildState = "idle" | "building" | "running" | "error";
@@ -148,6 +148,16 @@ type RomImportReadiness = {
   status: HealthState;
   detail: string;
   importDirectory: string;
+  acceptedExtensions: string[];
+};
+
+type RomImportResult = {
+  generatedAt: string;
+  status: HealthState;
+  detail: string;
+  sourceName: string;
+  importPath: string;
+  bytes: number;
   acceptedExtensions: string[];
 };
 
@@ -414,10 +424,20 @@ const previewSaveResult: ProjectSaveResult = {
 
 const previewImportReadiness: RomImportReadiness = {
   generatedAt: "preview",
-  status: "warning",
-  detail: "Import storage preview; native file picker and ROM copy are next",
+  status: "ready",
+  detail: "Import storage preview",
   importDirectory: "artifacts/phase5/imports",
   acceptedExtensions: [".bin", ".gen", ".md", ".smd"],
+};
+
+const previewImportResult: RomImportResult = {
+  generatedAt: "preview",
+  status: "ready",
+  detail: "Preview imported ROM selected",
+  sourceName: "rom.bin",
+  importPath: "artifacts/phase5/imports/drive16-import-preview-rom.bin",
+  bytes: 0,
+  acceptedExtensions: previewImportReadiness.acceptedExtensions,
 };
 
 const initialProjectActionNotice: ProjectActionNotice = {
@@ -468,6 +488,7 @@ function App() {
   const [saveBusy, setSaveBusy] = useState(false);
   const [recentProjects, setRecentProjects] = useState<ProjectSnapshot[]>([]);
   const [importReadiness, setImportReadiness] = useState<RomImportReadiness | undefined>();
+  const [importResult, setImportResult] = useState<RomImportResult | undefined>();
   const [importBusy, setImportBusy] = useState(false);
   const [projectActionNotice, setProjectActionNotice] =
     useState<ProjectActionNotice>(initialProjectActionNotice);
@@ -513,12 +534,13 @@ function App() {
     detail: "Not tested",
   });
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const romImportInputRef = useRef<HTMLInputElement | null>(null);
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
 
   useEffect(() => {
     void refreshPreflight();
-    void launchStarterRom();
+    void launchRom();
     void connectOpenCode();
     void loadProjectSummary();
     void loadRecentProjects();
@@ -1088,22 +1110,28 @@ function App() {
   async function exportRom() {
     setExportBusy(true);
     noteAction("Exporting the current ROM.");
+    const activeImport = importResult;
 
     if (!isTauriRuntime()) {
-      setExportResult(previewExportResult);
+      const previewResult = previewExportForRom(activeImport);
+      setExportResult(previewResult);
       setProjectActionNotice({
-        state: previewExportResult.status,
+        state: previewResult.status,
         label: "ROM export ready",
-        detail: previewExportResult.exportPath,
+        detail: previewResult.exportPath,
       });
-      appendOpenCodeEvent("export.preview", previewExportResult.exportPath);
-      noteAction(`Preview export ready at ${previewExportResult.exportPath}.`);
+      appendOpenCodeEvent("export.preview", previewResult.exportPath);
+      noteAction(`Preview export ready at ${previewResult.exportPath}.`);
       setExportBusy(false);
       return;
     }
 
     try {
-      const result = await invoke<RomExportResult>("export_current_rom");
+      const result = activeImport
+        ? await invoke<RomExportResult>("export_rom_path", {
+            sourceRomPath: activeImport.importPath,
+          })
+        : await invoke<RomExportResult>("export_current_rom");
       setExportResult(result);
       setProjectActionNotice({
         state: result.status,
@@ -1112,7 +1140,9 @@ function App() {
       });
       appendOpenCodeEvent("export.ready", result.exportPath);
       noteAction(`ROM exported to ${result.exportPath}.`);
-      void loadProjectSummary();
+      if (!activeImport) {
+        void loadProjectSummary();
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : "ROM export failed";
       setExportResult({
@@ -1459,9 +1489,15 @@ function App() {
     setTransport("running");
     setBuildState("running");
     setSpriteX(52);
-    noteAction("Starter ROM reset requested.");
-    appendOpenCodeEvent("starter.reset", "Starter ROM reset requested");
-    void launchStarterRom("Starter ROM reset and running.");
+    noteAction(importResult ? "Imported ROM reset requested." : "Starter ROM reset requested.");
+    appendOpenCodeEvent(
+      importResult ? "imported.reset" : "starter.reset",
+      importResult?.importPath ?? "Starter ROM reset requested",
+    );
+    void launchRom(
+      importResult?.importPath,
+      importResult ? "Imported ROM reset and running." : "Starter ROM reset and running.",
+    );
   }
 
   function startNewProject() {
@@ -1474,6 +1510,8 @@ function App() {
     setDraft("");
     setExportResult(undefined);
     setSaveResult(undefined);
+    setImportResult(undefined);
+    setImportReadiness(undefined);
     setV1PromptResult(undefined);
     setV1PromptSource("idle");
     setOpenCodeSessionId(undefined);
@@ -1489,7 +1527,7 @@ function App() {
     noteAction("New project started from the blank starter template.");
     appendOpenCodeEvent("project.new", "Blank starter template loaded");
     void loadProjectSummary();
-    void launchStarterRom("New starter project running.");
+    void launchRom(undefined, "New starter project running.");
   }
 
   async function saveProject() {
@@ -1521,7 +1559,9 @@ function App() {
       });
       appendOpenCodeEvent("project.saved", result.snapshotPath);
       noteAction(`Project saved to ${result.snapshotPath}.`);
-      void loadProjectSummary();
+      if (!importResult) {
+        void loadProjectSummary();
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Project save failed";
       setSaveResult({
@@ -1565,33 +1605,99 @@ function App() {
     noteAction(`Project snapshot selected: ${target.projectPath}.`);
   }
 
-  async function importRom() {
-    setImportBusy(true);
-    noteAction("Preparing local ROM import storage.");
-
+  async function loadRomImportReadiness() {
     if (!isTauriRuntime()) {
-      setImportReadiness(previewImportReadiness);
+      return previewImportReadiness;
+    }
+
+    return invoke<RomImportReadiness>("prepare_rom_import");
+  }
+
+  async function importSelectedRomInTauri(file: File) {
+    const dataBase64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+    return invoke<RomImportResult>("import_rom_bytes", {
+      request: {
+        fileName: file.name,
+        dataBase64,
+      },
+    });
+  }
+
+  function activateImportedRom(result: RomImportResult) {
+    setImportResult(result);
+    setImportReadiness({
+      generatedAt: result.generatedAt,
+      status: result.status,
+      detail: result.detail,
+      importDirectory:
+        result.importPath.split("/").slice(0, -1).join("/") ||
+        previewImportReadiness.importDirectory,
+      acceptedExtensions: result.acceptedExtensions,
+    });
+    setProjectSummary(projectSummaryFromImport(result));
+    setProjectSource(isTauriRuntime() ? "tauri" : "preview");
+    setExportResult(undefined);
+    setV1PromptResult(undefined);
+    setV1PromptSource("idle");
+    setProjectActionNotice({
+      state: result.status,
+      label: "Imported ROM active",
+      detail: `${result.sourceName} copied to ${result.importPath}`,
+    });
+    noteAction(`Imported ROM active: ${result.sourceName}.`);
+  }
+
+  async function importRom() {
+    noteAction("Choose a Genesis ROM to import.");
+
+    try {
+      const readiness = await loadRomImportReadiness();
+      setImportReadiness(readiness);
       setProjectActionNotice({
-        state: previewImportReadiness.status,
-        label: "Import storage ready",
-        detail: `${previewImportReadiness.importDirectory} accepts ${previewImportReadiness.acceptedExtensions.join(", ")}`,
+        state: "warning",
+        label: "Choose ROM file",
+        detail: `Accepted: ${readiness.acceptedExtensions.join(", ")}`,
       });
-      appendOpenCodeEvent("rom.import.preview", previewImportReadiness.importDirectory);
-      noteAction(`ROM import storage ready at ${previewImportReadiness.importDirectory}.`);
-      setImportBusy(false);
+      appendOpenCodeEvent("rom.import.choose", readiness.importDirectory);
+      romImportInputRef.current?.click();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "ROM import setup failed";
+      setProjectActionNotice({
+        state: "missing",
+        label: "Import setup failed",
+        detail,
+      });
+      appendOpenCodeEvent("rom.import.failed", detail);
+      noteAction(`ROM import setup failed: ${detail}`);
+    }
+  }
+
+  async function handleRomFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFile = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!selectedFile) {
+      noteAction("ROM import canceled.");
       return;
     }
 
+    setImportBusy(true);
+    noteAction(`Importing ${selectedFile.name}.`);
+
     try {
-      const readiness = await invoke<RomImportReadiness>("prepare_rom_import");
+      const readiness = await loadRomImportReadiness();
       setImportReadiness(readiness);
-      setProjectActionNotice({
-        state: readiness.status,
-        label: "Import storage ready",
-        detail: `${readiness.importDirectory} accepts ${readiness.acceptedExtensions.join(", ")}`,
-      });
-      appendOpenCodeEvent("rom.import.ready", readiness.importDirectory);
-      noteAction(`ROM import storage ready at ${readiness.importDirectory}.`);
+      if (!isAcceptedRomFileName(selectedFile.name, readiness.acceptedExtensions)) {
+        throw new Error(
+          `Unsupported ROM extension. Accepted: ${readiness.acceptedExtensions.join(", ")}`,
+        );
+      }
+
+      const result = isTauriRuntime()
+        ? await importSelectedRomInTauri(selectedFile)
+        : previewImportForFile(selectedFile, readiness);
+      activateImportedRom(result);
+      appendOpenCodeEvent("rom.imported", result.importPath);
+      void launchRom(result.importPath, "Imported ROM running.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "ROM import setup failed";
       setProjectActionNotice({
@@ -1606,10 +1712,39 @@ function App() {
     }
   }
 
+  async function importTestRom() {
+    setImportBusy(true);
+    noteAction("Importing the repo-generated test ROM.");
+
+    try {
+      const result = isTauriRuntime()
+        ? await invoke<RomImportResult>("import_test_rom")
+        : previewTestRomImport();
+      activateImportedRom(result);
+      appendOpenCodeEvent("rom.imported.test", result.importPath);
+      void launchRom(result.importPath, "Test ROM imported and running.");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Test ROM import failed";
+      setProjectActionNotice({
+        state: "missing",
+        label: "Test import failed",
+        detail,
+      });
+      appendOpenCodeEvent("rom.import.test.failed", detail);
+      noteAction(`Test ROM import failed: ${detail}`);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   function runCurrentProject() {
-    noteAction("Running the current starter ROM.");
-    appendOpenCodeEvent("run.started", projectSummary.romPath);
-    void launchStarterRom("Current starter ROM is running.");
+    const activePath = importResult?.importPath ?? projectSummary.romPath;
+    noteAction(importResult ? "Running the imported ROM." : "Running the current starter ROM.");
+    appendOpenCodeEvent("run.started", activePath);
+    void launchRom(
+      importResult?.importPath,
+      importResult ? "Imported ROM running." : "Current starter ROM is running.",
+    );
   }
 
   function toggleEmulatorFocus() {
@@ -1657,14 +1792,14 @@ function App() {
     }
   }
 
-  async function launchStarterRom(doneMessage = "Starter ROM running.") {
+  async function launchRom(romPath?: string, doneMessage = "Starter ROM running.") {
     setStarterBusy(true);
     setStarterSource("checking");
     setBuildState("building");
-    noteAction("Launching starter ROM.");
+    noteAction(romPath ? "Launching imported ROM." : "Launching starter ROM.");
 
     if (!isTauriRuntime()) {
-      setStarterRom(makePreviewStarterRom());
+      setStarterRom(makePreviewStarterRom(romPath));
       setStarterSource("preview");
       setBuildState("running");
       noteAction(`${doneMessage} Browser preview is using simulated frames.`);
@@ -1673,7 +1808,9 @@ function App() {
     }
 
     try {
-      const preview = await invoke<StarterRomPreview>("launch_starter_rom");
+      const preview = romPath
+        ? await invoke<StarterRomPreview>("launch_rom_path", { romPath })
+        : await invoke<StarterRomPreview>("launch_starter_rom");
       setStarterRom(preview);
       setStarterSource("tauri");
       setBuildState("running");
@@ -1698,6 +1835,16 @@ function App() {
 
   return (
     <main className={`app-shell ${emulatorFocused ? "emulator-focused" : ""}`}>
+      <input
+        ref={romImportInputRef}
+        type="file"
+        accept={romImportAccept(importReadiness)}
+        data-testid="rom-import-input"
+        hidden
+        onChange={(event) => {
+          void handleRomFileSelected(event);
+        }}
+      />
       <TopBar
         actionDetail={actionDetail}
         buildLabel={buildLabel}
@@ -1881,7 +2028,7 @@ function App() {
                 {transport === "running" ? <Pause size={18} /> : <Play size={18} />}
               </IconControl>
               <IconControl
-                label="Launch starter ROM"
+                label="Rerun current ROM"
                 onClick={resetPreview}
                 disabled={starterBusy}
               >
@@ -1954,7 +2101,7 @@ function App() {
                 data-testid="starter-rom-summary"
               >
                 {healthIcon(starterRom.status)}
-                <span>{starterLabel(starterRom, starterBusy)}</span>
+                <span>{starterLabel(starterRom, starterBusy, projectSummary.name)}</span>
                 <small>{sourceLabel(starterSource, "Native starter ROM")}</small>
               </div>
               <div className="rom-metadata">
@@ -2073,6 +2220,7 @@ function App() {
           exportResult={exportResult}
           importBusy={importBusy}
           importReadiness={importReadiness}
+          importResult={importResult}
           modelProvider={modelProvider}
           ollamaEndpoint={ollamaEndpoint}
           ollamaModel={ollamaModel}
@@ -2088,6 +2236,9 @@ function App() {
           }}
           onImportRom={() => {
             void importRom();
+          }}
+          onImportTestRom={() => {
+            void importTestRom();
           }}
           onNewProject={() => {
             startNewProject();
@@ -2223,14 +2374,14 @@ function sourceLabel(source: string, nativeLabel = "Native preflight") {
   return "Preview mode";
 }
 
-function starterLabel(preview: StarterRomPreview, busy: boolean) {
-  if (busy) return "Launching starter ROM";
+function starterLabel(preview: StarterRomPreview, busy: boolean, projectName = "Starter ROM") {
+  if (busy) return `Launching ${projectName}`;
   if (preview.status === "ready" && preview.framebufferFrames.length > 0) {
     return "Framebuffer stream loaded";
   }
-  if (preview.status === "ready") return "Starter ROM loaded";
-  if (preview.generatedAt === "error") return "Starter ROM unavailable";
-  return "Starter ROM preview";
+  if (preview.status === "ready") return `${projectName} loaded`;
+  if (preview.generatedAt === "error") return `${projectName} unavailable`;
+  return `${projectName} preview`;
 }
 
 function starterBadge(
@@ -2251,6 +2402,84 @@ function shortPath(path: string) {
   const parts = path.split("/").filter(Boolean);
   if (parts.length <= 3) return path;
   return `${parts[0]}/${parts[1]}/.../${parts[parts.length - 1]}`;
+}
+
+function romImportAccept(readiness?: RomImportReadiness) {
+  return (readiness?.acceptedExtensions ?? previewImportReadiness.acceptedExtensions).join(",");
+}
+
+function isAcceptedRomFileName(fileName: string, extensions: string[]) {
+  const normalized = fileName.toLowerCase();
+  return extensions.some((extension) => normalized.endsWith(extension.toLowerCase()));
+}
+
+function previewImportForFile(file: File, readiness: RomImportReadiness): RomImportResult {
+  const extension = acceptedRomExtensionForName(file.name, readiness.acceptedExtensions) ?? ".bin";
+  const stem = file.name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "-") || "rom";
+
+  return {
+    ...previewImportResult,
+    sourceName: file.name,
+    importPath: `${readiness.importDirectory}/drive16-import-preview-${stem}${extension}`,
+    bytes: file.size,
+    acceptedExtensions: readiness.acceptedExtensions,
+  };
+}
+
+function previewTestRomImport(): RomImportResult {
+  return {
+    ...previewImportResult,
+    sourceName: "starter-test-rom.bin",
+    importPath: "artifacts/phase5/imports/drive16-import-preview-starter-test-rom.bin",
+  };
+}
+
+function previewExportForRom(importedRom?: RomImportResult): RomExportResult {
+  if (!importedRom) return previewExportResult;
+  const extension = acceptedRomExtensionForName(
+    importedRom.importPath,
+    importedRom.acceptedExtensions,
+  ) ?? ".bin";
+  return {
+    ...previewExportResult,
+    status: "ready",
+    detail: "Preview export for imported ROM",
+    sourceRomPath: importedRom.importPath,
+    exportPath: `artifacts/phase3/exports/drive16-import-preview${extension}`,
+    bytes: importedRom.bytes,
+  };
+}
+
+function projectSummaryFromImport(result: RomImportResult): ProjectSummary {
+  const importDirectory =
+    result.importPath.split("/").slice(0, -1).join("/") || previewImportReadiness.importDirectory;
+
+  return {
+    generatedAt: result.generatedAt,
+    name: "Imported ROM",
+    projectPath: importDirectory,
+    romPath: result.importPath,
+    exportDirectory: previewProjectSummary.exportDirectory,
+    romStatus: result.status,
+    romDetail: `${formatBytes(result.bytes)} from ${result.sourceName}`,
+    files: [
+      {
+        label: "Imported ROM",
+        path: result.importPath,
+        state: result.status,
+      },
+      {
+        label: "Import storage",
+        path: importDirectory,
+        state: "ready",
+      },
+    ],
+  };
+}
+
+function acceptedRomExtensionForName(fileName: string, extensions: string[]) {
+  const normalized = fileName.toLowerCase();
+  return extensions.find((extension) => normalized.endsWith(extension.toLowerCase()));
 }
 
 function snapshotFromSaveResult(result: ProjectSaveResult): ProjectSnapshot {
@@ -2385,7 +2614,7 @@ function base64ToBytes(value: string) {
   return bytes;
 }
 
-function makePreviewStarterRom(): StarterRomPreview {
+function makePreviewStarterRom(romPath?: string): StarterRomPreview {
   const framebufferFrames = [
     makePreviewFrame(0, 0x3944),
     makePreviewFrame(30, 0x4145),
@@ -2393,6 +2622,11 @@ function makePreviewStarterRom(): StarterRomPreview {
 
   return {
     ...previewStarterRom,
+    detail: romPath ? "Imported ROM preview frames" : previewStarterRom.detail,
+    projectPath: romPath
+      ? romPath.split("/").slice(0, -1).join("/") || previewImportReadiness.importDirectory
+      : previewStarterRom.projectPath,
+    romPath: romPath ?? previewStarterRom.romPath,
     framebufferFrames,
     streamedFrames: framebufferFrames.length,
   };
@@ -3041,6 +3275,7 @@ function ProjectMenu({
   exportResult,
   importBusy,
   importReadiness,
+  importResult,
   modelProvider,
   ollamaEndpoint,
   ollamaModel,
@@ -3053,6 +3288,7 @@ function ProjectMenu({
   onClose,
   onExportRom,
   onImportRom,
+  onImportTestRom,
   onNewProject,
   onOpenProject,
   onOpenSettings,
@@ -3063,6 +3299,7 @@ function ProjectMenu({
   exportResult?: RomExportResult;
   importBusy: boolean;
   importReadiness?: RomImportReadiness;
+  importResult?: RomImportResult;
   modelProvider: ModelProvider;
   ollamaEndpoint: string;
   ollamaModel: string;
@@ -3075,6 +3312,7 @@ function ProjectMenu({
   onClose: () => void;
   onExportRom: () => void;
   onImportRom: () => void;
+  onImportTestRom: () => void;
   onNewProject: () => void;
   onOpenProject: (snapshot?: ProjectSnapshot) => void;
   onOpenSettings: () => void;
@@ -3126,8 +3364,16 @@ function ProjectMenu({
                   : shortPath(projectSummary.exportDirectory)}
               </strong>
               <span>Import</span>
-              <strong title={importReadiness?.importDirectory ?? "No imported ROM"}>
-                {importReadiness ? shortPath(importReadiness.importDirectory) : "Not imported yet"}
+              <strong
+                title={
+                  importResult?.importPath ?? importReadiness?.importDirectory ?? "No imported ROM"
+                }
+              >
+                {importResult
+                  ? shortPath(importResult.importPath)
+                  : importReadiness
+                    ? shortPath(importReadiness.importDirectory)
+                    : "Not imported yet"}
               </strong>
             </div>
           </section>
@@ -3187,12 +3433,26 @@ function ProjectMenu({
               >
                 <Upload size={16} />
                 <span>
-                  <strong>{importBusy ? "Preparing Import" : "Import ROM"}</strong>
+                  <strong>{importBusy ? "Importing ROM" : "Import ROM"}</strong>
                   <small>
-                    {importReadiness
-                      ? importReadiness.acceptedExtensions.join(", ")
-                      : ".bin, .gen, .md, .smd"}
+                    {importResult
+                      ? `Active: ${importResult.sourceName}`
+                      : importReadiness
+                        ? importReadiness.acceptedExtensions.join(", ")
+                        : ".bin, .gen, .md, .smd"}
                   </small>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="menu-import-test-rom"
+                onClick={onImportTestRom}
+                disabled={importBusy}
+              >
+                <Upload size={16} />
+                <span>
+                  <strong>Import Test ROM</strong>
+                  <small>Use the repo-generated starter ROM</small>
                 </span>
               </button>
               <button

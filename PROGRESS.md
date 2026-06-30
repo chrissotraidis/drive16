@@ -11,7 +11,7 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Clean provider switching between OpenRouter and Ollama.
 - [x] Clarify live agent inference versus local proof responses.
 - [x] Add project menu actions for load/open project and import ROM.
-- [ ] Import a local Genesis ROM into ignored storage and run it in the app.
+- [x] Import a local Genesis ROM into ignored storage and run it in the app.
 - [ ] Add visible ROM controls and keyboard/controller mapping.
 - [ ] Add collapsible or resizable ROM-first layout.
 - [ ] Clarify AI sprites and MML music readiness states.
@@ -21,19 +21,20 @@ hardware target, and the hosted BYOK path is stable enough to share.
 
 ## Current Task
 
-Phase 5 is open. Unit 3 made the project menu the home for project and ROM
-actions. The menu now includes New Project, Save Project, Open Project, Import
-ROM, Export ROM, and Agent Settings. Save adds a recent saved snapshot row.
-Open Project selects a saved snapshot or clearly asks the user to save first.
-Import ROM prepares ignored local storage under `artifacts/phase5/imports` and
-shows accepted ROM extensions without pretending file import is complete.
+Phase 5 is open. Unit 4 added a ROM import path that accepts `.bin`, `.gen`,
+`.md`, and `.smd`, stores imported ROM bytes under ignored
+`artifacts/phase5/imports`, switches the app to an Imported ROM state, and
+lets Run and Export operate on the active imported ROM. A repo-generated
+starter ROM was imported through the app preview and an ignored imported copy
+was launched through Genteel.
 
-Evidence is recorded in `docs/phase5-project-menu-actions.md`.
+Evidence is recorded in `docs/phase5-rom-import-flow.md`.
 
 ## Next Up
 
-Unit 4: implement the native Import ROM flow for `.bin`, `.gen`, `.md`, and
-`.smd` files, copy imports into ignored storage, and run a local test ROM.
+Unit 5: add visible ROM controls and keyboard/controller mapping, including
+clear focus state and honest labels for tested scripted input versus live
+manual input.
 
 ## Completed Phase 5 Work
 
@@ -55,6 +56,12 @@ Unit 4: implement the native Import ROM flow for `.bin`, `.gen`, `.md`, and
 - [x] Open Project and Import ROM actions now provide visible feedback instead
   of acting like dead buttons.
 - [x] Import ROM storage is prepared under ignored `artifacts/phase5/imports`.
+- [x] Import ROM can copy selected ROM bytes into ignored local storage.
+- [x] The app can activate an imported ROM and show it as the current project.
+- [x] Run and rerun actions use the active imported ROM path when one exists.
+- [x] Export can copy the active imported ROM, not only the starter ROM.
+- [x] A repo-generated imported test ROM launched through Genteel with a PNG
+  screenshot and RGB565 frame stream.
 
 ## Completed Phase 4 Work
 
