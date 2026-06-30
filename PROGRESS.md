@@ -16,19 +16,19 @@ still builds a working ROM.
 - [x] Ship the tuned Genesis palette ComfyUI workflow.
 - [ ] Validate generated sprites as palette-legal SGDK SPRITE resources.
 - [x] Wrap ctrmml as the MML music MCP server.
-- [ ] Ship the FM preset library.
+- [x] Ship the FM preset library.
 - [ ] Add the MML reference to the RAG corpus.
 - [ ] Wire the optional prompt path to use generated sprite and music assets.
 - [ ] Build the generated-asset ROM and verify it still works.
 
 ## Current Task
 
-`drive16-mml-music` wraps pinned `ctrmml` and compiles Megadrive MML to VGM.
-Live ComfyUI sprite validation is still awaiting local ComfyUI.
+An original FM preset library now gives generated MML stable YM2612 starter
+voices. Live ComfyUI sprite validation is still awaiting local ComfyUI.
 
 ## Next Up
 
-Ship the FM preset library.
+Add the MML reference to the RAG corpus.
 
 ## Completed Phase 4 Work
 
@@ -60,6 +60,9 @@ Ship the FM preset library.
   `mcp-servers/mml-music/server.py`.
 - [x] Phase 4 MML music MCP evidence recorded in
   `docs/phase4-mml-music-mcp.md`.
+- [x] Original FM preset library added under `assets/enhancements/mml/`.
+- [x] Phase 4 MML FM preset evidence recorded in
+  `docs/phase4-mml-presets.md`.
 
 ## Completed Phase 3 Work
 

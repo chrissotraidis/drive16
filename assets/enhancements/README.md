@@ -9,3 +9,9 @@ toggles.
 `comfyui/` contains the Phase 4 AI sprite workflow contract. It is designed to
 run through the optional `drive16-comfyui` MCP server and a local ComfyUI
 process.
+
+## MML
+
+`mml/` contains original Phase 4 FM preset data for generated Megadrive MML.
+It is designed for the optional `drive16-mml-music` MCP server backed by
+`ctrmml`.

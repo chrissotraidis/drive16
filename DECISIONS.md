@@ -1,5 +1,26 @@
 # Drive16 Decisions
 
+## 2026-06-30 - FM presets ship as original MML data
+
+Context:
+
+Phase 4 generated music needs a small library of known-good FM instruments
+because unaided YM2612 patch design is weak. The library must not copy GPL
+sample songs or tracker data into Drive16, and it must stay optional with the
+MML enhancement path.
+
+Decision:
+
+Ship original Drive16 preset data under `assets/enhancements/mml/` as a
+`ctrmml` include file plus a JSON manifest. Validate every preset by compiling
+a short sample phrase through the pinned `ctrmml` compiler.
+
+Consequence:
+
+Generated MML can reference stable instrument numbers without inventing FM
+voice tables from scratch. The preset data remains independent of CORE bundled
+music, and RAG ingestion plus prompt wiring remain later Phase 4 units.
+
 ## 2026-06-30 - MML music uses ctrmml as a sidecar MCP tool
 
 Context:

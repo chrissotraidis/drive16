@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "format": "drive16-ctrmml-fm-presets",
+  "platform": "megadrive",
+  "license": "Original Drive16 project data. Use under the repository license.",
+  "mml": "fm-presets.mml",
+  "notes": [
+    "Use these original YM2612 starter voices for generated Megadrive MML.",
+    "Keep generated songs short for Phase 4 validation and include #platform megadrive.",
+    "Use channel A for bass, B or C for lead, D or E for harmony, and G or H for PSG support when needed."
+  ],
+  "presets": [
+    {
+      "id": "drive16_round_bass",
+      "instrument": 80,
+      "role": "bass",
+      "defaultChannel": "A",
+      "octave": 3,
+      "volume": 13,
+      "samplePhrase": "c c g c >c< g c r"
+    },
+    {
+      "id": "drive16_clear_lead",
+      "instrument": 81,
+      "role": "lead",
+      "defaultChannel": "B",
+      "octave": 4,
+      "volume": 11,
+      "samplePhrase": "c d e g a g e d"
+    },
+    {
+      "id": "drive16_soft_pad",
+      "instrument": 82,
+      "role": "pad",
+      "defaultChannel": "C",
+      "octave": 4,
+      "volume": 8,
+      "samplePhrase": "c4 e4 g4 >c4<"
+    },
+    {
+      "id": "drive16_chip_pluck",
+      "instrument": 83,
+      "role": "pluck",
+      "defaultChannel": "D",
+      "octave": 5,
+      "volume": 10,
+      "samplePhrase": "c e g >c< g e c r"
+    },
+    {
+      "id": "drive16_bright_bell",
+      "instrument": 84,
+      "role": "bell",
+      "defaultChannel": "E",
+      "octave": 5,
+      "volume": 9,
+      "samplePhrase": "c4 g4 >c4 e4<"
+    },
+    {
+      "id": "drive16_brass_stab",
+      "instrument": 85,
+      "role": "brass",
+      "defaultChannel": "F",
+      "octave": 4,
+      "volume": 11,
+      "samplePhrase": "c4 r8 c8 g4 r4"
+    }
+  ]
+}

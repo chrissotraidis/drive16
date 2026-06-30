@@ -1,5 +1,53 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 41 - MML FM preset library
+
+Plan:
+
+- Task: ship a small original FM preset library for generated Megadrive MML.
+- Files: `assets/enhancements/mml/fm-presets.mml`,
+  `assets/enhancements/mml/manifest.json`,
+  `assets/enhancements/mml/README.md`, `scripts/validate-mml-presets.py`,
+  `docs/phase4-mml-presets.md`, `assets/enhancements/README.md`,
+  `assets/README.md`, `scripts/README.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: manifest validation, compile every preset through pinned
+  `ctrmml`, Python syntax check, secret scan, Markdown punctuation check, and
+  `git diff --check`.
+
+Did:
+
+- Added six original YM2612 FM starter voices for `ctrmml`.
+- Added a manifest with stable preset IDs, instrument numbers, roles, default
+  FM channels, volume hints, octaves, and sample phrases.
+- Added a validator that compiles each preset sample to VGM through the pinned
+  compiler.
+
+Evidence:
+
+- `scripts/validate-mml-presets.py` passed and compiled all six presets.
+- Validation produced VGM outputs for `drive16_round_bass`,
+  `drive16_clear_lead`, `drive16_soft_pad`, `drive16_chip_pluck`,
+  `drive16_bright_bell`, and `drive16_brass_stab`.
+- Generated preset VGMs ranged from 688 to 757 bytes.
+- Every generated preset VGM reported version `0x00000161` and YM2612 clock
+  `7670454`.
+- `python3 -m py_compile scripts/validate-mml-presets.py` passed.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+- Generated preset MML and VGM artifacts under `artifacts/phase4/mml-presets/`
+  were ignored.
+
+Gate:
+
+None for this unit. The live ComfyUI generated-sprite validation request
+remains open.
+
+Next:
+
+- Add the MML reference to the RAG corpus.
+
 ## 2026-06-30 - ITERATION 40 - MML music MCP wrapper
 
 Plan:

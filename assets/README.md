@@ -20,6 +20,8 @@ ComfyUI sprites and MML music are Phase 4 enhancements, not CORE dependencies.
 
 `assets/enhancements/` contains optional Phase 4 generation contracts. These
 assets are not part of the CORE path and stay behind settings toggles.
+The current enhancement contracts cover ComfyUI sprite generation and MML FM
+music presets.
 
 ## Phase 0 Assets
 
