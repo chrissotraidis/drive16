@@ -40,6 +40,9 @@ Toolchain and validation scripts live here.
   Pixydust Quantizer custom node and showing the required checkpoint path for
   the live Phase 4 sprite workflow. It can also install Pixydust's Python
   requirements explicitly and accepts the same checkpoint override.
+- `install-phase4-comfyui-checkpoint.sh`: places a user-provided compatible
+  checkpoint file or URL into the local ComfyUI checkpoints folder, with an
+  optional SHA-256 check.
 - `validate-mml-music-mcp.py`: verifies the Phase 4 `drive16-mml-music` MCP
   server by compiling a tiny Megadrive MML song to VGM.
 - `validate-mml-presets.py`: validates the Phase 4 FM preset manifest and

@@ -154,6 +154,10 @@ Place a Pixel Art Diffusion XL compatible checkpoint at:
 
 $CHECKPOINT_PATH
 
+Or install a user-provided compatible checkpoint with:
+
+scripts/install-phase4-comfyui-checkpoint.sh --source /path-or-url/to/checkpoint.safetensors --checkpoint $CHECKPOINT_NAME --check
+
 Drive16 does not download this model automatically because model license,
 source, size, and hardware fit need to remain explicit.
 EOF

@@ -24,6 +24,9 @@ check:
 - Existing Pixydust directories are left untouched.
 - The script prints the required checkpoint path:
   `~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors`.
+- When the checkpoint is missing, the script points to
+  `scripts/install-phase4-comfyui-checkpoint.sh --source ... --checkpoint ... --check`
+  for placing an explicit user-provided compatible checkpoint.
 - `--check` can run `scripts/check-phase4-comfyui-readiness.py` afterward.
 
 ## Local Verification
@@ -40,8 +43,9 @@ The dry run was executed:
 scripts/setup-phase4-comfyui-prereqs.sh
 ```
 
-Result: the script reported the existing ComfyUI root, printed the Pixydust
-install command, and kept the checkpoint as an explicit validation request.
+Result: the script reported the existing ComfyUI root, found the Pixydust
+directory, and kept the checkpoint as an explicit validation request with the
+checkpoint install helper command.
 
 The readiness check was rerun:
 
@@ -83,6 +87,12 @@ Place a Pixel Art Diffusion XL compatible checkpoint at:
 
 ```text
 ~/Documents/ComfyUI/models/checkpoints/pixel-art-diffusion-xl.safetensors
+```
+
+Or install a user-provided compatible checkpoint with:
+
+```sh
+scripts/install-phase4-comfyui-checkpoint.sh --source /path-or-url/to/checkpoint.safetensors --checkpoint pixel-art-diffusion-xl.safetensors --check
 ```
 
 Then start ComfyUI on `http://127.0.0.1:8188` and run:

@@ -41,14 +41,19 @@ through SGDK `rescomp`, a ROM build, and a Genteel screenshot. Live ComfyUI
 output is still required before the generated-sprite checklist item can close.
 The combined prompt path has been fixture-proven with that validated generated
 sprite plus generated MML music, including ROM build, Genteel screenshots,
-Right-input movement, and non-silent audio.
+Right-input movement, and non-silent audio. A checkpoint install helper now
+places a user-provided compatible checkpoint file or URL into the local ComfyUI
+checkpoints folder with optional SHA-256 verification.
 
 ## Next Up
 
 VALIDATION REQUEST: place the Pixel Art Diffusion XL compatible checkpoint, set
 `DRIVE16_COMFYUI_CHECKPOINT` if the filename differs from the default, or type
 the compatible filename into the app's `Checkpoint` field before testing the
-endpoint. Start ComfyUI with `scripts/launch-phase4-comfyui-api.sh`, make
+endpoint. You can use
+`scripts/install-phase4-comfyui-checkpoint.sh --source /path-or-url/to/compatible-checkpoint.safetensors --checkpoint pixel-art-diffusion-xl.safetensors --check`
+to place an explicit user-provided checkpoint. Start ComfyUI with
+`scripts/launch-phase4-comfyui-api.sh`, make
 `scripts/check-phase4-comfyui-readiness.py` pass in another shell, then run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
 then run `scripts/validate-phase4-generated-assets-prompt.sh`.
@@ -131,6 +136,8 @@ then run `scripts/validate-phase4-generated-assets-prompt.sh`.
   resource harness with ROM build and Genteel screenshot evidence.
 - [x] Combined generated-sprite plus generated-MML prompt path fixture proof
   passed without masking the live ComfyUI gate.
+- [x] Explicit checkpoint install helper added for user-provided compatible
+  checkpoint files or URLs.
 
 ## Completed Phase 3 Work
 

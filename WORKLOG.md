@@ -1,5 +1,65 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 59 - Explicit checkpoint install helper
+
+Plan:
+
+- Task: provide an exact helper for placing a user-provided compatible
+  checkpoint into the local ComfyUI checkpoints folder.
+- Files: `scripts/install-phase4-comfyui-checkpoint.sh`,
+  `scripts/setup-phase4-comfyui-prereqs.sh`, `scripts/README.md`,
+  `docs/phase4-comfyui-checkpoint-install.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- Verification: syntax-check the helper, install a tiny ignored fixture with
+  SHA-256 verification, prove wrong-hash rejection, rerun the real ComfyUI
+  readiness check, run hygiene scans, and confirm generated artifacts are
+  ignored.
+
+Did:
+
+- Added `scripts/install-phase4-comfyui-checkpoint.sh`.
+- Kept model source explicit: the helper requires `--source <path-or-url>` and
+  has no baked-in model URL.
+- Added optional SHA-256 verification.
+- Added `--check` so the helper can immediately run the Phase 4 readiness
+  check after placement.
+- Updated the prerequisite setup output and docs to point to the helper.
+
+Evidence:
+
+- Local fixture install passed:
+  `artifacts/phase4/checkpoint-install-test/comfyui/models/checkpoints/test-pixel.safetensors`.
+- Fixture SHA-256 verified:
+  `2de2cfee082e137f29a01565a6f3c20f114a8f004dc6ad0313cc4ab5ab57a0bc`.
+- Wrong-hash install attempt exited `66` with `Checkpoint SHA-256 mismatch`.
+- The fixture stayed under ignored `artifacts/phase4/checkpoint-install-test/`
+  and was not treated as a real Phase 4 checkpoint.
+- `bash -n` passed for the checkpoint install helper and prerequisite setup
+  helper.
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py` passed.
+- `scripts/setup-phase4-comfyui-prereqs.sh` reported the existing ComfyUI root,
+  found Pixydust, and printed the new checkpoint install helper command.
+- `scripts/check-phase4-comfyui-readiness.py` still exits `68`: ComfyUI API is
+  not reachable on `127.0.0.1:8188`, the default checkpoint is not present in
+  the checked model paths, and workflow classes cannot be inspected without
+  the API.
+- `git diff --check` passed.
+- Secret scan and Markdown punctuation scan found no matches.
+- Checkpoint install fixture artifacts and readiness output are ignored by
+  git.
+
+Gate:
+
+VALIDATION REQUEST remains: install a real Pixel Art Diffusion XL compatible
+checkpoint from an explicit source, start local ComfyUI, pass
+`scripts/check-phase4-comfyui-readiness.py`, run the live sprite workflow, then
+rerun the real generated-assets proof.
+
+Next:
+
+- Install the real checkpoint, run the live sprite workflow, then run the
+  generated-assets ROM proof with real live ComfyUI output.
+
 ## 2026-06-30 - ITERATION 58 - Combined generated-assets fixture proof
 
 Plan:
