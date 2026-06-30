@@ -1,5 +1,39 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 84 - Phase 5 evidence packet
+
+Plan:
+
+- Task: assemble the Phase 5 evidence packet for human review.
+- Files: `docs/phase5-evidence.md`, `PROGRESS.md`, `README.md`, and
+  `WORKLOG.md`.
+- Verification: confirm Phase 5 evidence index, run final build/test checks,
+  and ensure docs are ready for review.
+
+Did:
+
+- Added a single Phase 5 evidence packet that links Units 1 through 9.
+- Summarized current behavior, local validation, verification commands, git and
+  artifact hygiene, exit criteria, and review notes.
+- Marked the Phase 5 evidence checklist item complete.
+- Updated README to point to human review as the next step.
+
+Evidence:
+
+- Phase 5 evidence packet: `docs/phase5-evidence.md`.
+- Unit evidence docs remain linked from the packet.
+- Phase 5 is ready for human review with documented caveats for live freeform
+  model replies and full manual controller input.
+
+Gate:
+
+Phase 5 implementation work is complete enough for human review.
+
+Next:
+
+- Human review and sign-off, or a focused Phase 5 patch pass if review finds
+  issues.
+
 ## 2026-06-30 - ITERATION 83 - Phase 5 local path validation
 
 Plan:

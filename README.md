@@ -50,8 +50,7 @@ near the ROM viewport and preserve recent action paths.
 
 ## What to do next
 
-Current Phase 5 next step: assemble the Phase 5 evidence packet for human
-review.
+Current Phase 5 next step: human review of `docs/phase5-evidence.md`.
 
 Current local validation:
 
@@ -166,7 +165,7 @@ scripts/validate-phase4-live-generated-assets.sh
 - Phase 3: core v1 app flow, complete and approved.
 - Phase 4: optional AI sprites and generated MML music, proof passed locally
   and approved.
-- Phase 5: hardening and fully local path, in progress.
+- Phase 5: hardening and fully local path, ready for human review.
 
 ## Model stance
 

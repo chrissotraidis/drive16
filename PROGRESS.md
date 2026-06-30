@@ -17,21 +17,20 @@ hardware target, and the hosted BYOK path is stable enough to share.
 - [x] Clarify AI sprites and MML music readiness states.
 - [x] Improve Run, Save, Export, Import, and tool-health feedback.
 - [x] Validate and document the fully local Ollama plus local ComfyUI path.
-- [ ] Assemble Phase 5 evidence packet for human review.
+- [x] Assemble Phase 5 evidence packet for human review.
 
 ## Current Task
 
-Phase 5 is open. Unit 9 validated and documented the local provider and
-enhancement setup paths. Ollama HTTP is reachable locally and lists installed
-models, but the app default `qwen2.5-coder:7b` is not installed. ComfyUI model
-files and Pixydust are present, but the API is not currently running on
-`127.0.0.1:8188`.
+Phase 5 is open and ready for human review. The evidence packet summarizes the
+provider cleanup, conversation truthfulness, project actions, ROM import, ROM
+controls, ROM-first layout, enhancement readiness, action feedback, and local
+path validation work.
 
-Evidence is recorded in `docs/phase5-local-path-validation.md`.
+Evidence is recorded in `docs/phase5-evidence.md`.
 
 ## Next Up
 
-Assemble the Phase 5 evidence packet for human review.
+Human review and sign-off for Phase 5.
 
 ## Completed Phase 5 Work
 
@@ -84,6 +83,7 @@ Assemble the Phase 5 evidence packet for human review.
   Pixydust present.
 - [x] OpenRouter BYOK, Ollama local, and ComfyUI local setup paths are
   documented separately.
+- [x] Phase 5 evidence packet assembled for human review.
 
 ## Completed Phase 4 Work
 
