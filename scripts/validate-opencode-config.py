@@ -18,6 +18,7 @@ EXPECTED_MCP = {
     "drive16-emulator",
     "drive16-rag",
     "drive16-comfyui",
+    "drive16-mml-music",
 }
 
 

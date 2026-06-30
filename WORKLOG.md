@@ -1,5 +1,58 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 40 - MML music MCP wrapper
+
+Plan:
+
+- Task: wrap `ctrmml` as the optional Phase 4 MML music MCP server.
+- Files: `scripts/build-ctrmml.sh`, `mcp-servers/mml-music/server.py`,
+  `mcp-servers/mml-music/README.md`, `scripts/validate-mml-music-mcp.py`,
+  `opencode.json`, `scripts/validate-opencode-config.py`,
+  `mcp-servers/README.md`, `scripts/README.md`,
+  `docs/phase4-mml-music-mcp.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `DECISIONS.md`.
+- Verification: pinned `ctrmml` build, MCP handshake and sample compile,
+  OpenCode config validation, secret scan, Markdown punctuation check, and
+  `git diff --check`.
+
+Did:
+
+- Added a pinned `ctrmml` builder that clones upstream commit
+  `ca87769a5e73d69a514401e15a8d8bb193a3c0ef` into ignored artifacts and builds
+  `mmlc`.
+- Added `drive16-mml-music` with `compile_music` and `read_music_state`.
+- Added a validator that compiles a tiny `#platform megadrive` MML song to VGM
+  through the MCP server.
+- Added `drive16-mml-music` to OpenCode config validation.
+
+Evidence:
+
+- `make -C artifacts/phase4/ctrmml-src RELEASE=1 mmlc` built upstream
+  `ctrmml` manually during discovery.
+- A tiny Megadrive MML file compiled to a 619 byte VGM with header `Vgm `.
+- `scripts/validate-mml-music-mcp.py` passed and compiled the tiny sample
+  through the MCP server to a 619 byte VGM.
+- Validation metadata reported VGM version `0x00000161`, YM2612 clock
+  `7670454`, loop offset `409`, loop samples `44100`, and `hasLoop: true`.
+- `python3 scripts/validate-opencode-config.py` passed OpenCode config
+  validation and still reported the existing model-credential validation
+  request before full agent-loop runs.
+- `python3 -m py_compile mcp-servers/mml-music/server.py
+  scripts/validate-mml-music-mcp.py` passed.
+- Markdown punctuation and emoji guard returned no matches.
+- Secret scan returned no matches for OpenRouter key patterns.
+- `git diff --check` passed.
+- Generated ctrmml and VGM artifacts under `artifacts/phase4/` were ignored.
+
+Gate:
+
+None for this unit. The live ComfyUI generated-sprite validation request
+remains open.
+
+Next:
+
+- Ship the FM preset library.
+
 ## 2026-06-30 - ITERATION 39 - Live ComfyUI sprite runner
 
 Plan:

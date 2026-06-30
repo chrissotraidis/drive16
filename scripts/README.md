@@ -5,6 +5,8 @@ Toolchain and validation scripts live here.
 - `build-sgdk.sh`: builds an SGDK project with the pinned docker-sgdk image.
 - `build-genteel.sh`: clones and builds the pinned Genteel source revision into
   ignored `artifacts/` storage for Phase 0 validation.
+- `build-ctrmml.sh`: clones and builds the pinned GPL-2.0 `ctrmml` compiler
+  into ignored `artifacts/` storage for the Phase 4 MML music path.
 - `validate-genteel.sh`: runs a ROM through a Genteel binary and captures a
   screenshot with the upstream `--headless <frames> --screenshot <path>` CLI.
 - `validate-genteel-frame-stream.sh`: builds/runs the patched Genteel binary and
@@ -24,6 +26,8 @@ Toolchain and validation scripts live here.
 - `run-comfyui-sprite-workflow.py`: enqueues the Phase 4 ComfyUI workflow
   through `drive16-comfyui`, downloads the PNG output, and runs the generated
   sprite validator.
+- `validate-mml-music-mcp.py`: verifies the Phase 4 `drive16-mml-music` MCP
+  server by compiling a tiny Megadrive MML song to VGM.
 - `validate-known-good-homebrew.sh`: fetches a pinned upstream SGDK sample ROM,
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.

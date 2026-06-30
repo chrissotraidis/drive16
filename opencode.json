@@ -40,6 +40,14 @@
         "COMFYUI_DOWNLOAD_CACHE_DIR": "artifacts/phase4/comfyui-mcp/cache"
       },
       "enabled": true
+    },
+    "drive16-mml-music": {
+      "type": "local",
+      "command": [
+        "python3",
+        "mcp-servers/mml-music/server.py"
+      ],
+      "enabled": true
     }
   }
 }

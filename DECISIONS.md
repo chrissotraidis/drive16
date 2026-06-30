@@ -1,5 +1,27 @@
 # Drive16 Decisions
 
+## 2026-06-30 - MML music uses ctrmml as a sidecar MCP tool
+
+Context:
+
+Phase 4 calls for generated music through MML compiled by `ctrmml`. The
+upstream project is GPL-2.0, so it cannot be linked into the permissively
+licensed Drive16 app. The app also needs the music path to stay optional and
+separate from CORE bundled assets.
+
+Decision:
+
+Add a `drive16-mml-music` MCP server that invokes a pinned `ctrmml` `mmlc`
+binary from ignored artifacts. The server accepts complete Megadrive MML text,
+compiles it to VGM, validates the VGM header, and returns an SGDK `XGM`
+resource line. `ctrmml` source and build output stay under `artifacts/`.
+
+Consequence:
+
+The agent can compile generated MML through MCP without vendoring or linking
+GPL code into Drive16. FM preset authoring, RAG reference ingestion, app prompt
+wiring, and generated-asset ROM proof remain follow-up Phase 4 units.
+
 ## 2026-06-30 - Live ComfyUI sprite validation uses a committed runner
 
 Context:
