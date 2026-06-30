@@ -26,6 +26,9 @@ Toolchain and validation scripts live here.
 - `run-comfyui-sprite-workflow.py`: enqueues the Phase 4 ComfyUI workflow
   through `drive16-comfyui`, downloads the PNG output, and runs the generated
   sprite validator.
+- `check-phase4-comfyui-readiness.py`: checks the local ComfyUI API,
+  committed workflow classes, Pixel Art Diffusion XL checkpoint, and Pixydust
+  Quantizer node before live sprite generation.
 - `validate-mml-music-mcp.py`: verifies the Phase 4 `drive16-mml-music` MCP
   server by compiling a tiny Megadrive MML song to VGM.
 - `validate-mml-presets.py`: validates the Phase 4 FM preset manifest and

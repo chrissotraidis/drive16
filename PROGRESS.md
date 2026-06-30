@@ -24,14 +24,15 @@ still builds a working ROM.
 ## Current Task
 
 The generated-MML ROM proof now passes with Docker, SGDK, and Genteel. Full
-generated-asset ROM proof is awaiting live ComfyUI sprite output.
+generated-asset ROM proof is awaiting live ComfyUI sprite output. A readiness
+check now reports the missing local ComfyUI prerequisites explicitly.
 
 ## Next Up
 
-VALIDATION REQUEST: start local ComfyUI and run
+VALIDATION REQUEST: make `scripts/check-phase4-comfyui-readiness.py` pass,
+then run
 `COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py`,
-then run `scripts/validate-phase4-generated-assets-prompt.sh` while Docker
-Desktop is running.
+then run `scripts/validate-phase4-generated-assets-prompt.sh`.
 
 ## Completed Phase 4 Work
 
@@ -83,6 +84,10 @@ Desktop is running.
   `docs/phase4-generated-assets-validation.md`.
 - [x] Generated-MML ROM proof passed with Docker, SGDK, Genteel screenshots,
   Right-input sprite movement, and non-silent generated audio.
+- [x] Phase 4 ComfyUI readiness check added at
+  `scripts/check-phase4-comfyui-readiness.py`.
+- [x] Phase 4 ComfyUI readiness evidence recorded in
+  `docs/phase4-comfyui-readiness.md`.
 
 ## Completed Phase 3 Work
 

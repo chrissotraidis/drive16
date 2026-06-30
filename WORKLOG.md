@@ -1,5 +1,73 @@
 # Drive16 Worklog
 
+## 2026-06-30 - ITERATION 47 - ComfyUI readiness check
+
+Plan:
+
+- Task: add a focused readiness check for the remaining live ComfyUI sprite
+  gate.
+- Files: `scripts/check-phase4-comfyui-readiness.py`, `scripts/README.md`,
+  `docs/phase4-comfyui-readiness.md`, `PROGRESS.md`, and `WORKLOG.md`.
+- Verification: readiness check, script syntax, full native test suite,
+  frontend build, secret scan, Markdown punctuation check, ignored artifact
+  check, and `git diff --check`.
+
+Did:
+
+- Added `scripts/check-phase4-comfyui-readiness.py`.
+- The script checks the local ComfyUI API, workflow node classes,
+  `pixel-art-diffusion-xl.safetensors`, and the Pixydust `Quantizer` node.
+- The script writes
+  `artifacts/phase4/comfyui-readiness/latest.json`.
+- Documented the readiness check in `scripts/README.md` and
+  `docs/phase4-comfyui-readiness.md`.
+
+Evidence:
+
+- `scripts/check-phase4-comfyui-readiness.py` exited `68` with a validation
+  request.
+- The readiness report showed the local ComfyUI API was not reachable at
+  `127.0.0.1:8188`.
+- The readiness report showed no
+  `pixel-art-diffusion-xl.safetensors` checkpoint under
+  `~/Documents/ComfyUI/models/checkpoints`.
+- The readiness report showed no Pixydust Quantizer custom node under
+  `~/Documents/ComfyUI/custom_nodes`.
+- `python3 -m py_compile scripts/check-phase4-comfyui-readiness.py
+  scripts/run-comfyui-sprite-workflow.py scripts/validate-comfyui-workflow.py`
+  passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml -- --nocapture`
+  passed: 20 passed, 4 ignored.
+- `npm run build` in `app/` passed.
+- `scripts/validate-phase4-generated-assets-prompt.sh` ran the focused tests:
+  5 passed, 2 ignored. It then exited `66` with the live ComfyUI validation
+  request because the live sprite run record is not successful.
+- Ignored-artifact checks confirmed `app/dist/`,
+  `artifacts/phase4/comfyui-readiness/latest.json`, and
+  `artifacts/phase4/live-comfyui-sprite/last-run.json` are ignored.
+
+Gate:
+
+VALIDATION REQUEST: make this command pass:
+
+```sh
+scripts/check-phase4-comfyui-readiness.py
+```
+
+Expected result: the readiness report records `ok: true`.
+
+Then run:
+
+```sh
+COMFYUI_URL=http://127.0.0.1:8188 scripts/run-comfyui-sprite-workflow.py
+scripts/validate-phase4-generated-assets-prompt.sh
+```
+
+Next:
+
+- Install or start a local ComfyUI server with the Pixel Art Diffusion XL
+  checkpoint and Pixydust Quantizer node, then run the live sprite workflow.
+
 ## 2026-06-30 - ITERATION 46 - Generated MML ROM proof
 
 Plan:
