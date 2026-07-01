@@ -1,5 +1,32 @@
 # Drive16 Decisions
 
+## 2026-07-01 - Interactive Play core delivery is dev-only until release-settled
+
+Context:
+
+Product V1 can play imported and generated ROMs through the embedded
+Nostalgist/RetroArch adapter, but the current Mega Drive path resolves
+Genesis Plus GX from Nostalgist's default dev CDN. Nostalgist itself is MIT
+licensed, but Libretro documents the Genesis Plus GX core as non-commercial.
+Drive16 should not imply that a release-safe Genesis core is bundled.
+
+Decision:
+
+Treat the current Nostalgist/RetroArch path as a local-development interactive
+adapter. Show it as `Play ready` with `Dev CDN` when browser capabilities are
+present. Do not commit or vendor Genesis Plus GX, RetroArch Emscripten, or
+other emulator core binaries. Keep Genteel as the deterministic
+Verify/Capture Proof path. A future public release must choose a user-supplied
+core flow, a license-reviewed installer-managed flow, or a replacement runtime
+before calling interactive Play distribution-settled.
+
+Consequence:
+
+Fresh downloaders can see whether Play is ready, setup-needed, or dev-only
+without guessing. Missing interactive Play setup no longer affects Verify, and
+the app has a single readiness contract for `available`, `dev-only`, `missing`,
+`needs-user-action`, and `unsupported`.
+
 ## 2026-06-30 - Nostalgist is integrated without vendoring Genesis cores
 
 Context:

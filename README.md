@@ -22,11 +22,17 @@ interactive Play foundation, native generated-ROM Play is verified, provider
 setup is truthful, project lifecycle actions are covered, and post-v1 work is
 separated from the V1 stop line.
 
+Phase 7 Slice 1 is in progress: interactive Play core distribution is now
+explicit. The current Nostalgist/RetroArch path is a local-development
+`Dev CDN` adapter, not a bundled release core. Genteel remains the local
+Verify/Capture Proof path.
+
 Evidence:
 
 - Phase 6 packet: `docs/phase6-evidence.md`
 - Product V1 packet: `docs/product-v1-evidence.md`
 - Post-v1 backlog: `docs/post-v1-backlog.md`
+- Phase 7 core policy: `docs/phase7-interactive-core-distribution.md`
 - Phase 3 packet: `docs/phase3-evidence.md`
 - Core prompt proof: `docs/phase3-v1-prompt.md`
 - Current ledger: `PROGRESS.md`
@@ -67,9 +73,10 @@ core as a settled commercial distribution dependency.
 
 ## What to do next
 
-Current next step: start the selected post-v1 slice in
-`docs/post-v1-backlog.md`: emulator/core distribution policy for interactive
-Play, while keeping Genteel as Verify/Capture Proof.
+Current next step: finish the selected post-v1 slice in
+`docs/phase7-interactive-core-distribution.md`: keep the current interactive
+Play path honest as a dev-only CDN adapter, while leaving room for a future
+user-supplied or replacement core flow before public distribution.
 
 Current local validation:
 
@@ -115,8 +122,15 @@ http://127.0.0.1:1420/
 Useful checks:
 
 ```sh
+scripts/check-interactive-play-core.mjs
 scripts/verify-phase6-loop.sh --browser
 scripts/verify-phase6-loop.sh --no-browser --with-v1-proof
+```
+
+Optional online Play-core check:
+
+```sh
+scripts/check-interactive-play-core.mjs --online
 ```
 
 Interactive player smoke:
@@ -125,6 +139,11 @@ Interactive player smoke:
 2. Click Play ROM.
 3. Click the ROM viewport and use Arrow keys, `Z`, `X`, `C`, and Enter.
 4. Use Pause/Resume, Reset, or Stop from the compact player controls.
+
+If the app reports `Play setup needed`, click Verify instead. Verify uses the
+local Genteel proof path and does not depend on the interactive RetroArch core.
+If the app reports `Play ready` / `Dev CDN`, local interactive Play can run, but
+Drive16 still has not bundled a release-settled Genesis core.
 
 The native Tauri app can be run with:
 

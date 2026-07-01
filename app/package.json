@@ -9,7 +9,8 @@
     "preview": "vite preview --host 127.0.0.1 --port 1420",
     "tauri": "tauri",
     "verify:phase6": "../scripts/verify-phase6-loop.sh",
-    "verify:phase6:browser": "node ../scripts/verify-phase6-browser-smoke.mjs --url http://127.0.0.1:1420/"
+    "verify:phase6:browser": "node ../scripts/verify-phase6-browser-smoke.mjs --url http://127.0.0.1:1420/",
+    "check:interactive-core": "node ../scripts/check-interactive-play-core.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",

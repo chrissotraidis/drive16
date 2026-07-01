@@ -1,11 +1,27 @@
 # Drive16 Progress
 
-Current phase: Product V1 closure complete for local review
+Current phase: Phase 7 Slice 1 - interactive core distribution policy
 
 Exit criterion: a non-developer can follow the golden path from starter project
 to agent/proof build, interactive keyboard Play, Verify, Save/Open, and Export
 without ambiguous controls, while Genteel proof and interactive Play remain
 distinct.
+
+## Phase 7 Slice 1 Checklist
+
+- [x] Confirm upstream wrapper/core licensing posture for the current
+  Nostalgist/RetroArch/Genesis Plus GX path.
+- [x] Choose the release posture: current Play is local-development `Dev CDN`,
+  not bundled or release-settled.
+- [x] Record the decision in `DECISIONS.md`.
+- [x] Add an interactive core readiness contract with `available`,
+  `dev-only`, `missing`, `needs-user-action`, and `unsupported`.
+- [x] Surface Play readiness near the ROM player without moving it into Agent
+  Settings.
+- [x] Add an `Interactive Play` setup item to the Tools panel.
+- [x] Add a setup/check command for the interactive Play core policy.
+- [x] Run the expanded browser smoke for present and missing core states.
+- [x] Update final evidence after verification.
 
 ## Phase 6 Checklist
 
@@ -38,12 +54,14 @@ distinct.
 
 ## Current Task
 
-Phase 6 implementation is functionally complete for browser/native command
-evidence, including native generated-ROM Play. Product V1 closure evidence is
-recorded in `docs/product-v1-evidence.md`.
+Phase 7 Slice 1 is implementing the selected post-v1 emulator/core distribution
+policy. The current posture is `Play ready` / `Dev CDN` for local development,
+while public distribution still needs a user-supplied, installer-managed, or
+replacement interactive core path.
 
 Evidence is recorded in:
 
+- `docs/phase7-interactive-core-distribution.md`
 - `docs/product-v1-evidence.md`
 - `docs/post-v1-backlog.md`
 - `docs/phase6-to-product-v1-goal.md`
@@ -57,9 +75,9 @@ Evidence is recorded in:
 ## Next Up
 
 Product V1 closure is complete for the local review scope. The selected first
-post-v1 slice is emulator/core distribution policy: decide user-supplied versus
-installer-managed Genesis core delivery while keeping Genteel as
-Verify/Capture Proof.
+post-v1 slice is now underway: Drive16 treats current interactive Play as a
+dev-only CDN adapter, keeps Genteel as Verify/Capture Proof, and shows Play
+readiness explicitly in the ROM player and Tools surfaces.
 
 ## Completed Phase 6 Work
 

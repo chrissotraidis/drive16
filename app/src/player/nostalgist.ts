@@ -10,10 +10,10 @@ export const GENESIS_PLUS_GX_CORE = "genesis_plus_gx";
 
 export const nostalgistProviderReady: PlayerProvider = {
   kind: "nostalgist-retroarch",
-  state: "available",
-  label: "Interactive player",
+  state: "dev-only",
+  label: "Play ready",
   detail:
-    "Nostalgist/RetroArch loads Genesis Plus GX at play time; Drive16 does not vendor the core.",
+    "Nostalgist/RetroArch loads Genesis Plus GX from the dev CDN at play time; Drive16 does not vendor the core.",
 };
 
 export type NostalgistPlayerRuntime = {

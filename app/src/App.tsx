@@ -39,10 +39,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  coreLaunchFailureReadiness,
+  detectInteractiveCoreReadiness,
   launchNostalgistMegadrivePlayer,
-  nostalgistProviderReady,
   pauseNostalgistPlayer,
   playerInputActionFromKey,
+  playerProviderFromCoreReadiness,
   proofPreviewProvider,
   resetNostalgistPlayer,
   resumeNostalgistPlayer,
@@ -51,6 +53,7 @@ import {
   visibleKeyboardMappings,
   type ActiveRomSource,
   type InteractivePlayerSession,
+  type InteractiveCoreReadiness,
   type LoadedPlayerRom,
   type NostalgistPlayerRuntime,
   type PlayerAudioState,
@@ -555,7 +558,8 @@ function App() {
   const [playerState, setPlayerState] = useState<PlayerSessionState>("idle");
   const [playerCanvasActive, setPlayerCanvasActive] = useState(false);
   const [playerAudio] = useState<PlayerAudioState>("unavailable");
-  const [interactiveProvider] = useState<PlayerProvider>(nostalgistProviderReady);
+  const [interactiveCoreReadiness, setInteractiveCoreReadiness] =
+    useState<InteractiveCoreReadiness>(() => detectInteractiveCoreReadiness());
   const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
     "Starter template loaded. Verify the ROM or ask for sprite and music.",
@@ -745,7 +749,7 @@ function App() {
         detail: actionDetail,
       };
     }
-    if (projectActionNotice.label === "Player core needed") {
+    if (projectActionNotice.label === "Play setup needed") {
       return {
         state: "warning",
         label: projectActionNotice.label,
@@ -793,6 +797,14 @@ function App() {
   const activeRomSource = useMemo(
     () => activeRomSourceFor(projectSummary, importResult, v1PromptResult),
     [importResult, projectSummary, v1PromptResult],
+  );
+  const interactiveProvider = useMemo(
+    () => playerProviderFromCoreReadiness(interactiveCoreReadiness),
+    [interactiveCoreReadiness],
+  );
+  const preflightWithInteractivePlay = useMemo(
+    () => [interactiveCoreHealthCheck(interactiveCoreReadiness), ...preflight.checks],
+    [interactiveCoreReadiness, preflight.checks],
   );
   const keyboardMappings = useMemo(() => visibleKeyboardMappings(), []);
   const playerSession = useMemo<InteractivePlayerSession>(
@@ -1935,6 +1947,20 @@ function App() {
   }
 
   async function playActiveRom() {
+    if (!interactiveCoreReadiness.canPlay) {
+      setPlayerState("stopped");
+      setPlayerCanvasActive(false);
+      const detail = `${interactiveCoreReadiness.detail} ${interactiveCoreReadiness.verifyDetail}`;
+      setProjectActionNotice({
+        state: "warning",
+        label: "Play setup needed",
+        detail,
+      });
+      noteAction(detail);
+      appendOpenCodeEvent("player.setup_needed", detail);
+      return;
+    }
+
     setPlayerState("loading");
     setPlayerCanvasActive(true);
     noteAction(`Preparing ${activeRomSource.label} for interactive Play.`);
@@ -1943,22 +1969,6 @@ function App() {
     try {
       const payload = await readActiveRomForPlayer(activeRomSource);
       setLoadedPlayerRom(payload);
-
-      if (interactiveProvider.state !== "available") {
-        setPlayerState("stopped");
-        setPlayerCanvasActive(false);
-        const detail = `${payload.sourceName} (${formatBytes(
-          payload.bytes,
-        )}) is ready for Play, but ${interactiveProvider.detail}`;
-        setProjectActionNotice({
-          state: "warning",
-          label: "Player core needed",
-          detail,
-        });
-        noteAction(detail);
-        appendOpenCodeEvent("player.needs_core", detail);
-        return;
-      }
 
       const canvas = playerCanvasRef.current;
       if (!canvas) {
@@ -1981,15 +1991,19 @@ function App() {
       appendOpenCodeEvent("player.playing", payload.sourcePath);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Interactive Play setup failed";
+      const launchFailure = coreLaunchFailureReadiness(detail);
+      if (launchFailure) {
+        setInteractiveCoreReadiness(launchFailure);
+      }
       disposeInteractivePlayer();
       setPlayerCanvasActive(false);
       setPlayerState("error");
       setProjectActionNotice({
-        state: "missing",
-        label: "Play setup failed",
-        detail,
+        state: launchFailure ? "warning" : "missing",
+        label: launchFailure ? "Play setup needed" : "Play setup failed",
+        detail: launchFailure ? `${launchFailure.detail} ${launchFailure.verifyDetail}` : detail,
       });
-      noteAction(detail);
+      noteAction(launchFailure ? launchFailure.detail : detail);
       appendOpenCodeEvent("player.failed", detail);
     }
   }
@@ -2550,6 +2564,7 @@ function App() {
           <div className="emulator-frame">
             <PlayerSessionStrip
               proofProvider={proofPreviewProvider}
+              readiness={interactiveCoreReadiness}
               session={playerSession}
             />
             <div className="screen-bezel">
@@ -2649,6 +2664,7 @@ function App() {
             </div>
             <div className="rom-input-proof">
               <span data-testid="rom-last-input">{lastInputAction}</span>
+              <CoreReadinessPill readiness={interactiveCoreReadiness} />
               <div
                 className="rom-player-actions"
                 onMouseDown={(event) => event.preventDefault()}
@@ -2833,7 +2849,7 @@ function App() {
                 <small>{sourceLabel(preflightSource)}</small>
               </div>
               <div className="health-list" data-testid="tool-health-list">
-                {preflight.checks.map((tool) => (
+                {preflightWithInteractivePlay.map((tool) => (
                   <div className={`health-item ${tool.state}`} key={tool.name}>
                     <span>{tool.name}</span>
                     <strong>{stateLabel(tool.state)}</strong>
@@ -3084,9 +3100,11 @@ function activeRomSourceFor(
 
 function PlayerSessionStrip({
   proofProvider,
+  readiness,
   session,
 }: {
   proofProvider: PlayerProvider;
+  readiness: InteractiveCoreReadiness;
   session: InteractivePlayerSession;
 }) {
   const providerState = playerProviderHealthState(session.provider.state);
@@ -3118,10 +3136,10 @@ function PlayerSessionStrip({
         {session.provider.label}
         <strong>{playerSessionLabel(session.state, session.provider.state)}</strong>
       </span>
-      <span title={proofProvider.detail}>
+      <span title={readiness.verifyDetail || proofProvider.detail}>
         <ShieldCheck size={15} />
         Verify
-        <strong>{proofProvider.label}</strong>
+        <strong>Still available</strong>
       </span>
       <span title={session.input.lastAction?.detail ?? "Keyboard input model is ready"}>
         <KeyRound size={15} />
@@ -3142,9 +3160,39 @@ function PlayerSessionStrip({
   );
 }
 
+function CoreReadinessPill({ readiness }: { readiness: InteractiveCoreReadiness }) {
+  const state = interactiveCoreHealthState(readiness);
+  return (
+    <span
+      className={`core-readiness-pill ${state}`}
+      data-testid="interactive-core-readiness"
+      title={`${readiness.detail} ${readiness.setupAction}`}
+    >
+      {healthIcon(state)}
+      <strong>{readiness.label}</strong>
+      <small>{interactiveCoreStatusLabel(readiness.status)}</small>
+    </span>
+  );
+}
+
+function interactiveCoreHealthCheck(readiness: InteractiveCoreReadiness): HealthCheck {
+  return {
+    name: "Interactive Play",
+    state: interactiveCoreHealthState(readiness),
+    detail: `${readiness.source}: ${readiness.detail}`,
+    hints: [readiness.verifyDetail, readiness.setupAction],
+  };
+}
+
+function interactiveCoreHealthState(readiness: InteractiveCoreReadiness): HealthState {
+  if (readiness.status === "available") return "ready";
+  if (readiness.status === "missing" || readiness.status === "unsupported") return "missing";
+  return "warning";
+}
+
 function playerProviderHealthState(state: PlayerProvider["state"]): HealthState {
   if (state === "available") return "ready";
-  if (state === "error") return "missing";
+  if (state === "missing" || state === "unsupported" || state === "error") return "missing";
   return "warning";
 }
 
@@ -3158,7 +3206,10 @@ function playerSessionLabel(
   sessionState: PlayerSessionState,
   providerState: PlayerProvider["state"],
 ) {
-  if (providerState === "unconfigured") return "Needs core";
+  if (providerState === "dev-only") return "Dev-only";
+  if (providerState === "missing" || providerState === "unconfigured") return "Setup needed";
+  if (providerState === "needs-user-action") return "User action";
+  if (providerState === "unsupported") return "Unsupported";
   if (providerState === "loading") return "Loading";
   if (providerState === "error") return "Unavailable";
   if (sessionState === "playing") return "Playing";
@@ -3167,6 +3218,14 @@ function playerSessionLabel(
   if (sessionState === "stopped") return "Stopped";
   if (sessionState === "error") return "Error";
   return "Idle";
+}
+
+function interactiveCoreStatusLabel(status: InteractiveCoreReadiness["status"]) {
+  if (status === "available") return "User core";
+  if (status === "dev-only") return "Dev CDN";
+  if (status === "missing") return "Missing";
+  if (status === "needs-user-action") return "User action";
+  return "Unsupported";
 }
 
 function starterLabel(preview: StarterRomPreview, busy: boolean, projectName = "Starter ROM") {
@@ -4199,7 +4258,7 @@ function TopBar({
           <Box size={22} />
           <div>
             <strong>Drive16</strong>
-            <span>Phase 6 player</span>
+            <span>Phase 7 core policy</span>
           </div>
         </div>
       </div>

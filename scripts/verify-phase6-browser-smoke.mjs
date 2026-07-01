@@ -16,6 +16,7 @@ function parseArgs(argv) {
       process.env.DRIVE16_VERIFY_ROM ??
       path.join(rootDir, "examples", "app-starter-blank", "out", "rom.bin"),
     timeoutMs: 45000,
+    coreStatus: process.env.DRIVE16_VERIFY_CORE_STATUS ?? "dev-only",
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -28,6 +29,8 @@ function parseArgs(argv) {
       args.romPath = path.resolve(argv[++index]);
     } else if (arg === "--timeout-ms") {
       args.timeoutMs = Number(argv[++index]);
+    } else if (arg === "--core-status") {
+      args.coreStatus = argv[++index];
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -38,6 +41,11 @@ function parseArgs(argv) {
 
   if (!Number.isFinite(args.timeoutMs) || args.timeoutMs < 1000) {
     throw new Error("--timeout-ms must be at least 1000");
+  }
+  if (!["available", "dev-only", "missing", "needs-user-action", "unsupported"].includes(args.coreStatus)) {
+    throw new Error(
+      "--core-status must be one of available, dev-only, missing, needs-user-action, unsupported",
+    );
   }
 
   return args;
@@ -51,6 +59,9 @@ Options:
   --out <dir>          Directory for screenshots and browser-smoke.json.
   --rom <path>         Local test ROM to import through the browser file input.
   --timeout-ms <ms>    Interaction timeout. Default: 45000.
+  --core-status <mode> Interactive core status override for verification.
+                       One of: available, dev-only, missing, needs-user-action, unsupported.
+                       Default: dev-only.
 `);
 }
 
@@ -137,6 +148,9 @@ async function main() {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
     });
+    await context.addInitScript((coreStatus) => {
+      window.localStorage.setItem("drive16.interactiveCoreStatusOverride", coreStatus);
+    }, args.coreStatus);
     const page = await context.newPage();
     page.setDefaultTimeout(args.timeoutMs);
     page.on("console", (message) => {
@@ -229,44 +243,50 @@ async function main() {
       return document.querySelector('[data-testid="rom-last-input"]')?.textContent?.includes("Right");
     });
     states.lastInput = await visibleText(page, "rom-last-input");
+    states.coreReadinessBeforePlay = await visibleText(page, "interactive-core-readiness");
 
     await page.getByTestId("play-active-rom").click();
     await page.waitForFunction(() => {
       const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /Interactive player started|Play setup failed|Player core needed/i.test(feedback);
+      return /Interactive player started|Play setup failed|Play setup needed/i.test(feedback);
     });
     states.playFeedback = await visibleText(page, "rom-action-feedback");
-    if (!/Interactive player started/i.test(states.playFeedback ?? "")) {
+    if (canCoreStatusPlay(args.coreStatus) && !/Interactive player started/i.test(states.playFeedback ?? "")) {
       throw new Error(`Interactive Play did not start: ${states.playFeedback}`);
     }
+    if (!canCoreStatusPlay(args.coreStatus) && !/Play setup needed|Verify still available/i.test(states.playFeedback ?? "")) {
+      throw new Error(`Missing-core Play did not explain setup: ${states.playFeedback}`);
+    }
 
-    await page.getByTestId("pause-player").click();
-    await page.waitForFunction(() => {
-      const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /paused/i.test(feedback);
-    });
-    states.pauseFeedback = await visibleText(page, "rom-action-feedback");
+    if (canCoreStatusPlay(args.coreStatus)) {
+      await page.getByTestId("pause-player").click();
+      await page.waitForFunction(() => {
+        const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
+        return /paused/i.test(feedback);
+      });
+      states.pauseFeedback = await visibleText(page, "rom-action-feedback");
 
-    await page.getByTestId("pause-player").click();
-    await page.waitForFunction(() => {
-      const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /resumed/i.test(feedback);
-    });
-    states.resumeFeedback = await visibleText(page, "rom-action-feedback");
+      await page.getByTestId("pause-player").click();
+      await page.waitForFunction(() => {
+        const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
+        return /resumed/i.test(feedback);
+      });
+      states.resumeFeedback = await visibleText(page, "rom-action-feedback");
 
-    await page.getByTestId("reset-player").click();
-    await page.waitForFunction(() => {
-      const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /reset/i.test(feedback);
-    });
-    states.resetFeedback = await visibleText(page, "rom-action-feedback");
+      await page.getByTestId("reset-player").click();
+      await page.waitForFunction(() => {
+        const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
+        return /reset/i.test(feedback);
+      });
+      states.resetFeedback = await visibleText(page, "rom-action-feedback");
 
-    await page.getByTestId("stop-player").click();
-    await page.waitForFunction(() => {
-      const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /stopped/i.test(feedback);
-    });
-    states.stopFeedback = await visibleText(page, "rom-action-feedback");
+      await page.getByTestId("stop-player").click();
+      await page.waitForFunction(() => {
+        const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
+        return /stopped/i.test(feedback);
+      });
+      states.stopFeedback = await visibleText(page, "rom-action-feedback");
+    }
     await screenshot(page, args.outDir, screenshots, "03-player-stopped.png");
 
     await page.getByTestId("verify-rom").click();
@@ -303,6 +323,7 @@ async function main() {
       checkedAt: new Date().toISOString(),
       url: args.url,
       romPath: args.romPath,
+      coreStatus: args.coreStatus,
       browser: launchLabel,
       screenshots,
       states,
@@ -318,10 +339,14 @@ async function main() {
       throw new Error(`Browser console/page errors were captured: ${errors.join(" | ")}`);
     }
 
-    console.log(`Phase 6 browser smoke passed. Evidence: ${args.outDir}`);
+    console.log(`Phase 6 browser smoke passed for core status ${args.coreStatus}. Evidence: ${args.outDir}`);
   } finally {
     await browser.close();
   }
+}
+
+function canCoreStatusPlay(coreStatus) {
+  return coreStatus === "available" || coreStatus === "dev-only";
 }
 
 async function screenshot(page, outDir, screenshots, name) {

@@ -19,7 +19,28 @@ export type LoadedPlayerRom = {
 
 export type PlayerProviderKind = "proof-preview" | "nostalgist-retroarch";
 
-export type PlayerProviderState = "available" | "unconfigured" | "loading" | "error";
+export type InteractiveCoreStatus =
+  | "available"
+  | "missing"
+  | "unsupported"
+  | "dev-only"
+  | "needs-user-action";
+
+export type InteractiveCorePolicy = "dev-cdn" | "user-supplied" | "disabled" | "unsupported";
+
+export type InteractiveCoreReadiness = {
+  status: InteractiveCoreStatus;
+  policy: InteractiveCorePolicy;
+  label: string;
+  detail: string;
+  verifyDetail: string;
+  setupAction: string;
+  source: string;
+  canPlay: boolean;
+  releaseSafe: boolean;
+};
+
+export type PlayerProviderState = InteractiveCoreStatus | "unconfigured" | "loading" | "error";
 
 export type PlayerProvider = {
   kind: PlayerProviderKind;
@@ -77,6 +98,6 @@ export const proofPreviewProvider: PlayerProvider = {
 export const nostalgistProviderPending: PlayerProvider = {
   kind: "nostalgist-retroarch",
   state: "unconfigured",
-  label: "Interactive player",
-  detail: "RetroArch core delivery is not configured yet.",
+  label: "Play setup needed",
+  detail: "Interactive core delivery is not configured yet. Verify remains available.",
 };

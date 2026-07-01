@@ -1,5 +1,52 @@
 # Drive16 Worklog
 
+## 2026-07-01 - ITERATION 95 - Phase 7 interactive core policy
+
+Plan:
+
+- Task: make interactive Play core distribution explicit after Product V1.
+- Files: `app/src/player`, `app/src/App.tsx`, `app/src/styles.css`,
+  `scripts/check-interactive-play-core.mjs`,
+  `scripts/verify-phase6-browser-smoke.mjs`, `README.md`, `PROGRESS.md`,
+  `DECISIONS.md`, `scripts/README.md`, and
+  `docs/phase7-interactive-core-distribution.md`.
+- Verification: wrapper/core policy check, Play-ready browser smoke,
+  missing-core browser smoke, frontend build, and git hygiene.
+
+Did:
+
+- Chose the Phase 7 Slice 1 posture: current interactive Play is a
+  local-development `Dev CDN` adapter through Nostalgist/RetroArch, not a
+  bundled release-settled Genesis core.
+- Added a shared readiness contract for `available`, `dev-only`, `missing`,
+  `needs-user-action`, and `unsupported`.
+- Added a ROM-control readiness pill and an `Interactive Play` item in Tools.
+- Kept Genteel as Verify/Capture Proof when Play setup is missing.
+- Added a local setup/check script and a browser smoke core-status override.
+
+Evidence:
+
+- `docs/phase7-interactive-core-distribution.md`.
+- `scripts/check-interactive-play-core.mjs` passed.
+- `pnpm --dir app build` passed.
+- `scripts/verify-phase6-loop.sh --browser` passed with evidence under
+  `artifacts/phase6/verify-loop/20260701-135734`.
+- `scripts/verify-phase6-browser-smoke.mjs --core-status dev-only` passed with
+  evidence under `artifacts/phase7/core-readiness/dev-only-final`.
+- `scripts/verify-phase6-browser-smoke.mjs --core-status missing` passed with
+  evidence under `artifacts/phase7/core-readiness/missing-final`.
+- Native spot-check found `Play ready`, `Dev CDN`, `Interactive Play`, and
+  Verify/Genteel setup hints in the desktop app.
+
+Gate:
+
+Passed for the first Phase 7 slice.
+
+Next:
+
+- Decide whether the next post-v1 slice should be user-supplied core selection,
+  controller mapping, or live freeform agent replies.
+
 ## 2026-07-01 - ITERATION 94 - Product V1 release handoff
 
 Plan:

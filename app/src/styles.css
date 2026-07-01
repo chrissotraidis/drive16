@@ -1106,6 +1106,50 @@ kbd {
   white-space: nowrap;
 }
 
+.rom-input-proof > .core-readiness-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 210px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(5, 4, 3, 0.42);
+}
+
+.core-readiness-pill.ready {
+  border-color: rgba(115, 209, 123, 0.36);
+}
+
+.core-readiness-pill.warning {
+  border-color: rgba(255, 171, 82, 0.34);
+}
+
+.core-readiness-pill.missing {
+  border-color: rgba(255, 115, 106, 0.44);
+}
+
+.core-readiness-pill svg {
+  flex: 0 0 auto;
+}
+
+.core-readiness-pill strong,
+.core-readiness-pill small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.core-readiness-pill strong {
+  color: var(--text);
+}
+
+.core-readiness-pill small {
+  color: var(--muted);
+}
+
 .rom-player-actions {
   display: inline-flex;
   align-items: center;

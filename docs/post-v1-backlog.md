@@ -5,7 +5,8 @@ closure unless a later goal explicitly changes scope.
 
 ## Selected First Slice
 
-Start with emulator/core distribution:
+Emulator/core distribution is the first Phase 7 slice and now has an initial
+policy implementation in `docs/phase7-interactive-core-distribution.md`:
 
 - Decide whether the Product V1 interactive Genesis core is user-supplied,
   installer-managed, dev-only, or replaced before public release.
@@ -15,6 +16,11 @@ Start with emulator/core distribution:
 
 Why this first: it is the highest-leverage post-v1 blocker for someone cloning
 the repo and expecting interactive Play to work without guesswork.
+
+Current result: Drive16 treats the existing Nostalgist/RetroArch path as
+`Play ready` / `Dev CDN` for local development, does not bundle Genesis core
+binaries, and keeps a future user-supplied or replacement core flow open for
+public distribution.
 
 ## Input And Play
 
