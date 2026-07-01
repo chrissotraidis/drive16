@@ -1016,7 +1016,7 @@ h3 {
 
 .rom-controls {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(220px, 1fr);
   align-items: center;
   gap: 10px;
   margin: 0 18px 14px;
@@ -1090,13 +1090,16 @@ kbd {
 
 .rom-input-proof {
   display: inline-flex;
+  grid-column: 1 / -1;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
 }
 
 .rom-input-proof > span {
+  flex: 1 1 150px;
   max-width: 150px;
   overflow: hidden;
   color: var(--muted);
@@ -1108,6 +1111,7 @@ kbd {
 
 .rom-input-proof > .core-readiness-pill {
   display: inline-flex;
+  flex: 0 1 220px;
   align-items: center;
   gap: 6px;
   max-width: 210px;
@@ -1152,6 +1156,7 @@ kbd {
 
 .rom-player-actions {
   display: inline-flex;
+  flex: 1 1 320px;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;

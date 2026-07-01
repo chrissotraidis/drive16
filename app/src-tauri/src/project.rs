@@ -13,6 +13,12 @@ const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
 const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
 const ROM_IMPORT_DIRECTORY: &str = "artifacts/phase5/imports";
 const ROM_IMPORT_EXTENSIONS: [&str; 4] = [".bin", ".gen", ".md", ".smd"];
+const INTERACTIVE_CORE_DIRECTORY: &str = "artifacts/phase7/interactive-core";
+const INTERACTIVE_CORE_NAME: &str = "genesis_plus_gx";
+const INTERACTIVE_CORE_JS: &str = "genesis_plus_gx_libretro.js";
+const INTERACTIVE_CORE_WASM: &str = "genesis_plus_gx_libretro.wasm";
+const INTERACTIVE_CORE_INPUT_EXTENSIONS: [&str; 3] = [".zip", ".js", ".wasm"];
+const INTERACTIVE_CORE_STORAGE_EXTENSIONS: [&str; 2] = [".js", ".wasm"];
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -108,6 +114,67 @@ pub struct RomReadResult {
     pub accepted_extensions: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractiveCoreStatusResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub core_name: String,
+    pub source: String,
+    pub import_directory: String,
+    pub js_path: Option<String>,
+    pub wasm_path: Option<String>,
+    pub js_bytes: Option<u64>,
+    pub wasm_bytes: Option<u64>,
+    pub accepted_extensions: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractiveCoreUploadFile {
+    pub file_name: String,
+    pub data_base64: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractiveCoreImportRequest {
+    pub files: Vec<InteractiveCoreUploadFile>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractiveCoreImportResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub core_name: String,
+    pub source: String,
+    pub import_directory: String,
+    pub js_path: String,
+    pub wasm_path: String,
+    pub js_bytes: u64,
+    pub wasm_bytes: u64,
+    pub accepted_extensions: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractiveCoreReadResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub core_name: String,
+    pub source: String,
+    pub js_path: String,
+    pub wasm_path: String,
+    pub js_bytes: u64,
+    pub wasm_bytes: u64,
+    pub js_data_base64: String,
+    pub wasm_data_base64: String,
+}
+
 struct ProjectPaths {
     repo_root: PathBuf,
     project_path: PathBuf,
@@ -115,6 +182,7 @@ struct ProjectPaths {
     export_directory: PathBuf,
     project_save_directory: PathBuf,
     rom_import_directory: PathBuf,
+    interactive_core_directory: PathBuf,
     build_sgdk_script: PathBuf,
 }
 
@@ -156,6 +224,24 @@ pub fn export_rom_path(source_rom_path: String) -> Result<RomExportResult, Strin
 
 pub fn read_rom_bytes(rom_path: String) -> Result<RomReadResult, String> {
     read_rom_bytes_for_repo(repo_root(), rom_path)
+}
+
+pub fn load_interactive_core_status() -> InteractiveCoreStatusResult {
+    interactive_core_status_for_repo(repo_root())
+}
+
+pub fn prepare_interactive_core_import() -> Result<InteractiveCoreStatusResult, String> {
+    prepare_interactive_core_import_for_repo(repo_root())
+}
+
+pub fn import_interactive_core_files(
+    request: InteractiveCoreImportRequest,
+) -> Result<InteractiveCoreImportResult, String> {
+    import_interactive_core_files_for_repo(repo_root(), request)
+}
+
+pub fn read_interactive_core_files() -> Result<InteractiveCoreReadResult, String> {
+    read_interactive_core_files_for_repo(repo_root())
 }
 
 fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
@@ -498,6 +584,172 @@ fn import_rom_data_for_repo(
     })
 }
 
+fn interactive_core_status_for_repo(repo_root: PathBuf) -> InteractiveCoreStatusResult {
+    let paths = ProjectPaths::new(repo_root);
+    let js_path = paths.interactive_core_directory.join(INTERACTIVE_CORE_JS);
+    let wasm_path = paths.interactive_core_directory.join(INTERACTIVE_CORE_WASM);
+    let js_bytes = readable_nonempty_file_bytes(&js_path);
+    let wasm_bytes = readable_nonempty_file_bytes(&wasm_path);
+    let has_core = js_bytes.is_some() && wasm_bytes.is_some();
+
+    InteractiveCoreStatusResult {
+        generated_at: unix_timestamp(),
+        status: if has_core { "available" } else { "missing" }.to_string(),
+        detail: if has_core {
+            "User-supplied Genesis core is installed in ignored local storage.".to_string()
+        } else {
+            "Choose a compatible .zip archive or .js + .wasm pair to enable local Play.".to_string()
+        },
+        core_name: INTERACTIVE_CORE_NAME.to_string(),
+        source: if has_core {
+            "User core".to_string()
+        } else {
+            "No user core".to_string()
+        },
+        import_directory: repo_relative(&paths.repo_root, &paths.interactive_core_directory),
+        js_path: js_bytes
+            .as_ref()
+            .map(|_| repo_relative(&paths.repo_root, &js_path)),
+        wasm_path: wasm_bytes
+            .as_ref()
+            .map(|_| repo_relative(&paths.repo_root, &wasm_path)),
+        js_bytes,
+        wasm_bytes,
+        accepted_extensions: accepted_interactive_core_extensions(),
+    }
+}
+
+fn prepare_interactive_core_import_for_repo(
+    repo_root: PathBuf,
+) -> Result<InteractiveCoreStatusResult, String> {
+    let paths = ProjectPaths::new(repo_root);
+    fs::create_dir_all(&paths.interactive_core_directory).map_err(|error| {
+        format!(
+            "Could not create interactive core directory {}: {}",
+            paths.interactive_core_directory.display(),
+            error
+        )
+    })?;
+
+    Ok(interactive_core_status_for_repo(paths.repo_root))
+}
+
+fn import_interactive_core_files_for_repo(
+    repo_root: PathBuf,
+    request: InteractiveCoreImportRequest,
+) -> Result<InteractiveCoreImportResult, String> {
+    let mut js_data: Option<Vec<u8>> = None;
+    let mut wasm_data: Option<Vec<u8>> = None;
+
+    if request.files.is_empty() {
+        return Err("Choose a .zip archive or .js + .wasm pair.".to_string());
+    }
+
+    for upload in request.files {
+        let safe_name = sanitize_upload_file_name(&upload.file_name)?;
+        let extension =
+            accepted_interactive_core_storage_extension(&safe_name).ok_or_else(|| {
+                format!(
+                    "Unsupported core file {}. Accepted stored files: {}",
+                    safe_name,
+                    INTERACTIVE_CORE_STORAGE_EXTENSIONS.join(", ")
+                )
+            })?;
+        let data = general_purpose::STANDARD
+            .decode(upload.data_base64.trim())
+            .map_err(|error| format!("Core file {} was not valid base64: {}", safe_name, error))?;
+        if data.is_empty() {
+            return Err(format!("Core file was empty: {}", safe_name));
+        }
+
+        match extension {
+            ".js" => js_data = Some(data),
+            ".wasm" => wasm_data = Some(data),
+            _ => {}
+        }
+    }
+
+    let js_data = js_data.ok_or_else(|| "Core setup needs a .js loader file.".to_string())?;
+    let wasm_data =
+        wasm_data.ok_or_else(|| "Core setup needs a matching .wasm file.".to_string())?;
+
+    let paths = ProjectPaths::new(repo_root);
+    fs::create_dir_all(&paths.interactive_core_directory).map_err(|error| {
+        format!(
+            "Could not create interactive core directory {}: {}",
+            paths.interactive_core_directory.display(),
+            error
+        )
+    })?;
+
+    let js_path = paths.interactive_core_directory.join(INTERACTIVE_CORE_JS);
+    let wasm_path = paths.interactive_core_directory.join(INTERACTIVE_CORE_WASM);
+    fs::write(&js_path, &js_data)
+        .map_err(|error| format!("Could not write core JS {}: {}", js_path.display(), error))?;
+    fs::write(&wasm_path, &wasm_data).map_err(|error| {
+        format!(
+            "Could not write core WebAssembly {}: {}",
+            wasm_path.display(),
+            error
+        )
+    })?;
+
+    Ok(InteractiveCoreImportResult {
+        generated_at: unix_timestamp(),
+        status: "available".to_string(),
+        detail: "User-supplied Genesis core copied into ignored local storage.".to_string(),
+        core_name: INTERACTIVE_CORE_NAME.to_string(),
+        source: "User core".to_string(),
+        import_directory: repo_relative(&paths.repo_root, &paths.interactive_core_directory),
+        js_path: repo_relative(&paths.repo_root, &js_path),
+        wasm_path: repo_relative(&paths.repo_root, &wasm_path),
+        js_bytes: js_data.len() as u64,
+        wasm_bytes: wasm_data.len() as u64,
+        accepted_extensions: accepted_interactive_core_extensions(),
+    })
+}
+
+fn read_interactive_core_files_for_repo(
+    repo_root: PathBuf,
+) -> Result<InteractiveCoreReadResult, String> {
+    let paths = ProjectPaths::new(repo_root);
+    let js_path = paths.interactive_core_directory.join(INTERACTIVE_CORE_JS);
+    let wasm_path = paths.interactive_core_directory.join(INTERACTIVE_CORE_WASM);
+
+    let js_data = fs::read(&js_path)
+        .map_err(|error| format!("Could not read core JS {}: {}", js_path.display(), error))?;
+    if js_data.is_empty() {
+        return Err(format!("Core JS file was empty: {}", js_path.display()));
+    }
+    let wasm_data = fs::read(&wasm_path).map_err(|error| {
+        format!(
+            "Could not read core WebAssembly {}: {}",
+            wasm_path.display(),
+            error
+        )
+    })?;
+    if wasm_data.is_empty() {
+        return Err(format!(
+            "Core WebAssembly file was empty: {}",
+            wasm_path.display()
+        ));
+    }
+
+    Ok(InteractiveCoreReadResult {
+        generated_at: unix_timestamp(),
+        status: "available".to_string(),
+        detail: "User-supplied Genesis core bytes ready for interactive Play.".to_string(),
+        core_name: INTERACTIVE_CORE_NAME.to_string(),
+        source: "User core".to_string(),
+        js_path: repo_relative(&paths.repo_root, &js_path),
+        wasm_path: repo_relative(&paths.repo_root, &wasm_path),
+        js_bytes: js_data.len() as u64,
+        wasm_bytes: wasm_data.len() as u64,
+        js_data_base64: general_purpose::STANDARD.encode(js_data),
+        wasm_data_base64: general_purpose::STANDARD.encode(wasm_data),
+    })
+}
+
 impl ProjectPaths {
     fn new(repo_root: PathBuf) -> Self {
         Self {
@@ -506,6 +758,7 @@ impl ProjectPaths {
             export_directory: repo_root.join(EXPORT_DIRECTORY),
             project_save_directory: repo_root.join(PROJECT_SAVE_DIRECTORY),
             rom_import_directory: repo_root.join(ROM_IMPORT_DIRECTORY),
+            interactive_core_directory: repo_root.join(INTERACTIVE_CORE_DIRECTORY),
             build_sgdk_script: repo_root.join("scripts/build-sgdk.sh"),
             repo_root,
         }
@@ -582,10 +835,14 @@ fn resolve_repo_path(repo_root: &Path, source_rom_path: &str) -> Result<PathBuf,
 }
 
 fn sanitize_rom_file_name(source_name: &str) -> Result<String, String> {
+    sanitize_upload_file_name(source_name)
+}
+
+fn sanitize_upload_file_name(source_name: &str) -> Result<String, String> {
     let file_name = Path::new(source_name)
         .file_name()
         .and_then(|value| value.to_str())
-        .ok_or_else(|| "ROM file name is missing".to_string())?;
+        .ok_or_else(|| "File name is missing".to_string())?;
     let sanitized = file_name
         .chars()
         .map(|character| {
@@ -601,7 +858,7 @@ fn sanitize_rom_file_name(source_name: &str) -> Result<String, String> {
         .trim_matches(|character| character == '.' || character == '-')
         .is_empty()
     {
-        Err("ROM file name is not usable".to_string())
+        Err("File name is not usable".to_string())
     } else {
         Ok(sanitized)
     }
@@ -635,6 +892,28 @@ fn accepted_extensions() -> Vec<String> {
         .iter()
         .map(|extension| extension.to_string())
         .collect()
+}
+
+fn accepted_interactive_core_storage_extension(file_name: &str) -> Option<&'static str> {
+    let lower_name = file_name.to_ascii_lowercase();
+    INTERACTIVE_CORE_STORAGE_EXTENSIONS
+        .iter()
+        .copied()
+        .find(|extension| lower_name.ends_with(extension))
+}
+
+fn accepted_interactive_core_extensions() -> Vec<String> {
+    INTERACTIVE_CORE_INPUT_EXTENSIONS
+        .iter()
+        .map(|extension| extension.to_string())
+        .collect()
+}
+
+fn readable_nonempty_file_bytes(path: &Path) -> Option<u64> {
+    fs::metadata(path)
+        .ok()
+        .filter(|metadata| metadata.is_file() && metadata.len() > 0)
+        .map(|metadata| metadata.len())
 }
 
 fn copy_project_tree(source: &Path, destination: &Path) -> Result<u64, String> {
@@ -1044,6 +1323,148 @@ mod tests {
         fs::remove_dir_all(temp_dir).unwrap();
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn interactive_core_status_reports_missing_without_user_pair() {
+        let temp_dir = temp_repo("core-missing");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let status = interactive_core_status_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(status.status, "missing");
+        assert_eq!(status.import_directory, INTERACTIVE_CORE_DIRECTORY);
+        assert!(status.js_path.is_none());
+        assert!(status.wasm_path.is_none());
+        assert_eq!(
+            status.accepted_extensions,
+            INTERACTIVE_CORE_INPUT_EXTENSIONS
+                .iter()
+                .map(|extension| extension.to_string())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn prepare_interactive_core_import_creates_ignored_storage_path() {
+        let temp_dir = temp_repo("core-prepare");
+        let status = prepare_interactive_core_import_for_repo(temp_dir.clone()).unwrap();
+        let import_directory_exists = temp_dir.join(&status.import_directory).is_dir();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(status.status, "missing");
+        assert_eq!(status.import_directory, INTERACTIVE_CORE_DIRECTORY);
+        assert!(import_directory_exists);
+    }
+
+    #[test]
+    fn import_interactive_core_files_copies_pair_to_stable_ignored_paths() {
+        let temp_dir = temp_repo("core-import");
+        let result = import_interactive_core_files_for_repo(
+            temp_dir.clone(),
+            InteractiveCoreImportRequest {
+                files: vec![
+                    InteractiveCoreUploadFile {
+                        file_name: "../custom-core.js".to_string(),
+                        data_base64: general_purpose::STANDARD.encode(b"core js"),
+                    },
+                    InteractiveCoreUploadFile {
+                        file_name: "custom-core.wasm".to_string(),
+                        data_base64: general_purpose::STANDARD.encode(b"core wasm"),
+                    },
+                ],
+            },
+        )
+        .expect("core pair should import");
+        let imported_js = fs::read(temp_dir.join(&result.js_path)).unwrap();
+        let imported_wasm = fs::read(temp_dir.join(&result.wasm_path)).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "available");
+        assert_eq!(result.core_name, INTERACTIVE_CORE_NAME);
+        assert_eq!(
+            result.js_path,
+            format!("{}/{}", INTERACTIVE_CORE_DIRECTORY, INTERACTIVE_CORE_JS)
+        );
+        assert_eq!(
+            result.wasm_path,
+            format!("{}/{}", INTERACTIVE_CORE_DIRECTORY, INTERACTIVE_CORE_WASM)
+        );
+        assert_eq!(imported_js, b"core js");
+        assert_eq!(imported_wasm, b"core wasm");
+    }
+
+    #[test]
+    fn import_interactive_core_files_rejects_missing_wasm_pair() {
+        let temp_dir = temp_repo("core-missing-wasm");
+        let result = import_interactive_core_files_for_repo(
+            temp_dir.clone(),
+            InteractiveCoreImportRequest {
+                files: vec![InteractiveCoreUploadFile {
+                    file_name: "custom-core.js".to_string(),
+                    data_base64: general_purpose::STANDARD.encode(b"core js"),
+                }],
+            },
+        );
+        let import_directory_exists = temp_dir.join(INTERACTIVE_CORE_DIRECTORY).exists();
+        let _ = fs::remove_dir_all(temp_dir);
+
+        assert!(result.is_err());
+        assert!(!import_directory_exists);
+    }
+
+    #[test]
+    fn import_interactive_core_files_rejects_unsupported_storage_extension() {
+        let temp_dir = temp_repo("core-reject-extension");
+        let result = import_interactive_core_files_for_repo(
+            temp_dir.clone(),
+            InteractiveCoreImportRequest {
+                files: vec![
+                    InteractiveCoreUploadFile {
+                        file_name: "core.zip".to_string(),
+                        data_base64: general_purpose::STANDARD.encode(b"zip data"),
+                    },
+                    InteractiveCoreUploadFile {
+                        file_name: "core.wasm".to_string(),
+                        data_base64: general_purpose::STANDARD.encode(b"wasm data"),
+                    },
+                ],
+            },
+        );
+        let import_directory_exists = temp_dir.join(INTERACTIVE_CORE_DIRECTORY).exists();
+        let _ = fs::remove_dir_all(temp_dir);
+
+        assert!(result.is_err());
+        assert!(!import_directory_exists);
+    }
+
+    #[test]
+    fn read_interactive_core_files_returns_user_core_payload() {
+        let temp_dir = temp_repo("core-read");
+        let core_directory = temp_dir.join(INTERACTIVE_CORE_DIRECTORY);
+        fs::create_dir_all(&core_directory).unwrap();
+        fs::write(core_directory.join(INTERACTIVE_CORE_JS), b"read js").unwrap();
+        fs::write(core_directory.join(INTERACTIVE_CORE_WASM), b"read wasm").unwrap();
+
+        let result = read_interactive_core_files_for_repo(temp_dir.clone())
+            .expect("core payload should read");
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "available");
+        assert_eq!(result.core_name, INTERACTIVE_CORE_NAME);
+        assert_eq!(
+            general_purpose::STANDARD
+                .decode(result.js_data_base64)
+                .unwrap(),
+            b"read js"
+        );
+        assert_eq!(
+            general_purpose::STANDARD
+                .decode(result.wasm_data_base64)
+                .unwrap(),
+            b"read wasm"
+        );
     }
 
     fn temp_repo(label: &str) -> PathBuf {

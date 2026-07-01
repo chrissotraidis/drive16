@@ -1,5 +1,52 @@
 # Drive16 Worklog
 
+## 2026-07-01 - ITERATION 96 - Phase 7 user-supplied core flow
+
+Plan:
+
+- Task: implement the Phase 7 Slice 2 user-supplied interactive core setup
+  flow.
+- Files: `app/src/App.tsx`, `app/src/player`, `app/src-tauri/src`,
+  `app/package.json`, `scripts/check-interactive-play-core.mjs`,
+  `scripts/verify-phase6-browser-smoke.mjs`, `README.md`, `PROGRESS.md`,
+  `DECISIONS.md`, `scripts/README.md`, and `docs/phase7-user-core-flow.md`.
+- Verification: frontend build, native project tests, core checker, user-core
+  browser smoke, missing-core browser smoke, and git hygiene.
+
+Did:
+
+- Added `Set Up Play` / `Choose Core` as a project/player action.
+- Accepted compatible `.zip` archives or `.js + .wasm` pairs for the Genesis
+  RetroArch/libretro Emscripten core.
+- Stored normalized user core files under ignored
+  `artifacts/phase7/interactive-core`.
+- Added Tauri commands and tests for core status, import, and readback.
+- Made `Play ROM` prefer the user-supplied core and use the dev CDN only as a
+  development fallback.
+- Extended the core checker to report local core presence/readability, tracked
+  core-binary hygiene, and Verify availability.
+- Extended browser smoke so it can import a real user core ZIP and prove Play
+  uses it.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml project::` passed.
+- `scripts/check-interactive-play-core.mjs --online` passed.
+- User-core browser smoke passed with evidence under
+  `artifacts/phase7/browser-smoke-user-core`.
+- Missing-core browser smoke passed with evidence under
+  `artifacts/phase7/browser-smoke-missing-core`.
+
+Gate:
+
+Passed for Phase 7 Slice 2.
+
+Next:
+
+- Controller mapping and persistent input configuration are the next logical
+  player slice.
+
 ## 2026-07-01 - ITERATION 95 - Phase 7 interactive core policy
 
 Plan:

@@ -17,6 +17,9 @@ function parseArgs(argv) {
       path.join(rootDir, "examples", "app-starter-blank", "out", "rom.bin"),
     timeoutMs: 45000,
     coreStatus: process.env.DRIVE16_VERIFY_CORE_STATUS ?? "dev-only",
+    userCorePath: process.env.DRIVE16_VERIFY_USER_CORE
+      ? path.resolve(process.env.DRIVE16_VERIFY_USER_CORE)
+      : undefined,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -31,6 +34,8 @@ function parseArgs(argv) {
       args.timeoutMs = Number(argv[++index]);
     } else if (arg === "--core-status") {
       args.coreStatus = argv[++index];
+    } else if (arg === "--user-core") {
+      args.userCorePath = path.resolve(argv[++index]);
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -47,6 +52,9 @@ function parseArgs(argv) {
       "--core-status must be one of available, dev-only, missing, needs-user-action, unsupported",
     );
   }
+  if (args.coreStatus === "available" && !args.userCorePath) {
+    throw new Error("--core-status available requires --user-core so Play uses a real selected core.");
+  }
 
   return args;
 }
@@ -62,6 +70,8 @@ Options:
   --core-status <mode> Interactive core status override for verification.
                        One of: available, dev-only, missing, needs-user-action, unsupported.
                        Default: dev-only.
+  --user-core <path>   Optional local .zip or .js/.wasm file path for Set Up Play.
+                       When present, the smoke imports it and does not use a status override.
 `);
 }
 
@@ -136,6 +146,13 @@ async function main() {
       `Browser smoke test ROM is missing: ${args.romPath}. Build or provide one with --rom <path>.`,
     );
   }
+  if (args.userCorePath) {
+    try {
+      await access(args.userCorePath);
+    } catch {
+      throw new Error(`User core fixture is missing: ${args.userCorePath}`);
+    }
+  }
 
   const { chromium } = await loadPlaywright();
   const { browser, launchLabel } = await launchBrowser(chromium);
@@ -148,9 +165,11 @@ async function main() {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
     });
-    await context.addInitScript((coreStatus) => {
-      window.localStorage.setItem("drive16.interactiveCoreStatusOverride", coreStatus);
-    }, args.coreStatus);
+    if (!args.userCorePath) {
+      await context.addInitScript((coreStatus) => {
+        window.localStorage.setItem("drive16.interactiveCoreStatusOverride", coreStatus);
+      }, args.coreStatus);
+    }
     const page = await context.newPage();
     page.setDefaultTimeout(args.timeoutMs);
     page.on("console", (message) => {
@@ -193,6 +212,20 @@ async function main() {
     }
 
     await screenshot(page, args.outDir, screenshots, "01-initial.png");
+
+    if (args.userCorePath) {
+      await page.getByTestId("core-import-input").setInputFiles(args.userCorePath);
+      await page.waitForFunction(() => {
+        const feedback =
+          document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
+        const readiness =
+          document.querySelector('[data-testid="interactive-core-readiness"]')?.textContent ?? "";
+        return /Play core ready|User-supplied Genesis core ready/i.test(feedback) && /User core/i.test(readiness);
+      });
+      states.userCoreFeedback = await visibleText(page, "rom-action-feedback");
+      states.userCoreReadiness = await visibleText(page, "interactive-core-readiness");
+      await screenshot(page, args.outDir, screenshots, "01b-user-core-ready.png");
+    }
 
     await page.getByTestId("project-menu-toggle").click();
     await page.getByTestId("project-menu").waitFor();
@@ -251,14 +284,20 @@ async function main() {
       return /Interactive player started|Play setup failed|Play setup needed/i.test(feedback);
     });
     states.playFeedback = await visibleText(page, "rom-action-feedback");
-    if (canCoreStatusPlay(args.coreStatus) && !/Interactive player started/i.test(states.playFeedback ?? "")) {
+    if (
+      canCoreStatusPlay(args.coreStatus, args.userCorePath) &&
+      !/Interactive player started/i.test(states.playFeedback ?? "")
+    ) {
       throw new Error(`Interactive Play did not start: ${states.playFeedback}`);
     }
-    if (!canCoreStatusPlay(args.coreStatus) && !/Play setup needed|Verify still available/i.test(states.playFeedback ?? "")) {
+    if (
+      !canCoreStatusPlay(args.coreStatus, args.userCorePath) &&
+      !/Play setup needed|Verify still available/i.test(states.playFeedback ?? "")
+    ) {
       throw new Error(`Missing-core Play did not explain setup: ${states.playFeedback}`);
     }
 
-    if (canCoreStatusPlay(args.coreStatus)) {
+    if (canCoreStatusPlay(args.coreStatus, args.userCorePath)) {
       await page.getByTestId("pause-player").click();
       await page.waitForFunction(() => {
         const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
@@ -324,6 +363,7 @@ async function main() {
       url: args.url,
       romPath: args.romPath,
       coreStatus: args.coreStatus,
+      userCorePath: args.userCorePath,
       browser: launchLabel,
       screenshots,
       states,
@@ -345,8 +385,8 @@ async function main() {
   }
 }
 
-function canCoreStatusPlay(coreStatus) {
-  return coreStatus === "available" || coreStatus === "dev-only";
+function canCoreStatusPlay(coreStatus, userCorePath) {
+  return Boolean(userCorePath) || coreStatus === "dev-only";
 }
 
 async function screenshot(page, outDir, screenshots, name) {

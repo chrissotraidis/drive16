@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { unzipSync } from "fflate";
 import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -54,6 +55,7 @@ import {
   type ActiveRomSource,
   type InteractivePlayerSession,
   type InteractiveCoreReadiness,
+  type LoadedInteractiveCore,
   type LoadedPlayerRom,
   type NostalgistPlayerRuntime,
   type PlayerAudioState,
@@ -197,6 +199,52 @@ type RomReadResult = {
   bytes: number;
   dataBase64: string;
   acceptedExtensions: string[];
+};
+
+type InteractiveCoreStatusResult = {
+  generatedAt: string;
+  status: "available" | "missing";
+  detail: string;
+  coreName: string;
+  source: string;
+  importDirectory: string;
+  jsPath?: string;
+  wasmPath?: string;
+  jsBytes?: number;
+  wasmBytes?: number;
+  acceptedExtensions: string[];
+};
+
+type InteractiveCoreUploadFile = {
+  fileName: string;
+  dataBase64: string;
+};
+
+type InteractiveCoreImportResult = InteractiveCoreStatusResult & {
+  status: "available";
+  jsPath: string;
+  wasmPath: string;
+  jsBytes: number;
+  wasmBytes: number;
+};
+
+type InteractiveCoreReadResult = {
+  generatedAt: string;
+  status: "available";
+  detail: string;
+  coreName: string;
+  source: string;
+  jsPath: string;
+  wasmPath: string;
+  jsBytes: number;
+  wasmBytes: number;
+  jsDataBase64: string;
+  wasmDataBase64: string;
+};
+
+type InteractiveCoreSelectedFile = {
+  fileName: string;
+  bytes: Uint8Array;
 };
 
 type ProjectActionNotice = {
@@ -487,6 +535,16 @@ const previewImportResult: RomImportResult = {
   acceptedExtensions: previewImportReadiness.acceptedExtensions,
 };
 
+const previewInteractiveCoreStatus: InteractiveCoreStatusResult = {
+  generatedAt: "preview",
+  status: "missing",
+  detail: "Choose a compatible .zip archive or .js + .wasm pair to enable local Play.",
+  coreName: "genesis_plus_gx",
+  source: "No user core",
+  importDirectory: "artifacts/phase7/interactive-core",
+  acceptedExtensions: [".zip", ".js", ".wasm"],
+};
+
 const initialProjectActionNotice: ProjectActionNotice = {
   state: "warning",
   label: "Project actions ready",
@@ -537,6 +595,9 @@ function App() {
   const [importReadiness, setImportReadiness] = useState<RomImportReadiness | undefined>();
   const [importResult, setImportResult] = useState<RomImportResult | undefined>();
   const [importBusy, setImportBusy] = useState(false);
+  const [interactiveCoreStatus, setInteractiveCoreStatus] =
+    useState<InteractiveCoreStatusResult>(previewInteractiveCoreStatus);
+  const [interactiveCoreBusy, setInteractiveCoreBusy] = useState(false);
   const [projectActionNotice, setProjectActionNotice] =
     useState<ProjectActionNotice>(initialProjectActionNotice);
   const [v1PromptResult, setV1PromptResult] = useState<V1PromptResult | undefined>();
@@ -555,11 +616,18 @@ function App() {
   const [lastInputAction, setLastInputAction] = useState("No local input yet");
   const [lastPlayerInput, setLastPlayerInput] = useState<PlayerInputAction | undefined>();
   const [loadedPlayerRom, setLoadedPlayerRom] = useState<LoadedPlayerRom | undefined>();
+  const [loadedInteractiveCore, setLoadedInteractiveCore] =
+    useState<LoadedInteractiveCore | undefined>();
   const [playerState, setPlayerState] = useState<PlayerSessionState>("idle");
   const [playerCanvasActive, setPlayerCanvasActive] = useState(false);
   const [playerAudio] = useState<PlayerAudioState>("unavailable");
   const [interactiveCoreReadiness, setInteractiveCoreReadiness] =
-    useState<InteractiveCoreReadiness>(() => detectInteractiveCoreReadiness());
+    useState<InteractiveCoreReadiness>(() =>
+      detectInteractiveCoreReadiness({
+        allowDevCdn: allowDevCoreCdnFallback(),
+        storage: previewInteractiveCoreStatus,
+      }),
+    );
   const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
     "Starter template loaded. Verify the ROM or ask for sprite and music.",
@@ -597,6 +665,7 @@ function App() {
   const playerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playerRuntimeRef = useRef<NostalgistPlayerRuntime | undefined>();
   const romImportInputRef = useRef<HTMLInputElement | null>(null);
+  const coreImportInputRef = useRef<HTMLInputElement | null>(null);
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
 
@@ -606,6 +675,7 @@ function App() {
     void connectOpenCode();
     void loadProjectSummary();
     void loadRecentProjects();
+    void loadInteractiveCoreStatus();
   }, []);
 
   useEffect(() => {
@@ -1298,6 +1368,127 @@ function App() {
     }
   }
 
+  async function loadInteractiveCoreStatus() {
+    if (!isTauriRuntime()) {
+      applyInteractiveCoreStatus(previewInteractiveCoreStatus);
+      return;
+    }
+
+    try {
+      const status = await invoke<InteractiveCoreStatusResult>("load_interactive_core_status");
+      applyInteractiveCoreStatus(status);
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Interactive core status was unavailable";
+      const missingStatus: InteractiveCoreStatusResult = {
+        ...previewInteractiveCoreStatus,
+        generatedAt: "error",
+        detail,
+      };
+      applyInteractiveCoreStatus(missingStatus);
+      appendOpenCodeEvent("core.status.failed", detail);
+    }
+  }
+
+  async function prepareInteractiveCoreImport() {
+    if (!isTauriRuntime()) {
+      applyInteractiveCoreStatus(previewInteractiveCoreStatus);
+      return previewInteractiveCoreStatus;
+    }
+
+    const status = await invoke<InteractiveCoreStatusResult>("prepare_interactive_core_import");
+    applyInteractiveCoreStatus(status);
+    return status;
+  }
+
+  function applyInteractiveCoreStatus(status: InteractiveCoreStatusResult) {
+    setInteractiveCoreStatus(status);
+    setInteractiveCoreReadiness(
+      detectInteractiveCoreReadiness({
+        allowDevCdn: allowDevCoreCdnFallback(),
+        storage: status,
+      }),
+    );
+    if (status.status !== "available") {
+      setLoadedInteractiveCore(undefined);
+    }
+  }
+
+  async function chooseInteractiveCore() {
+    noteAction("Choose a local Genesis core for Play.");
+
+    try {
+      const status = await prepareInteractiveCoreImport();
+      setProjectActionNotice({
+        state: "warning",
+        label: "Choose Play core",
+        detail: `Accepted: ${status.acceptedExtensions.join(", ")}`,
+      });
+      appendOpenCodeEvent("core.import.choose", status.importDirectory);
+      coreImportInputRef.current?.click();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Interactive core setup failed";
+      setProjectActionNotice({
+        state: "missing",
+        label: "Play setup failed",
+        detail,
+      });
+      appendOpenCodeEvent("core.import.failed", detail);
+      noteAction(`Interactive core setup failed: ${detail}`);
+    }
+  }
+
+  async function handleInteractiveCoreFilesSelected(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (selectedFiles.length === 0) {
+      noteAction("Core setup canceled.");
+      return;
+    }
+
+    setInteractiveCoreBusy(true);
+    noteAction(`Preparing ${selectedFiles.map((file) => file.name).join(", ")} for Play.`);
+
+    try {
+      const selectedCoreFiles = await normalizeInteractiveCoreSelection(selectedFiles);
+      const result = isTauriRuntime()
+        ? await importSelectedInteractiveCoreInTauri(selectedCoreFiles)
+        : previewInteractiveCoreImport(selectedCoreFiles);
+      const loadedCore = loadedInteractiveCoreFromSelectedFiles(result, selectedCoreFiles);
+      setLoadedInteractiveCore(loadedCore);
+      applyInteractiveCoreStatus(result);
+      setProjectActionNotice({
+        state: "ready",
+        label: "Play core ready",
+        detail: `${shortPath(result.jsPath)} and ${shortPath(result.wasmPath)}`,
+      });
+      appendOpenCodeEvent("core.imported", result.importDirectory);
+      noteAction("User-supplied Genesis core ready for Play.");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Interactive core import failed";
+      setProjectActionNotice({
+        state: "missing",
+        label: "Core import failed",
+        detail,
+      });
+      appendOpenCodeEvent("core.import.failed", detail);
+      noteAction(`Core import failed: ${detail}`);
+    } finally {
+      setInteractiveCoreBusy(false);
+    }
+  }
+
+  async function importSelectedInteractiveCoreInTauri(files: InteractiveCoreSelectedFile[]) {
+    const uploadFiles = files.map<InteractiveCoreUploadFile>((file) => ({
+      fileName: file.fileName,
+      dataBase64: bytesToBase64(file.bytes),
+    }));
+
+    return invoke<InteractiveCoreImportResult>("import_interactive_core_files", {
+      request: { files: uploadFiles },
+    });
+  }
+
   async function exportRom() {
     setExportBusy(true);
     noteAction(`Exporting ${activeRomSource.label}.`);
@@ -1976,8 +2167,10 @@ function App() {
       }
 
       disposeInteractivePlayer();
+      const core = await readConfiguredInteractiveCoreForPlayer();
       const runtime = await launchNostalgistMegadrivePlayer({
         canvas,
+        core,
         rom: payload,
       });
       playerRuntimeRef.current = runtime;
@@ -1985,10 +2178,16 @@ function App() {
       setProjectActionNotice({
         state: "ready",
         label: "Interactive player started",
-        detail: `${payload.sourceName} is running in the ROM viewport.`,
+        detail: `${payload.sourceName} is running with ${
+          runtime.coreSource === "user" ? "the user core" : "the dev CDN core"
+        }.`,
       });
-      noteAction(`Playing ${payload.sourceName}.`);
-      appendOpenCodeEvent("player.playing", payload.sourcePath);
+      noteAction(
+        `Playing ${payload.sourceName} with ${
+          runtime.coreSource === "user" ? "the user core" : "the dev CDN core"
+        }.`,
+      );
+      appendOpenCodeEvent("player.playing", `${payload.sourcePath} via ${runtime.coreSource}`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Interactive Play setup failed";
       const launchFailure = coreLaunchFailureReadiness(detail);
@@ -2027,6 +2226,28 @@ function App() {
       result.sourceName,
       base64ToBytes(result.dataBase64),
     );
+  }
+
+  async function readConfiguredInteractiveCoreForPlayer() {
+    if (
+      interactiveCoreReadiness.status !== "available" ||
+      interactiveCoreReadiness.policy !== "user-supplied"
+    ) {
+      return undefined;
+    }
+
+    if (loadedInteractiveCore) {
+      return loadedInteractiveCore;
+    }
+
+    if (!isTauriRuntime()) {
+      throw new Error("Choose Core again before Play; browser preview keeps user cores in memory.");
+    }
+
+    const result = await invoke<InteractiveCoreReadResult>("read_interactive_core_files");
+    const core = loadedInteractiveCoreFromReadResult(result);
+    setLoadedInteractiveCore(core);
+    return core;
   }
 
   function toggleInteractivePlayerPause() {
@@ -2337,6 +2558,17 @@ function App() {
         hidden
         onChange={(event) => {
           void handleRomFileSelected(event);
+        }}
+      />
+      <input
+        ref={coreImportInputRef}
+        type="file"
+        accept={interactiveCoreAccept(interactiveCoreStatus)}
+        data-testid="core-import-input"
+        hidden
+        multiple
+        onChange={(event) => {
+          void handleInteractiveCoreFilesSelected(event);
         }}
       />
       <TopBar
@@ -2671,6 +2903,17 @@ function App() {
               >
                 <button
                   type="button"
+                  data-testid="choose-play-core"
+                  onClick={() => {
+                    void chooseInteractiveCore();
+                  }}
+                  disabled={interactiveCoreBusy}
+                >
+                  <Upload size={14} />
+                  {interactiveCoreBusy ? "Setting Up" : "Choose Core"}
+                </button>
+                <button
+                  type="button"
                   data-testid="play-active-rom"
                   onClick={() => {
                     void playActiveRom();
@@ -2905,6 +3148,8 @@ function App() {
           activeModel={activeModel}
           exportBusy={exportBusy}
           exportResult={exportResult}
+          interactiveCoreBusy={interactiveCoreBusy}
+          interactiveCoreStatus={interactiveCoreStatus}
           importBusy={importBusy}
           importReadiness={importReadiness}
           importResult={importResult}
@@ -2927,6 +3172,9 @@ function App() {
           onImportTestRom={() => {
             void importTestRom();
           }}
+          onChooseCore={() => {
+            void chooseInteractiveCore();
+          }}
           onNewProject={() => {
             startNewProject();
             setProjectMenuOpen(false);
@@ -2947,6 +3195,13 @@ function App() {
 
 function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function allowDevCoreCdnFallback() {
+  const meta = import.meta as ImportMeta & {
+    env?: Record<string, boolean | string | undefined>;
+  };
+  return meta.env?.DEV === true || meta.env?.DEV === "true";
 }
 
 function isV1Prompt(text: string) {
@@ -3262,9 +3517,99 @@ function romImportAccept(readiness?: RomImportReadiness) {
   return (readiness?.acceptedExtensions ?? previewImportReadiness.acceptedExtensions).join(",");
 }
 
+function interactiveCoreAccept(status?: InteractiveCoreStatusResult) {
+  return (status?.acceptedExtensions ?? previewInteractiveCoreStatus.acceptedExtensions).join(",");
+}
+
 function isAcceptedRomFileName(fileName: string, extensions: string[]) {
   const normalized = fileName.toLowerCase();
   return extensions.some((extension) => normalized.endsWith(extension.toLowerCase()));
+}
+
+async function normalizeInteractiveCoreSelection(
+  files: File[],
+): Promise<InteractiveCoreSelectedFile[]> {
+  if (files.length === 1 && files[0].name.toLowerCase().endsWith(".zip")) {
+    const archiveBytes = new Uint8Array(await files[0].arrayBuffer());
+    let entries: Record<string, Uint8Array>;
+    try {
+      entries = unzipSync(archiveBytes);
+    } catch (error) {
+      throw new Error(
+        error instanceof Error
+          ? `Could not read core ZIP: ${error.message}`
+          : "Could not read core ZIP",
+      );
+    }
+
+    return selectInteractiveCorePair(
+      Object.entries(entries)
+        .filter(([name, bytes]) => !name.endsWith("/") && bytes.byteLength > 0)
+        .map(([name, bytes]) => ({
+          fileName: name.split("/").filter(Boolean).pop() ?? name,
+          bytes,
+        })),
+      true,
+    );
+  }
+
+  return selectInteractiveCorePair(
+    await Promise.all(
+      files.map(async (file) => ({
+        fileName: file.name,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      })),
+    ),
+    false,
+  );
+}
+
+function selectInteractiveCorePair(
+  files: InteractiveCoreSelectedFile[],
+  fromArchive: boolean,
+): InteractiveCoreSelectedFile[] {
+  const unsupported = files.filter((file) => !interactiveCoreStorageExtension(file.fileName));
+  if (!fromArchive && unsupported.length > 0) {
+    throw new Error("Choose a .zip archive or a .js + .wasm pair.");
+  }
+
+  const candidates = fromArchive
+    ? files.filter((file) => interactiveCoreStorageExtension(file.fileName))
+    : files;
+  const jsFile = pickInteractiveCoreFile(candidates, ".js");
+  const wasmFile = pickInteractiveCoreFile(candidates, ".wasm");
+
+  if (!jsFile || !wasmFile) {
+    throw new Error("Core setup needs one .js loader and one matching .wasm file.");
+  }
+  if (jsFile.bytes.byteLength === 0 || wasmFile.bytes.byteLength === 0) {
+    throw new Error("Core files cannot be empty.");
+  }
+
+  return [jsFile, wasmFile];
+}
+
+function pickInteractiveCoreFile(files: InteractiveCoreSelectedFile[], extension: ".js" | ".wasm") {
+  const candidates = files.filter(
+    (file) => interactiveCoreStorageExtension(file.fileName) === extension,
+  );
+  if (candidates.length === 0) return undefined;
+
+  return (
+    candidates.find((file) => {
+      const normalized = file.fileName.toLowerCase();
+      return normalized.includes("genesis_plus_gx") && normalized.includes("libretro");
+    }) ??
+    candidates.find((file) => file.fileName.toLowerCase().includes("genesis")) ??
+    candidates[0]
+  );
+}
+
+function interactiveCoreStorageExtension(fileName: string) {
+  const normalized = fileName.toLowerCase();
+  if (normalized.endsWith(".js")) return ".js";
+  if (normalized.endsWith(".wasm")) return ".wasm";
+  return undefined;
 }
 
 function previewImportForFile(file: File, readiness: RomImportReadiness): RomImportResult {
@@ -3280,12 +3625,97 @@ function previewImportForFile(file: File, readiness: RomImportReadiness): RomImp
   };
 }
 
+function previewInteractiveCoreImport(
+  files: InteractiveCoreSelectedFile[],
+): InteractiveCoreImportResult {
+  const jsFile = files.find((file) => interactiveCoreStorageExtension(file.fileName) === ".js");
+  const wasmFile = files.find((file) => interactiveCoreStorageExtension(file.fileName) === ".wasm");
+  if (!jsFile || !wasmFile) {
+    throw new Error("Core setup needs one .js loader and one matching .wasm file.");
+  }
+
+  return {
+    ...previewInteractiveCoreStatus,
+    generatedAt: new Date().toISOString(),
+    status: "available",
+    detail: "User-supplied Genesis core loaded for this browser session.",
+    source: "User core",
+    jsPath: `${previewInteractiveCoreStatus.importDirectory}/genesis_plus_gx_libretro.js`,
+    wasmPath: `${previewInteractiveCoreStatus.importDirectory}/genesis_plus_gx_libretro.wasm`,
+    jsBytes: jsFile.bytes.byteLength,
+    wasmBytes: wasmFile.bytes.byteLength,
+  };
+}
+
 function previewTestRomImport(): RomImportResult {
   return {
     ...previewImportResult,
     sourceName: "starter-test-rom.bin",
     importPath: "artifacts/phase5/imports/drive16-import-preview-starter-test-rom.bin",
   };
+}
+
+function loadedInteractiveCoreFromSelectedFiles(
+  result: InteractiveCoreImportResult,
+  files: InteractiveCoreSelectedFile[],
+): LoadedInteractiveCore {
+  const jsFile = files.find((file) => interactiveCoreStorageExtension(file.fileName) === ".js");
+  const wasmFile = files.find((file) => interactiveCoreStorageExtension(file.fileName) === ".wasm");
+  if (!jsFile || !wasmFile) {
+    throw new Error("Core setup needs one .js loader and one matching .wasm file.");
+  }
+
+  return loadedInteractiveCoreFromBytes(
+    result.coreName,
+    result.jsPath,
+    result.wasmPath,
+    jsFile.bytes,
+    wasmFile.bytes,
+  );
+}
+
+function loadedInteractiveCoreFromReadResult(
+  result: InteractiveCoreReadResult,
+): LoadedInteractiveCore {
+  return loadedInteractiveCoreFromBytes(
+    result.coreName,
+    result.jsPath,
+    result.wasmPath,
+    base64ToBytes(result.jsDataBase64),
+    base64ToBytes(result.wasmDataBase64),
+  );
+}
+
+function loadedInteractiveCoreFromBytes(
+  coreName: string,
+  jsPath: string,
+  wasmPath: string,
+  jsBytes: Uint8Array,
+  wasmBytes: Uint8Array,
+): LoadedInteractiveCore {
+  return {
+    loadedAt: new Date().toISOString(),
+    source: "user",
+    coreName,
+    jsPath,
+    wasmPath,
+    jsFileName: fileNameFromPath(jsPath),
+    wasmFileName: fileNameFromPath(wasmPath),
+    jsBlob: blobFromBytes(jsBytes, "text/javascript"),
+    wasmBlob: blobFromBytes(wasmBytes, "application/wasm"),
+    jsBytes: jsBytes.byteLength,
+    wasmBytes: wasmBytes.byteLength,
+  };
+}
+
+function blobFromBytes(bytes: Uint8Array, type: string) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return new Blob([buffer], { type });
+}
+
+function fileNameFromPath(path: string) {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
 function previewSaveForProject(project: ProjectSummary): ProjectSaveResult {
@@ -4258,7 +4688,7 @@ function TopBar({
           <Box size={22} />
           <div>
             <strong>Drive16</strong>
-            <span>Phase 7 core policy</span>
+            <span>Phase 7 core setup</span>
           </div>
         </div>
       </div>
@@ -4310,6 +4740,8 @@ function ProjectMenu({
   activeModel,
   exportBusy,
   exportResult,
+  interactiveCoreBusy,
+  interactiveCoreStatus,
   importBusy,
   importReadiness,
   importResult,
@@ -4324,6 +4756,7 @@ function ProjectMenu({
   saveResult,
   onClose,
   onExportRom,
+  onChooseCore,
   onImportRom,
   onImportTestRom,
   onNewProject,
@@ -4334,6 +4767,8 @@ function ProjectMenu({
   activeModel: string;
   exportBusy: boolean;
   exportResult?: RomExportResult;
+  interactiveCoreBusy: boolean;
+  interactiveCoreStatus: InteractiveCoreStatusResult;
   importBusy: boolean;
   importReadiness?: RomImportReadiness;
   importResult?: RomImportResult;
@@ -4348,6 +4783,7 @@ function ProjectMenu({
   saveResult?: ProjectSaveResult;
   onClose: () => void;
   onExportRom: () => void;
+  onChooseCore: () => void;
   onImportRom: () => void;
   onImportTestRom: () => void;
   onNewProject: () => void;
@@ -4411,6 +4847,18 @@ function ProjectMenu({
                   : importReadiness
                     ? shortPath(importReadiness.importDirectory)
                     : "Not imported yet"}
+              </strong>
+              <span>Play core</span>
+              <strong
+                title={
+                  interactiveCoreStatus.jsPath ??
+                  interactiveCoreStatus.importDirectory ??
+                  interactiveCoreStatus.detail
+                }
+              >
+                {interactiveCoreStatus.status === "available" && interactiveCoreStatus.jsPath
+                  ? shortPath(interactiveCoreStatus.jsPath)
+                  : "Not set up"}
               </strong>
             </div>
           </section>
@@ -4490,6 +4938,28 @@ function ProjectMenu({
                 <span>
                   <strong>Import Test ROM</strong>
                   <small>Use the repo-generated starter ROM</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="menu-choose-core"
+                onClick={onChooseCore}
+                disabled={interactiveCoreBusy}
+              >
+                <Gamepad2 size={16} />
+                <span>
+                  <strong>
+                    {interactiveCoreBusy
+                      ? "Setting Up Play"
+                      : interactiveCoreStatus.status === "available"
+                        ? "Replace Play Core"
+                        : "Set Up Play"}
+                  </strong>
+                  <small>
+                    {interactiveCoreStatus.status === "available"
+                      ? "User core is installed"
+                      : interactiveCoreStatus.acceptedExtensions.join(", ")}
+                  </small>
                 </span>
               </button>
               <button

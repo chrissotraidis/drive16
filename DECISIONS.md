@@ -1,5 +1,31 @@
 # Drive16 Decisions
 
+## 2026-07-01 - User-supplied Genesis core is the preferred Play path
+
+Context:
+
+The first Phase 7 slice made the core policy honest, but a fresh downloader
+still needed a concrete way to provide a local compatible Genesis core. The app
+could use the dev CDN in local development, but that did not give users control
+over release-clean Play setup.
+
+Decision:
+
+Add a user-supplied core flow. `Set Up Play` / `Choose Core` accepts a
+compatible Genesis RetroArch/libretro Emscripten `.zip` archive or `.js +
+.wasm` pair, stores normalized files under ignored
+`artifacts/phase7/interactive-core`, and makes `Play ROM` prefer those local
+files. The dev CDN path remains available only as a development fallback.
+Agent Settings does not own this state because the core is a ROM/player
+capability, not an inference-provider setting.
+
+Consequence:
+
+Drive16 can now move from "honestly caveated" to "configurable" for
+interactive Play. Fresh downloaders can verify whether a user core is installed
+and readable, while the repo still avoids committing Genesis Plus GX,
+RetroArch Emscripten, or other emulator core binaries.
+
 ## 2026-07-01 - Interactive Play core delivery is dev-only until release-settled
 
 Context:

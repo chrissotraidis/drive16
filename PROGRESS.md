@@ -1,11 +1,27 @@
 # Drive16 Progress
 
-Current phase: Phase 7 Slice 1 - interactive core distribution policy
+Current phase: Phase 7 Slice 2 - user-supplied interactive core setup
 
 Exit criterion: a non-developer can follow the golden path from starter project
 to agent/proof build, interactive keyboard Play, Verify, Save/Open, and Export
 without ambiguous controls, while Genteel proof and interactive Play remain
 distinct.
+
+## Phase 7 Slice 2 Checklist
+
+- [x] Commit the completed Phase 7 Slice 1 checkpoint before starting.
+- [x] Add `Set Up Play` / `Choose Core` near project and ROM player actions,
+  not Agent Settings.
+- [x] Accept a compatible `.zip` archive or `.js + .wasm` pair.
+- [x] Copy normalized core files into ignored local storage under
+  `artifacts/phase7/interactive-core`.
+- [x] Report `Play ready` / `User core` when a user core is configured.
+- [x] Make `Play ROM` prefer the user-supplied core.
+- [x] Keep the dev-CDN core path as a development fallback only.
+- [x] Add validator coverage for local core presence, readability, tracked
+  binary hygiene, and Verify availability.
+- [x] Verify user-core Play and missing-core setup behavior in browser smoke.
+- [x] Update README and Phase 7 evidence docs.
 
 ## Phase 7 Slice 1 Checklist
 
@@ -54,14 +70,15 @@ distinct.
 
 ## Current Task
 
-Phase 7 Slice 1 is implementing the selected post-v1 emulator/core distribution
-policy. The current posture is `Play ready` / `Dev CDN` for local development,
-while public distribution still needs a user-supplied, installer-managed, or
-replacement interactive core path.
+Phase 7 Slice 2 implemented the user-supplied core path. The current posture is
+`Play ready` / `User core` when a compatible local core is installed,
+`Dev preview only` / `Dev CDN` during local development without a user core, and
+`Play setup needed` when no release-safe core path is available.
 
 Evidence is recorded in:
 
 - `docs/phase7-interactive-core-distribution.md`
+- `docs/phase7-user-core-flow.md`
 - `docs/product-v1-evidence.md`
 - `docs/post-v1-backlog.md`
 - `docs/phase6-to-product-v1-goal.md`
@@ -75,9 +92,9 @@ Evidence is recorded in:
 ## Next Up
 
 Product V1 closure is complete for the local review scope. The selected first
-post-v1 slice is now underway: Drive16 treats current interactive Play as a
-dev-only CDN adapter, keeps Genteel as Verify/Capture Proof, and shows Play
-readiness explicitly in the ROM player and Tools surfaces.
+post-v1 core-distribution work now has both the explicit policy and a
+user-supplied core setup flow. The next logical player slice is controller
+mapping and persistent input configuration on top of the stable local Play path.
 
 ## Completed Phase 6 Work
 

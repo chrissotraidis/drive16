@@ -1,5 +1,6 @@
 import { Nostalgist } from "nostalgist";
 import type {
+  LoadedInteractiveCore,
   LoadedPlayerRom,
   PlayerInputAction,
   PlayerInputActionId,
@@ -19,6 +20,7 @@ export const nostalgistProviderReady: PlayerProvider = {
 export type NostalgistPlayerRuntime = {
   instance: Awaited<ReturnType<typeof Nostalgist.launch>>;
   core: typeof GENESIS_PLUS_GX_CORE;
+  coreSource: "dev-cdn" | "user";
   rom: LoadedPlayerRom;
   startedAt: string;
 };
@@ -38,12 +40,15 @@ const inputButtonMap: Record<PlayerInputActionId, string> = {
 
 export async function launchNostalgistMegadrivePlayer({
   canvas,
+  core,
   rom,
 }: {
   canvas: HTMLCanvasElement;
+  core?: LoadedInteractiveCore;
   rom: LoadedPlayerRom;
 }): Promise<NostalgistPlayerRuntime> {
   canvas.dataset.playerCore = GENESIS_PLUS_GX_CORE;
+  canvas.dataset.playerCoreSource = core ? "user" : "dev-cdn";
   canvas.dataset.romSource = rom.sourcePath;
 
   const fileContent = await fetchRomBlob(rom);
@@ -58,7 +63,19 @@ export async function launchNostalgistMegadrivePlayer({
   } as NonNullable<NostalgistLaunchOptions["emscriptenModule"]>;
 
   const instance = await Nostalgist.launch({
-    core: GENESIS_PLUS_GX_CORE,
+    core: core
+      ? {
+          name: core.coreName,
+          js: {
+            fileContent: core.jsBlob,
+            fileName: core.jsFileName,
+          },
+          wasm: {
+            fileContent: core.wasmBlob,
+            fileName: core.wasmFileName,
+          },
+        }
+      : GENESIS_PLUS_GX_CORE,
     emscriptenModule,
     element: canvas,
     rom: {
@@ -70,6 +87,7 @@ export async function launchNostalgistMegadrivePlayer({
   return {
     instance,
     core: GENESIS_PLUS_GX_CORE,
+    coreSource: core ? "user" : "dev-cdn",
     rom,
     startedAt: new Date().toISOString(),
   };

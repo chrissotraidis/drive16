@@ -17,6 +17,20 @@ export type LoadedPlayerRom = {
   bytes: number;
 };
 
+export type LoadedInteractiveCore = {
+  loadedAt: string;
+  source: "user";
+  coreName: string;
+  jsPath: string;
+  wasmPath: string;
+  jsFileName: string;
+  wasmFileName: string;
+  jsBlob: Blob;
+  wasmBlob: Blob;
+  jsBytes: number;
+  wasmBytes: number;
+};
+
 export type PlayerProviderKind = "proof-preview" | "nostalgist-retroarch";
 
 export type InteractiveCoreStatus =

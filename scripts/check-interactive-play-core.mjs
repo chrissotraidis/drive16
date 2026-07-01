@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,9 @@ const execFileAsync = promisify(execFile);
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
 const nostalgistPackageDir = path.join(rootDir, "app", "node_modules", "nostalgist");
+const localCoreDir = path.join(rootDir, "artifacts", "phase7", "interactive-core");
+const localCoreJs = path.join(localCoreDir, "genesis_plus_gx_libretro.js");
+const localCoreWasm = path.join(localCoreDir, "genesis_plus_gx_libretro.wasm");
 const coreCdnUrl =
   "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/genesis_plus_gx_libretro.zip";
 
@@ -28,8 +31,10 @@ Checks Drive16's current interactive Play core policy.
 Default checks are local and safe:
   - Nostalgist package is installed.
   - The wrapper package is MIT licensed.
-  - The current adapter points at Genesis Plus GX through the dev CDN.
+  - User-supplied Genesis core storage is checked.
+  - The dev fallback still points at Genesis Plus GX through the CDN.
   - No emulator core binaries are tracked in git.
+  - Verify remains available without the interactive core.
 
 Use --online to also check whether the dev CDN core URL is reachable.
 `);
@@ -44,21 +49,29 @@ async function main() {
 
   const checks = [];
   const packageJson = await readNostalgistPackage(checks);
+  const localCore = await checkLocalUserCore(checks);
   await checkNostalgistRuntime(checks);
   await checkTrackedCoreBinaries(checks);
+  await checkVerifyPath(checks);
 
   if (args.online) {
     await checkCoreCdn(checks);
   }
 
   const hasFailure = checks.some((check) => check.state === "missing");
-  const hasWarning = checks.some((check) => check.state === "warning");
+  const localCoreReady = localCore.jsReady && localCore.wasmReady;
   const summary = {
-    status: hasFailure ? "missing" : hasWarning ? "dev-only" : "dev-only",
-    label: hasFailure ? "Play setup needed" : "Play ready",
+    status: hasFailure ? "missing" : localCoreReady ? "available" : "dev-only",
+    label: hasFailure
+      ? "Play setup needed"
+      : localCoreReady
+        ? "Play ready"
+        : "Dev preview only",
     detail: hasFailure
       ? "Interactive Play needs setup; Verify remains available through Genteel."
-      : "Interactive Play is available for local development through Nostalgist's dev CDN core path; this is not a bundled release core.",
+      : localCoreReady
+        ? "Interactive Play is configured with a user-supplied local Genesis core."
+        : "No user core is installed; local development can still use the explicit dev CDN fallback.",
     package: packageJson
       ? {
           name: packageJson.name,
@@ -66,6 +79,7 @@ async function main() {
           license: packageJson.license,
         }
       : undefined,
+    localCoreDirectory: path.relative(rootDir, localCoreDir),
     coreCdnUrl,
     checks,
   };
@@ -106,6 +120,30 @@ async function readNostalgistPackage(checks) {
     });
     return undefined;
   }
+}
+
+async function checkLocalUserCore(checks) {
+  const js = await readableFile(localCoreJs);
+  const wasm = await readableFile(localCoreWasm);
+  const jsReady = js.ok && js.bytes > 0;
+  const wasmReady = wasm.ok && wasm.bytes > 0;
+
+  checks.push({
+    name: "User core JS",
+    state: jsReady ? "ready" : "warning",
+    detail: jsReady
+      ? `${path.relative(rootDir, localCoreJs)} readable (${js.bytes} bytes).`
+      : `Not installed at ${path.relative(rootDir, localCoreJs)}. Use Set Up Play / Choose Core in the app.`,
+  });
+  checks.push({
+    name: "User core WASM",
+    state: wasmReady ? "ready" : "warning",
+    detail: wasmReady
+      ? `${path.relative(rootDir, localCoreWasm)} readable (${wasm.bytes} bytes).`
+      : `Not installed at ${path.relative(rootDir, localCoreWasm)}. Use Set Up Play / Choose Core in the app.`,
+  });
+
+  return { jsReady, wasmReady };
 }
 
 async function checkNostalgistRuntime(checks) {
@@ -158,6 +196,31 @@ async function checkTrackedCoreBinaries(checks) {
   });
 }
 
+async function checkVerifyPath(checks) {
+  const expectedFiles = [
+    "scripts/build-sgdk.sh",
+    "scripts/build-genteel.sh",
+    "app/src-tauri/src/starter_rom.rs",
+  ];
+  const missingFiles = [];
+  for (const file of expectedFiles) {
+    try {
+      await access(path.join(rootDir, file));
+    } catch {
+      missingFiles.push(file);
+    }
+  }
+
+  checks.push({
+    name: "Verify path",
+    state: missingFiles.length === 0 ? "ready" : "missing",
+    detail:
+      missingFiles.length === 0
+        ? "Genteel proof/capture files are present and independent of the interactive core."
+        : `Verify path files missing: ${missingFiles.join(", ")}`,
+  });
+}
+
 async function checkCoreCdn(checks) {
   try {
     const response = await fetch(coreCdnUrl, { method: "HEAD" });
@@ -174,6 +237,15 @@ async function checkCoreCdn(checks) {
       state: "missing",
       detail: formatError(error),
     });
+  }
+}
+
+async function readableFile(filePath) {
+  try {
+    const metadata = await stat(filePath);
+    return { ok: metadata.isFile(), bytes: metadata.size };
+  } catch {
+    return { ok: false, bytes: 0 };
   }
 }
 

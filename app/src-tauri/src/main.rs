@@ -106,6 +106,34 @@ async fn read_rom_bytes(rom_path: String) -> Result<project::RomReadResult, Stri
 }
 
 #[tauri::command]
+fn load_interactive_core_status() -> project::InteractiveCoreStatusResult {
+    project::load_interactive_core_status()
+}
+
+#[tauri::command]
+async fn prepare_interactive_core_import() -> Result<project::InteractiveCoreStatusResult, String> {
+    tauri::async_runtime::spawn_blocking(project::prepare_interactive_core_import)
+        .await
+        .map_err(|error| format!("Interactive core task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn import_interactive_core_files(
+    request: project::InteractiveCoreImportRequest,
+) -> Result<project::InteractiveCoreImportResult, String> {
+    tauri::async_runtime::spawn_blocking(move || project::import_interactive_core_files(request))
+        .await
+        .map_err(|error| format!("Interactive core import task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn read_interactive_core_files() -> Result<project::InteractiveCoreReadResult, String> {
+    tauri::async_runtime::spawn_blocking(project::read_interactive_core_files)
+        .await
+        .map_err(|error| format!("Interactive core read task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn save_current_project() -> Result<project::ProjectSaveResult, String> {
     tauri::async_runtime::spawn_blocking(project::save_current_project)
         .await
@@ -188,6 +216,10 @@ fn main() {
             export_current_rom,
             export_rom_path,
             read_rom_bytes,
+            load_interactive_core_status,
+            prepare_interactive_core_import,
+            import_interactive_core_files,
+            read_interactive_core_files,
             save_current_project,
             save_project_path,
             run_v1_prompt,

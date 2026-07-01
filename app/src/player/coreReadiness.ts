@@ -6,15 +6,28 @@ import type {
 
 export const interactiveCoreOverrideKey = "drive16.interactiveCoreStatusOverride";
 
+export type InteractiveCoreStorageSummary = {
+  status: string;
+  detail: string;
+  source: string;
+  jsPath?: string | null;
+  wasmPath?: string | null;
+};
+
+type DetectInteractiveCoreReadinessOptions = {
+  allowDevCdn?: boolean;
+  storage?: InteractiveCoreStorageSummary;
+};
+
 const devCdnReadiness: InteractiveCoreReadiness = {
   status: "dev-only",
   policy: "dev-cdn",
-  label: "Play ready",
+  label: "Dev preview only",
   detail:
     "Interactive Play uses Nostalgist/RetroArch with a Genesis Plus GX core loaded from the dev CDN. Drive16 does not bundle that core.",
   verifyDetail: "Verify still uses local Genteel capture and does not depend on the interactive core.",
   setupAction:
-    "For local development, keep internet access available for the Nostalgist core CDN. Public release still needs a user-supplied or replacement core policy.",
+    "For release-clean Play, choose a compatible local Genesis core. Dev CDN fallback is only for local development.",
   source: "Nostalgist dev CDN",
   canPlay: true,
   releaseSafe: false,
@@ -41,7 +54,7 @@ const readinessByOverride: Record<InteractiveCoreStatus, InteractiveCoreReadines
       "Interactive Play does not have a configured Genesis core in this environment.",
     verifyDetail: "Verify still available through Genteel proof capture.",
     setupAction:
-      "Run scripts/check-interactive-play-core.mjs, then use the local dev CDN path or a future user-supplied core flow.",
+      "Choose a compatible .zip archive or .js + .wasm pair to enable local Play.",
     source: "No interactive core",
     canPlay: false,
     releaseSafe: false,
@@ -52,7 +65,7 @@ const readinessByOverride: Record<InteractiveCoreStatus, InteractiveCoreReadines
     label: "Play setup needed",
     detail: "Interactive Play needs a user-supplied Genesis core before it can run.",
     verifyDetail: "Verify still available through Genteel proof capture.",
-    setupAction: "Choose a compatible core path once the user-supplied core flow lands.",
+    setupAction: "Choose a compatible .zip archive or .js + .wasm pair.",
     source: "Waiting for user core",
     canPlay: false,
     releaseSafe: false,
@@ -70,13 +83,27 @@ const readinessByOverride: Record<InteractiveCoreStatus, InteractiveCoreReadines
   },
 };
 
-export function detectInteractiveCoreReadiness(): InteractiveCoreReadiness {
+export function detectInteractiveCoreReadiness({
+  allowDevCdn = true,
+  storage,
+}: DetectInteractiveCoreReadinessOptions = {}): InteractiveCoreReadiness {
   if (typeof window === "undefined") {
     return readinessByOverride.unsupported;
   }
 
   const override = readStatusOverride();
   if (override) return readinessByOverride[override];
+
+  if (storage?.status === "available") {
+    return {
+      ...readinessByOverride.available,
+      detail: storage.detail || readinessByOverride.available.detail,
+      source: storage.source || readinessByOverride.available.source,
+      setupAction: storage.jsPath
+        ? `Using ${storage.jsPath}${storage.wasmPath ? ` and ${storage.wasmPath}` : ""}.`
+        : readinessByOverride.available.setupAction,
+    };
+  }
 
   const hasBrowserRuntime =
     typeof WebAssembly !== "undefined" &&
@@ -88,7 +115,15 @@ export function detectInteractiveCoreReadiness(): InteractiveCoreReadiness {
     return readinessByOverride.unsupported;
   }
 
-  return devCdnReadiness;
+  if (allowDevCdn) return devCdnReadiness;
+
+  return storage?.status === "missing"
+    ? {
+        ...readinessByOverride["needs-user-action"],
+        detail: storage.detail || readinessByOverride["needs-user-action"].detail,
+        source: storage.source || readinessByOverride["needs-user-action"].source,
+      }
+    : readinessByOverride["needs-user-action"];
 }
 
 export function playerProviderFromCoreReadiness(

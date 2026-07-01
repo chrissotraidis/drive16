@@ -74,8 +74,9 @@ Toolchain and validation scripts live here.
   verifies its hash, records source/license metadata, and runs it through
   Genteel for the Phase 0 accuracy check.
 - `check-interactive-play-core.mjs`: reports the current Phase 7 interactive
-  Play core posture. It checks the installed Nostalgist wrapper metadata, the
-  dev-CDN Genesis core path, and whether emulator core binaries are tracked.
+  Play core posture. It checks the installed Nostalgist wrapper metadata,
+  user-supplied core JS/WASM presence and readability, the dev-CDN Genesis core
+  fallback path, tracked emulator core binaries, and Verify path availability.
   Pass `--online` to also probe the dev CDN URL.
 - `validate-core-assets.py`: validates the Phase 2 CORE bundled sprite and VGM
   pack.
@@ -95,5 +96,5 @@ Toolchain and validation scripts live here.
 - `verify-phase6-browser-smoke.mjs`: Playwright smoke used by the Phase 6/7
   loop to run New Project, Save, Open, import the test ROM,
   Play/Pause/Resume/Reset/Stop, Verify, Export, and check the mobile layout.
-  It accepts `--core-status` to verify both Play-ready and Play-unavailable
-  behavior.
+  It accepts `--core-status` to verify Play-unavailable behavior and
+  `--user-core <path>` to import a local core ZIP or pair before Play.

@@ -1,6 +1,7 @@
 # Phase 7 Interactive Core Distribution
 
-Status: selected and implemented for the first post-v1 slice.
+Status: policy implemented in Slice 1; user-supplied setup implemented in
+Slice 2.
 
 ## Goal
 
@@ -27,15 +28,16 @@ opinion.
 ## Decision
 
 Use the current Nostalgist/RetroArch path as a local-development interactive
-adapter only:
+adapter only when a user core is not configured:
 
-- Current status in the app: `Play ready` with `Dev CDN`.
+- Preferred status in the app: `Play ready` with `User core`.
+- Development fallback status in the app: `Dev preview only` with `Dev CDN`.
 - Do not commit Genesis Plus GX, RetroArch Emscripten, or other emulator core
   binaries into the repo.
 - Do not claim the public/distributable app bundles a Genesis core.
 - Keep Genteel as the local `Verify/Capture Proof` path.
 - Treat a future public release as requiring either:
-  - a user-supplied core flow,
+  - the current user-supplied core flow,
   - a license-reviewed installer-managed flow, or
   - a replacement interactive runtime with a release-compatible license.
 
@@ -50,9 +52,23 @@ The app now models interactive core readiness with these statuses:
 - `needs-user-action`: the user must provide or configure a core.
 - `unsupported`: the browser environment cannot run the WebAssembly player.
 
-Only `available` and `dev-only` allow Play to start. All other states keep
-`Play ROM` clickable so the user gets a setup explanation, while `Verify`
-remains available.
+`available` allows Play through the selected local core. `dev-only` allows Play
+through the explicit development fallback. All other states keep `Play ROM`
+clickable so the user gets a setup explanation, while `Verify` remains
+available.
+
+## User Core Flow
+
+Drive16 now includes a user-supplied core setup path:
+
+- `Set Up Play` appears in the project menu.
+- `Choose Core` appears beside `Play ROM`.
+- The chooser accepts a compatible `.zip` archive or `.js + .wasm` pair.
+- ZIP archives are extracted in the browser and normalized before storage.
+- Native storage writes the selected pair under ignored
+  `artifacts/phase7/interactive-core`.
+- `Play ROM` reads the local core pair and passes it to Nostalgist as
+  `{ name, js, wasm }` before falling back to the dev CDN.
 
 ## UI Contract
 
@@ -77,9 +93,10 @@ scripts/check-interactive-play-core.mjs --online
 ```
 
 The command confirms the current dev-CDN posture, checks the installed
-Nostalgist wrapper metadata, and verifies that no emulator core binaries are
-tracked in git. The online mode also checks whether the current dev CDN core URL
-is reachable.
+Nostalgist wrapper metadata, reports whether a local user core pair is present
+and readable, checks Verify availability, and verifies that no emulator core
+binaries are tracked in git. The online mode also checks whether the current dev
+CDN core URL is reachable.
 
 ## Verification
 
@@ -91,6 +108,12 @@ Latest evidence:
   `scripts/check-interactive-play-core.mjs --online`
 - Frontend build:
   `pnpm --dir app build`
+- Native project tests:
+  `cargo test --manifest-path app/src-tauri/Cargo.toml project::`
+- User-core browser smoke:
+  `artifacts/phase7/browser-smoke-user-core`
+- Missing-core browser smoke:
+  `artifacts/phase7/browser-smoke-missing-core`
 - Full browser/native loop:
   `artifacts/phase6/verify-loop/20260701-135734`
 - Browser Play-ready mode:
@@ -105,11 +128,13 @@ The browser smoke accepts a core-status override:
 ```sh
 scripts/verify-phase6-browser-smoke.mjs --core-status dev-only
 scripts/verify-phase6-browser-smoke.mjs --core-status missing
+scripts/verify-phase6-browser-smoke.mjs --user-core /path/to/genesis_plus_gx_libretro.zip
 ```
 
 Expected behavior:
 
-- `dev-only`: imported ROM Play starts through the current adapter.
+- `--user-core`: imported ROM Play starts through the selected local core.
+- `dev-only`: imported ROM Play starts through the development fallback.
 - `missing`: Play reports setup needed, and Verify still captures proof.
 - Native app: accessibility text showed `Play ready`, `Dev CDN`,
   `Interactive Play`, `Verify still uses local Genteel`, and the setup hints in
