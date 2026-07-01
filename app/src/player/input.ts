@@ -318,7 +318,12 @@ function normalizeInputProfile(value: unknown): PlayerInputProfile {
 
   const candidate = value as Partial<PlayerInputProfile>;
   const keyboard = { ...defaults.keyboard };
-  const controller = cloneControllerBindings(defaults.controller);
+  const hasStoredControllerProfile = Boolean(
+    candidate.controller && typeof candidate.controller === "object",
+  );
+  const controller = hasStoredControllerProfile
+    ? emptyControllerBindings()
+    : cloneControllerBindings(defaults.controller);
 
   for (const id of playerInputActionIds) {
     const keyboardBinding = candidate.keyboard?.[id];
@@ -380,6 +385,16 @@ function cloneControllerBindings(
   return Object.fromEntries(
     playerInputActionIds.map((id) => [id, bindings[id].map((binding) => ({ ...binding }))]),
   ) as Record<PlayerInputActionId, PlayerInputBinding[]>;
+}
+
+function emptyControllerBindings(): Record<PlayerInputActionId, PlayerInputBinding[]> {
+  return playerInputActionIds.reduce(
+    (bindings, id) => ({
+      ...bindings,
+      [id]: [],
+    }),
+    {} as Record<PlayerInputActionId, PlayerInputBinding[]>,
+  );
 }
 
 function normalizeKeyboardKey(key: string) {
