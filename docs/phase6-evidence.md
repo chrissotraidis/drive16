@@ -1,7 +1,7 @@
 # Phase 6 Evidence
 
-Status: ready for human review with one explicit native-window click-through
-remaining.
+Status: native generated-ROM Play verified. Phase 6 is ready for Product V1
+closure review.
 
 ## What Phase 6 Added
 
@@ -29,6 +29,8 @@ remaining.
 - `docs/phase6-audio.md`
 - `docs/phase6-controller-foundation.md`
 - `docs/phase6-generated-rom-play.md`
+- `docs/phase6-verification-loop.md`
+- `docs/phase6-to-product-v1-goal.md`
 
 ## Verification
 
@@ -40,6 +42,8 @@ cargo fmt --manifest-path app/src-tauri/Cargo.toml --check
 cargo test --manifest-path app/src-tauri/Cargo.toml
 cargo test --manifest-path app/src-tauri/Cargo.toml v1_prompt_runs_core_asset_rom_when_tools_are_available -- --ignored --nocapture
 git diff --check
+scripts/verify-phase6-loop.sh --browser
+scripts/verify-phase6-loop.sh --no-browser --with-v1-proof
 ```
 
 Native test result:
@@ -56,6 +60,20 @@ Browser player smoke:
 - Confirmed Pause, Resume, and Stop feedback.
 - Final console warning/error count: zero.
 
+Repeatable verification loop:
+
+- `scripts/verify-phase6-loop.sh --browser` passed against
+  `http://127.0.0.1:1420/`.
+- Browser smoke covered New Project, Save, Open, imported
+  `examples/app-starter-blank/out/rom.bin`, clicked Play ROM, sent ArrowRight,
+  ran Pause/Resume/Reset/Stop, Verify, Export, and checked mobile overflow.
+- Evidence written under
+  `artifacts/phase6/verify-loop/20260701-131904`.
+- `scripts/verify-phase6-loop.sh --no-browser --with-v1-proof` passed the
+  slower generated CORE proof mode.
+- Evidence written under
+  `artifacts/phase6/verify-loop/20260701-131922`.
+
 Generated CORE player smoke:
 
 - Used the generated CORE fixture at `examples/phase2-core-assets/out/rom.bin`.
@@ -70,17 +88,20 @@ Hygiene:
 - Tracked-file scan found no Genesis core binaries, `.wasm` files,
   `.safetensors` model weights, OpenRouter keys, or obvious secrets.
 
-## Remaining Review Item
+## Native Generated-ROM Play
 
-The Tauri native process was running, and the native `read_rom_bytes` command is
-covered by tests. Direct native-window click automation was not available
-because the shell process does not have macOS Accessibility control.
+Native generated-ROM Play passed on July 1, 2026:
 
-Human review should still do this native-window click-through:
+1. Submitted `Make a sprite I can move left and right with music.` in the
+   native Tauri window.
+2. Confirmed `Generated CORE ROM` was active.
+3. Clicked `Play ROM` by native accessibility name.
+4. Confirmed the generated ROM started in the embedded player.
+5. Sent ArrowRight and confirmed `Right` input.
+6. Clicked Pause, Resume, Reset, and Stop by native accessibility name.
+7. Confirmed final feedback showed `Interactive player stopped`.
 
-1. In the native Drive16 window, run or select a generated CORE ROM.
-2. Click `Play ROM`.
-3. Confirm the generated active source starts without importing it first.
-4. Click the viewport, press ArrowRight, then Pause/Resume/Stop.
+Evidence screenshots:
 
-If that passes, Phase 6 can be treated as complete for the current v1 scope.
+- `artifacts/product-v1/native-click-through/20260701-1324/native-generated-play.png`
+- `artifacts/product-v1/native-click-through/20260701-1324/native-generated-controls-stopped.png`

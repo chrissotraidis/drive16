@@ -7,7 +7,9 @@
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 1420",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "verify:phase6": "../scripts/verify-phase6-loop.sh",
+    "verify:phase6:browser": "node ../scripts/verify-phase6-browser-smoke.mjs --url http://127.0.0.1:1420/"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
@@ -21,6 +23,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.61.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
   }

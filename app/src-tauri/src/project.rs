@@ -130,6 +130,10 @@ pub fn save_current_project() -> Result<ProjectSaveResult, String> {
     save_current_project_for_repo(repo_root())
 }
 
+pub fn save_project_path(source_project_path: String) -> Result<ProjectSaveResult, String> {
+    save_project_path_for_repo(repo_root(), source_project_path)
+}
+
 pub fn list_project_snapshots() -> Vec<ProjectSnapshot> {
     list_project_snapshots_for_repo(repo_root())
 }
@@ -306,11 +310,25 @@ fn export_rom_file(paths: &ProjectPaths, source_path: &Path) -> Result<RomExport
 
 fn save_current_project_for_repo(repo_root: PathBuf) -> Result<ProjectSaveResult, String> {
     let paths = ProjectPaths::new(repo_root);
-    if !paths.project_path.is_dir() {
-        return Err(format!(
-            "Starter project is missing: {}",
-            paths.project_path.display()
-        ));
+    let source_project = paths.project_path.clone();
+    save_project_directory_for_repo(paths, source_project)
+}
+
+fn save_project_path_for_repo(
+    repo_root: PathBuf,
+    source_project_path: String,
+) -> Result<ProjectSaveResult, String> {
+    let paths = ProjectPaths::new(repo_root);
+    let source_project = resolve_repo_path(&paths.repo_root, &source_project_path)?;
+    save_project_directory_for_repo(paths, source_project)
+}
+
+fn save_project_directory_for_repo(
+    paths: ProjectPaths,
+    source_project: PathBuf,
+) -> Result<ProjectSaveResult, String> {
+    if !source_project.is_dir() {
+        return Err(format!("Project is missing: {}", source_project.display()));
     }
     fs::create_dir_all(&paths.project_save_directory).map_err(|error| {
         format!(
@@ -320,16 +338,23 @@ fn save_current_project_for_repo(repo_root: PathBuf) -> Result<ProjectSaveResult
         )
     })?;
 
-    let snapshot_path = paths
-        .project_save_directory
-        .join(format!("drive16-starter-{}", unique_stamp()));
-    let files = copy_project_tree(&paths.project_path, &snapshot_path)?;
+    let project_name = source_project
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(sanitize_file_stem)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "project".to_string());
+    let snapshot_path =
+        paths
+            .project_save_directory
+            .join(format!("drive16-{}-{}", project_name, unique_stamp()));
+    let files = copy_project_tree(&source_project, &snapshot_path)?;
 
     Ok(ProjectSaveResult {
         generated_at: unix_timestamp(),
         status: "ready".to_string(),
         detail: "Project snapshot saved".to_string(),
-        source_project_path: repo_relative(&paths.repo_root, &paths.project_path),
+        source_project_path: repo_relative(&paths.repo_root, &source_project),
         snapshot_path: repo_relative(&paths.repo_root, &snapshot_path),
         files,
     })
@@ -530,12 +555,12 @@ fn file_entry(repo_root: &Path, path: PathBuf, label: &str) -> ProjectFileEntry 
 fn resolve_repo_path(repo_root: &Path, source_rom_path: &str) -> Result<PathBuf, String> {
     let trimmed = source_rom_path.trim();
     if trimmed.is_empty() {
-        return Err("ROM path is empty".to_string());
+        return Err("Path is empty".to_string());
     }
 
     let requested = PathBuf::from(trimmed);
     if requested.is_absolute() {
-        return Err("ROM path must be inside the Drive16 workspace".to_string());
+        return Err("Path must be inside the Drive16 workspace".to_string());
     }
 
     let candidate = repo_root.join(requested);
@@ -546,15 +571,11 @@ fn resolve_repo_path(repo_root: &Path, source_rom_path: &str) -> Result<PathBuf,
             error
         )
     })?;
-    let canonical_candidate = candidate.canonicalize().map_err(|error| {
-        format!(
-            "Could not resolve ROM path {}: {}",
-            candidate.display(),
-            error
-        )
-    })?;
+    let canonical_candidate = candidate
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve path {}: {}", candidate.display(), error))?;
     if !canonical_candidate.starts_with(&canonical_repo) {
-        return Err("ROM path must stay inside the Drive16 workspace".to_string());
+        return Err("Path must stay inside the Drive16 workspace".to_string());
     }
 
     Ok(candidate)
@@ -800,6 +821,36 @@ mod tests {
         assert_eq!(result.files, 2);
         assert_eq!(saved_main_contents, "int main(){}");
         assert_eq!(saved_resources_contents, "SPRITE player");
+    }
+
+    #[test]
+    fn save_project_path_copies_repo_local_project_tree_to_snapshot() {
+        let temp_dir = temp_repo("save-active");
+        let active_project = temp_dir.join("artifacts/phase3/generated-core");
+        fs::create_dir_all(active_project.join("src")).unwrap();
+        fs::create_dir_all(active_project.join("out")).unwrap();
+        fs::write(active_project.join("src/main.c"), "int generated(){}").unwrap();
+        fs::write(active_project.join("out/rom.bin"), b"GENERATED").unwrap();
+
+        let result = save_project_path_for_repo(
+            temp_dir.clone(),
+            "artifacts/phase3/generated-core".to_string(),
+        )
+        .expect("active project saves");
+        let saved_main = temp_dir.join(&result.snapshot_path).join("src/main.c");
+        let saved_rom = temp_dir.join(&result.snapshot_path).join("out/rom.bin");
+        let saved_main_contents = fs::read_to_string(saved_main).unwrap();
+        let saved_rom_contents = fs::read(saved_rom).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert_eq!(
+            result.source_project_path,
+            "artifacts/phase3/generated-core"
+        );
+        assert_eq!(result.files, 2);
+        assert_eq!(saved_main_contents, "int generated(){}");
+        assert_eq!(saved_rom_contents, b"GENERATED");
     }
 
     #[test]

@@ -113,6 +113,15 @@ async fn save_current_project() -> Result<project::ProjectSaveResult, String> {
 }
 
 #[tauri::command]
+async fn save_project_path(
+    source_project_path: String,
+) -> Result<project::ProjectSaveResult, String> {
+    tauri::async_runtime::spawn_blocking(move || project::save_project_path(source_project_path))
+        .await
+        .map_err(|error| format!("Project save task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn run_v1_prompt(prompt: String) -> Result<v1_prompt::V1PromptResult, String> {
     tauri::async_runtime::spawn_blocking(move || v1_prompt::run_v1_prompt(prompt))
         .await
@@ -180,6 +189,7 @@ fn main() {
             export_rom_path,
             read_rom_bytes,
             save_current_project,
+            save_project_path,
             run_v1_prompt,
             run_phase4_music_prompt,
             check_comfyui_endpoint,

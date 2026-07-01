@@ -85,3 +85,9 @@ Toolchain and validation scripts live here.
   Phase 2 bundled-asset validation gate.
 - `validate-sprite-movement.py`: compares neutral and scripted-input PNG
   screenshots to prove a sprite-like movement signal.
+- `verify-phase6-loop.sh`: runs the repeatable Phase 6 verification loop:
+  frontend build, native format/tests, optional generated CORE proof, git
+  hygiene, and optional browser smoke against a running preview.
+- `verify-phase6-browser-smoke.mjs`: Playwright smoke used by the Phase 6 loop
+  to run New Project, Save, Open, import the test ROM,
+  Play/Pause/Resume/Reset/Stop, Verify, Export, and check the mobile layout.

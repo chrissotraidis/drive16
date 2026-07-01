@@ -1,5 +1,122 @@
 # Drive16 Worklog
 
+## 2026-07-01 - ITERATION 94 - Product V1 release handoff
+
+Plan:
+
+- Task: prepare the Product V1 closure set for publishing to `main` and choose
+  the first post-v1 slice.
+- Files: `README.md`, `PROGRESS.md`, `WORKLOG.md`,
+  `docs/post-v1-backlog.md`, and the Product V1 closure files already updated.
+- Verification: final git hygiene, native app review pass, commit, and push.
+
+Did:
+
+- Selected emulator/core distribution policy as the first post-v1 slice.
+- Kept Genteel as the Verify/Capture Proof boundary for that slice.
+- Prepared the Product V1 closure changes for commit and push to `main`.
+
+Evidence:
+
+- Product V1 closure evidence remains in `docs/product-v1-evidence.md`.
+- Post-v1 selection is recorded in `docs/post-v1-backlog.md`.
+
+Gate:
+
+Ready to commit and push `main`.
+
+Next:
+
+- Commit and push Product V1 closure.
+
+## 2026-07-01 - ITERATION 93 - Product V1 lifecycle and native Play proof
+
+Plan:
+
+- Task: tighten active-project lifecycle behavior and close the native
+  generated-ROM Play evidence gap.
+- Files: `app/src/App.tsx`, `app/src-tauri/src/main.rs`,
+  `app/src-tauri/src/project.rs`, `scripts/verify-phase6-browser-smoke.mjs`,
+  `docs/product-v1-evidence.md`, `docs/phase6-evidence.md`, `PROGRESS.md`,
+  and `WORKLOG.md`.
+- Verification: frontend build, native format check, native test suite,
+  browser verification loop, generated CORE proof loop, in-app browser
+  rendered check, and native Tauri click-through.
+
+Did:
+
+- Save Project now snapshots the active repo-local project path instead of
+  always saving the starter project.
+- Open Project now restores the saved snapshot as the active project summary.
+- Verify and Export now use the active ROM source rather than silently falling
+  back to the original starter path.
+- Browser smoke now covers New Project, Save, Open, Import, Play, keyboard
+  Right, Pause/Resume/Reset/Stop, Verify, Export, and mobile overflow.
+- Native Tauri generated-ROM Play was clicked through from the visible app:
+  prompt, `Play ROM`, ArrowRight, Pause, Resume, Reset, and Stop.
+
+Evidence:
+
+- `scripts/verify-phase6-loop.sh --browser` passed with evidence under
+  `artifacts/phase6/verify-loop/20260701-131904`.
+- `scripts/verify-phase6-loop.sh --no-browser --with-v1-proof` passed with
+  evidence under `artifacts/phase6/verify-loop/20260701-131922`.
+- Native generated-ROM screenshots are under
+  `artifacts/product-v1/native-click-through/20260701-1324`.
+- In-app browser rendered check passed: correct URL/title, no console
+  warnings/errors, no horizontal overflow, and Play/Verify/menu controls
+  present.
+
+Provider evidence:
+
+- Missing-provider path showed `ROM proof only` and freeform replies paused.
+- Configured OpenRouter path reported `Connected` and `OpenRouter key accepted`
+  in Agent Settings.
+- Browser preview was reloaded after the provider test so the pasted key did
+  not remain in transient app state.
+
+Gate:
+
+Product V1 closure is complete for the local review scope. Remaining work is
+separated in `docs/post-v1-backlog.md`.
+
+Next:
+
+- Review Product V1 locally, then choose a post-v1 slice.
+
+## 2026-07-01 - ITERATION 92 - Product V1 closure docs
+
+Plan:
+
+- Task: update internal documentation so the next loop targets Product V1
+  closure instead of implying the earlier CORE proof is the whole product.
+- Files: `README.md`, `PROGRESS.md`, `docs/product-v1-evidence.md`,
+  `docs/phase6-to-product-v1-goal.md`, and `WORKLOG.md`.
+- Verification: documentation consistency review and whitespace check.
+
+Did:
+
+- Added the Product V1 evidence packet.
+- Updated the README to separate the completed CORE proof from open Product V1
+  closure work.
+- Pointed PROGRESS at the Product V1 evidence packet.
+- Added working files to the Product V1 goal loop so future runs know where to
+  record status.
+
+Evidence:
+
+- `docs/product-v1-evidence.md`.
+- `docs/phase6-to-product-v1-goal.md`.
+
+Gate:
+
+Product V1 remains open. The first blocker remains the native generated-ROM
+`Play ROM` click-through.
+
+Next:
+
+- Run the Product V1 closure loop and record pass/fail evidence.
+
 ## 2026-06-30 - ITERATION 91 - Phase 6 evidence packet
 
 Plan:

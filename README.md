@@ -11,25 +11,32 @@ loop.
 
 ## Current status
 
-Core v1 is complete and evidenced. The Phase 3 app flow launches a two-pane
-Drive16 shell, starts from a blank ROM preview, accepts the prompt
-`make a sprite I can move left and right with music`, builds the bundled
-sprite plus music ROM, verifies right-input sprite movement, and verifies
+The earlier CORE v1 proof is complete and evidenced: the Phase 3 app flow can
+launch a two-pane Drive16 shell, start from a blank ROM preview, accept the
+prompt `make a sprite I can move left and right with music`, build the bundled
+sprite plus music ROM, verify right-input sprite movement, and verify
 non-silent audio.
+
+Product V1 closure is complete for the local review scope. The app has an
+interactive Play foundation, native generated-ROM Play is verified, provider
+setup is truthful, project lifecycle actions are covered, and post-v1 work is
+separated from the V1 stop line.
 
 Evidence:
 
 - Phase 6 packet: `docs/phase6-evidence.md`
+- Product V1 packet: `docs/product-v1-evidence.md`
+- Post-v1 backlog: `docs/post-v1-backlog.md`
 - Phase 3 packet: `docs/phase3-evidence.md`
 - Core prompt proof: `docs/phase3-v1-prompt.md`
 - Current ledger: `PROGRESS.md`
 - Iteration journal: `WORKLOG.md`
 
-The active work is Phase 6 interactive ROM play. Phase 4 was
-approved after the live generated-assets proof passed locally: default-off
-settings toggles, ComfyUI readiness checks, the `comfyui-mcp` wrapper, the
-tuned Genesis sprite workflow, generated sprite validation, MML music
-generation, and the combined generated-assets proof harness are all in place.
+Phase 4 was approved after the live generated-assets proof passed locally:
+default-off settings toggles, ComfyUI readiness checks, the `comfyui-mcp`
+wrapper, the tuned Genesis sprite workflow, generated sprite validation, MML
+music generation, and the combined generated-assets proof harness are all in
+place.
 
 Phase 5 completed provider settings cleanup, conversation truthfulness,
 project menu hardening, local ROM import, ROM controls, ROM-first layout, and
@@ -60,8 +67,9 @@ core as a settled commercial distribution dependency.
 
 ## What to do next
 
-Current Phase 6 next step: human-review the native-window click-through listed
-in `docs/phase6-evidence.md`.
+Current next step: start the selected post-v1 slice in
+`docs/post-v1-backlog.md`: emulator/core distribution policy for interactive
+Play, while keeping Genteel as Verify/Capture Proof.
 
 Current local validation:
 
@@ -107,8 +115,8 @@ http://127.0.0.1:1420/
 Useful checks:
 
 ```sh
-pnpm --dir app build
-cargo test --manifest-path app/src-tauri/Cargo.toml
+scripts/verify-phase6-loop.sh --browser
+scripts/verify-phase6-loop.sh --no-browser --with-v1-proof
 ```
 
 Interactive player smoke:
@@ -123,6 +131,10 @@ The native Tauri app can be run with:
 ```sh
 pnpm --dir app tauri dev
 ```
+
+The browser check covers imported-ROM Play, keyboard input, player controls,
+Verify, Save, Export, and narrow layout. The generated CORE proof check covers
+the slower bundled-sprite/music proof path.
 
 ## Provider and enhancement setup
 
@@ -184,7 +196,11 @@ scripts/validate-phase4-live-generated-assets.sh
 - Phase 4: optional AI sprites and generated MML music, proof passed locally
   and approved.
 - Phase 5: hardening and fully local path, ready for human review.
-- Phase 6: interactive imported/generated ROM player, in progress.
+- Phase 6: interactive imported/generated ROM player, ready for Product V1
+  closure review.
+- Product V1 closure: generated-ROM native Play, golden path clarity, provider
+  truth, project lifecycle, and final evidence packet, complete for local
+  review.
 
 ## Model stance
 

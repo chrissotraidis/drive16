@@ -1288,11 +1288,11 @@ function App() {
 
   async function exportRom() {
     setExportBusy(true);
-    noteAction("Exporting the current ROM.");
-    const activeImport = importResult;
+    noteAction(`Exporting ${activeRomSource.label}.`);
+    const exportSource = activeRomSource;
 
     if (!isTauriRuntime()) {
-      const previewResult = previewExportForRom(activeImport);
+      const previewResult = previewExportForRom(exportSource);
       setExportResult(previewResult);
       setProjectActionNotice({
         state: previewResult.status,
@@ -1306,11 +1306,12 @@ function App() {
     }
 
     try {
-      const result = activeImport
-        ? await invoke<RomExportResult>("export_rom_path", {
-            sourceRomPath: activeImport.importPath,
-          })
-        : await invoke<RomExportResult>("export_current_rom");
+      const result =
+        exportSource.kind === "starter" && isDefaultStarterRomPath(exportSource.path)
+          ? await invoke<RomExportResult>("export_current_rom")
+          : await invoke<RomExportResult>("export_rom_path", {
+              sourceRomPath: exportSource.path,
+            });
       setExportResult(result);
       setProjectActionNotice({
         state: result.status,
@@ -1319,7 +1320,7 @@ function App() {
       });
       appendOpenCodeEvent("export.ready", result.exportPath);
       noteAction(`ROM exported to ${result.exportPath}.`);
-      if (!activeImport) {
+      if (exportSource.kind === "starter" && isDefaultStarterRomPath(exportSource.path)) {
         void loadProjectSummary();
       }
     } catch (error) {
@@ -1329,6 +1330,7 @@ function App() {
         status: "missing",
         detail,
         generatedAt: "error",
+        sourceRomPath: exportSource.path,
       });
       setProjectActionNotice({
         state: "missing",
@@ -1665,18 +1667,15 @@ function App() {
   }
 
   function resetPreview() {
+    const proofPath = isDefaultStarterRomPath(activeRomSource.path)
+      ? undefined
+      : activeRomSource.path;
     setTransport("running");
     setBuildState("running");
     setSpriteX(52);
-    noteAction(importResult ? "Imported ROM capture requested." : "Starter ROM capture requested.");
-    appendOpenCodeEvent(
-      importResult ? "imported.capture" : "starter.capture",
-      importResult?.importPath ?? "Starter ROM capture requested",
-    );
-    void launchRom(
-      importResult?.importPath,
-      importResult ? "Imported ROM proof captured." : "Starter ROM proof captured.",
-    );
+    noteAction(`${activeRomSource.label} proof capture requested.`);
+    appendOpenCodeEvent(`${activeRomSource.kind}.capture`, activeRomSource.path);
+    void launchRom(proofPath, `${activeRomSource.label} proof captured.`);
   }
 
   function startNewProject() {
@@ -1711,24 +1710,28 @@ function App() {
 
   async function saveProject() {
     setSaveBusy(true);
-    noteAction("Saving the current project snapshot.");
+    const sourceProjectPath = projectSummary.projectPath;
+    noteAction(`Saving project snapshot for ${shortPath(sourceProjectPath)}.`);
 
     if (!isTauriRuntime()) {
-      setSaveResult(previewSaveResult);
-      setRecentProjects([snapshotFromSaveResult(previewSaveResult)]);
+      const previewResult = previewSaveForProject(projectSummary);
+      setSaveResult(previewResult);
+      setRecentProjects([snapshotFromSaveResult(previewResult)]);
       setProjectActionNotice({
-        state: previewSaveResult.status,
+        state: previewResult.status,
         label: "Project saved",
-        detail: previewSaveResult.snapshotPath,
+        detail: previewResult.snapshotPath,
       });
-      appendOpenCodeEvent("project.save.preview", previewSaveResult.snapshotPath);
-      noteAction(`Preview save ready at ${previewSaveResult.snapshotPath}.`);
+      appendOpenCodeEvent("project.save.preview", previewResult.snapshotPath);
+      noteAction(`Preview save ready at ${previewResult.snapshotPath}.`);
       setSaveBusy(false);
       return;
     }
 
     try {
-      const result = await invoke<ProjectSaveResult>("save_current_project");
+      const result = await invoke<ProjectSaveResult>("save_project_path", {
+        sourceProjectPath,
+      });
       setSaveResult(result);
       setRecentProjects((current) => [snapshotFromSaveResult(result), ...current].slice(0, 6));
       setProjectActionNotice({
@@ -1738,9 +1741,6 @@ function App() {
       });
       appendOpenCodeEvent("project.saved", result.snapshotPath);
       noteAction(`Project saved to ${result.snapshotPath}.`);
-      if (!importResult) {
-        void loadProjectSummary();
-      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Project save failed";
       setSaveResult({
@@ -1775,13 +1775,19 @@ function App() {
       return;
     }
 
+    setImportResult(undefined);
+    setImportReadiness(undefined);
+    setV1PromptResult(undefined);
+    setV1PromptSource("idle");
+    setProjectSummary(projectSummaryFromSnapshot(target));
     setProjectActionNotice({
       state: "ready",
-      label: "Project snapshot selected",
+      label: "Project opened",
       detail: target.projectPath,
     });
     appendOpenCodeEvent("project.open.selected", target.projectPath);
-    noteAction(`Project snapshot selected: ${target.projectPath}.`);
+    noteAction(`Project opened from ${target.projectPath}.`);
+    void launchRom(`${target.projectPath}/out/rom.bin`, "Project snapshot proof preview ready.");
   }
 
   async function loadRomImportReadiness() {
@@ -2266,7 +2272,7 @@ function App() {
     setStarterBusy(true);
     setStarterSource("checking");
     setBuildState("building");
-    noteAction(romPath ? "Capturing imported ROM proof." : "Capturing starter ROM proof.");
+    noteAction(romPath ? "Capturing active ROM proof." : "Capturing starter ROM proof.");
 
     if (!isTauriRuntime()) {
       setStarterRom(makePreviewStarterRom(romPath));
@@ -3223,19 +3229,34 @@ function previewTestRomImport(): RomImportResult {
   };
 }
 
-function previewExportForRom(importedRom?: RomImportResult): RomExportResult {
-  if (!importedRom) return previewExportResult;
+function previewSaveForProject(project: ProjectSummary): ProjectSaveResult {
+  const projectName = project.projectPath.split("/").filter(Boolean).pop() ?? "project";
+  return {
+    ...previewSaveResult,
+    sourceProjectPath: project.projectPath,
+    snapshotPath: `artifacts/phase3/projects/drive16-${projectName}-preview`,
+  };
+}
+
+function previewExportForRom(source: ActiveRomSource): RomExportResult {
   const extension = acceptedRomExtensionForName(
-    importedRom.importPath,
-    importedRom.acceptedExtensions,
+    source.path,
+    previewImportReadiness.acceptedExtensions,
   ) ?? ".bin";
+  if (source.kind === "starter" && isDefaultStarterRomPath(source.path)) {
+    return {
+      ...previewExportResult,
+      sourceRomPath: source.path,
+    };
+  }
+
   return {
     ...previewExportResult,
     status: "ready",
-    detail: "Preview export for imported ROM",
-    sourceRomPath: importedRom.importPath,
-    exportPath: `artifacts/phase3/exports/drive16-import-preview${extension}`,
-    bytes: importedRom.bytes,
+    detail: `Preview export for ${source.label}`,
+    sourceRomPath: source.path,
+    exportPath: `artifacts/phase3/exports/drive16-active-preview${extension}`,
+    bytes: 0,
   };
 }
 
@@ -3266,9 +3287,43 @@ function projectSummaryFromImport(result: RomImportResult): ProjectSummary {
   };
 }
 
+function projectSummaryFromSnapshot(snapshot: ProjectSnapshot): ProjectSummary {
+  const romPath = `${snapshot.projectPath}/out/rom.bin`;
+  return {
+    generatedAt: snapshot.generatedAt,
+    name: snapshot.name,
+    projectPath: snapshot.projectPath,
+    romPath,
+    exportDirectory: previewProjectSummary.exportDirectory,
+    romStatus: "ready",
+    romDetail: snapshot.detail,
+    files: [
+      {
+        label: "Main C",
+        path: `${snapshot.projectPath}/src/main.c`,
+        state: "ready",
+      },
+      {
+        label: "Resources",
+        path: `${snapshot.projectPath}/res/resources.res`,
+        state: "ready",
+      },
+      {
+        label: "ROM",
+        path: romPath,
+        state: "ready",
+      },
+    ],
+  };
+}
+
 function acceptedRomExtensionForName(fileName: string, extensions: string[]) {
   const normalized = fileName.toLowerCase();
   return extensions.find((extension) => normalized.endsWith(extension.toLowerCase()));
+}
+
+function isDefaultStarterRomPath(romPath: string) {
+  return romPath === previewProjectSummary.romPath;
 }
 
 function snapshotFromSaveResult(result: ProjectSaveResult): ProjectSnapshot {

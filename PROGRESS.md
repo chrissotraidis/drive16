@@ -1,10 +1,11 @@
 # Drive16 Progress
 
-Current phase: Phase 6, interactive ROM player
+Current phase: Product V1 closure complete for local review
 
-Exit criterion: imported and Drive16-generated Genesis ROMs can be played
-interactively inside the app with real keyboard input, while the existing
-Genteel proof path remains available and distinct.
+Exit criterion: a non-developer can follow the golden path from starter project
+to agent/proof build, interactive keyboard Play, Verify, Save/Open, and Export
+without ambiguous controls, while Genteel proof and interactive Play remain
+distinct.
 
 ## Phase 6 Checklist
 
@@ -18,7 +19,7 @@ Genteel proof path remains available and distinct.
 - [x] Add or honestly gate audio.
 - [x] Add controller-ready input foundation.
 - [x] Wire Drive16-generated ROMs into the same player.
-- [ ] Run full polish, regression, and evidence pass.
+- [x] Run full polish, regression, and evidence pass.
 - [x] Assemble Phase 6 evidence packet for human review.
 
 ## Phase 5 Checklist
@@ -37,23 +38,28 @@ Genteel proof path remains available and distinct.
 
 ## Current Task
 
-Phase 6 is open. Imported ROMs can now be played through the embedded
-Nostalgist/RetroArch adapter in the ROM viewport, with keyboard input and
-compact player controls. Genteel remains the separate Verify/Proof Preview
-path.
+Phase 6 implementation is functionally complete for browser/native command
+evidence, including native generated-ROM Play. Product V1 closure evidence is
+recorded in `docs/product-v1-evidence.md`.
 
 Evidence is recorded in:
 
+- `docs/product-v1-evidence.md`
+- `docs/post-v1-backlog.md`
+- `docs/phase6-to-product-v1-goal.md`
 - `docs/phase6-interactive-player-adapter.md`
 - `docs/phase6-keyboard-input.md`
 - `docs/phase6-player-controls.md`
 - `docs/phase6-audio.md`
 - `docs/phase6-controller-foundation.md`
+- `docs/phase6-verification-loop.md`
 
 ## Next Up
 
-Final Phase 6 review is pending one native-window click-through. Automated
-browser and native command evidence is assembled in `docs/phase6-evidence.md`.
+Product V1 closure is complete for the local review scope. The selected first
+post-v1 slice is emulator/core distribution policy: decide user-supplied versus
+installer-managed Genesis core delivery while keeping Genteel as
+Verify/Capture Proof.
 
 ## Completed Phase 6 Work
 
@@ -85,6 +91,10 @@ browser and native command evidence is assembled in `docs/phase6-evidence.md`.
   support is finished.
 - [x] V1/CORE generated ROM proof harness passed locally.
 - [x] Generated CORE ROM fixture played through the same embedded player.
+- [x] Repeatable Phase 6 verification loop added and passed with required
+  browser smoke plus generated CORE proof mode.
+- [x] Native generated-ROM `Play ROM` click-through passed with ArrowRight,
+  Pause, Resume, Reset, and Stop.
 
 ## Completed Phase 5 Work
 
