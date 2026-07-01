@@ -165,6 +165,12 @@ async function main() {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
     });
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, "getGamepads", {
+        configurable: true,
+        value: () => [],
+      });
+    });
     if (!args.userCorePath) {
       await context.addInitScript((coreStatus) => {
         window.localStorage.setItem("drive16.interactiveCoreStatusOverride", coreStatus);
@@ -277,6 +283,58 @@ async function main() {
     });
     states.lastInput = await visibleText(page, "rom-last-input");
     states.coreReadinessBeforePlay = await visibleText(page, "interactive-core-readiness");
+    states.visibleKeyboardMapping = await visibleText(page, "rom-controls");
+    for (const expectedMapping of ["Arrows", "Z", "X", "C", "Enter"]) {
+      if (!states.visibleKeyboardMapping.includes(expectedMapping)) {
+        throw new Error(`Default keyboard mapping is missing ${expectedMapping}`);
+      }
+    }
+
+    await page.getByTestId("open-controls").click();
+    await page.getByTestId("controls-panel").waitFor();
+    states.controlsPanel = {
+      keyboard: await visibleText(page, "keyboard-readiness"),
+      controller: await visibleText(page, "controller-readiness"),
+      mapping: await visibleText(page, "controller-mapping-state"),
+    };
+    if (!/Keyboard ready/i.test(states.controlsPanel.keyboard)) {
+      throw new Error(`Controls panel did not report keyboard readiness: ${states.controlsPanel.keyboard}`);
+    }
+    if (!/Controller unavailable/i.test(states.controlsPanel.controller)) {
+      throw new Error(`No-controller state was not truthful: ${states.controlsPanel.controller}`);
+    }
+    if (!/Default mapping|Mapping not configured/i.test(states.controlsPanel.mapping)) {
+      throw new Error(`Controller mapping state was not visible: ${states.controlsPanel.mapping}`);
+    }
+    await screenshot(page, args.outDir, screenshots, "02b-controls.png");
+    await page.getByTestId("reset-input-profile").click();
+    await page.waitForFunction(() => {
+      return document
+        .querySelector('[data-testid="rom-last-input"]')
+        ?.textContent?.includes("Input defaults restored");
+    });
+    states.inputProfileAfterReset = await page.evaluate(() => {
+      const stored = window.localStorage.getItem("drive16.inputProfile.v1");
+      if (!stored) return undefined;
+      const parsed = JSON.parse(stored);
+      return {
+        source: parsed.source,
+        zBinding: parsed.keyboard?.["button.a"]?.label,
+        startBinding: parsed.keyboard?.["button.start"]?.label,
+        controllerStart: parsed.controller?.["button.start"]?.[0]?.label,
+      };
+    });
+    if (
+      states.inputProfileAfterReset?.source !== "local" ||
+      states.inputProfileAfterReset?.zBinding !== "Z" ||
+      states.inputProfileAfterReset?.startBinding !== "Enter"
+    ) {
+      throw new Error(
+        `Reset defaults did not persist the expected input profile: ${JSON.stringify(states.inputProfileAfterReset)}`,
+      );
+    }
+    await page.getByTestId("close-controls").click();
+    await page.getByTestId("controls-panel").waitFor({ state: "detached" });
 
     await page.getByTestId("play-active-rom").click();
     await page.waitForFunction(() => {

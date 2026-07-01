@@ -94,7 +94,8 @@ Toolchain and validation scripts live here.
   frontend build, native format/tests, optional generated CORE proof, git
   hygiene, and optional browser smoke against a running preview.
 - `verify-phase6-browser-smoke.mjs`: Playwright smoke used by the Phase 6/7
-  loop to run New Project, Save, Open, import the test ROM,
-  Play/Pause/Resume/Reset/Stop, Verify, Export, and check the mobile layout.
-  It accepts `--core-status` to verify Play-unavailable behavior and
-  `--user-core <path>` to import a local core ZIP or pair before Play.
+  loop to run New Project, Save, Open, import the test ROM, verify the input
+  Controls panel/default profile/no-controller state, Play/Pause/Resume/Reset/
+  Stop, Verify, Export, and check the mobile layout. It accepts
+  `--core-status` to verify Play-unavailable behavior and `--user-core <path>`
+  to import a local core ZIP or pair before Play.

@@ -1,5 +1,31 @@
 # Drive16 Decisions
 
+## 2026-07-01 - Input profiles live with the ROM player
+
+Context:
+
+After user-supplied Play setup, the player surface still showed keyboard
+mappings but no durable input profile or real controller detection. Putting
+this in Agent Settings would mix ROM/play controls with inference-provider
+configuration.
+
+Decision:
+
+Add a local input profile owned by the player surface. Keyboard and controller
+bindings share stable action IDs for D-pad, A, B, C, and Start. The compact
+Controls panel lives beside Play/Verify, persists the profile in localStorage,
+offers Reset defaults, and reports Gamepad API/controller readiness honestly.
+Basic standard-gamepad button/D-pad transitions can feed the same player input
+path as keyboard input, but full remapping and per-device hardware QA remain
+later work.
+
+Consequence:
+
+Drive16 now has a scalable input boundary without pretending controller support
+is distribution-complete. A user can see whether keyboard is ready, whether a
+controller is visible, and whether the current profile maps every player
+action without leaving the ROM player context.
+
 ## 2026-07-01 - User-supplied Genesis core is the preferred Play path
 
 Context:

@@ -1,5 +1,53 @@
 # Drive16 Worklog
 
+## 2026-07-01 - ITERATION 97 - Phase 7 input profiles and controller mapping
+
+Plan:
+
+- Task: implement the Phase 7 Slice 3 Controls/Input surface, local input
+  profile, and controller-ready mapping path.
+- Files: `app/src/App.tsx`, `app/src/player`, `app/src/styles.css`,
+  `scripts/verify-phase6-browser-smoke.mjs`, `README.md`, `PROGRESS.md`,
+  `DECISIONS.md`, `scripts/README.md`, `docs/phase6-controller-foundation.md`,
+  `docs/phase7-input-profiles.md`, `docs/phase7-user-core-flow.md`, and
+  `docs/post-v1-backlog.md`.
+- Verification: frontend build, native format/tests, user-core browser smoke,
+  missing-core browser smoke, and git hygiene.
+
+Did:
+
+- Added a shared input profile for keyboard and controller bindings.
+- Kept the default keyboard controls visible: arrows, `Z`, `X`, `C`, Enter.
+- Persisted the profile in localStorage and added Reset defaults.
+- Added a compact Controls panel beside Play/Verify, not inside Agent
+  Settings.
+- Added Gamepad API/controller detection with truthful readiness labels.
+- Wired detected standard-gamepad button/D-pad transitions into the same player
+  action path used by keyboard input.
+- Extended browser smoke to verify default mappings, Controls open/close,
+  Reset defaults persistence, and no-controller truthfulness.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 51 passed,
+  4 ignored.
+- User-core browser smoke passed with evidence under
+  `artifacts/phase7/browser-smoke-input-profile-user-core`.
+- Missing-core browser smoke passed with evidence under
+  `artifacts/phase7/browser-smoke-input-profile-missing-core`.
+
+Gate:
+
+Passed for Phase 7 Slice 3.
+
+Next:
+
+- Decide whether the next player slice should be a full remapping editor,
+  multi-controller handling, packaged controller QA, or a different post-v1
+  product area.
+
 ## 2026-07-01 - ITERATION 96 - Phase 7 user-supplied core flow
 
 Plan:

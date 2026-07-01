@@ -26,8 +26,9 @@ public distribution.
 
 ## Input And Play
 
-- Real controller detection, mapping UI, remapping, and persistence.
+- Full controller remapping editor and per-device mapping.
 - Multi-controller support.
+- Packaged controller hardware QA.
 - Interactive audio proof beyond the current honest `Audio gated` player state.
 
 ## Emulator Distribution

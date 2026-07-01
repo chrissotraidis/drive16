@@ -1,11 +1,30 @@
 # Drive16 Progress
 
-Current phase: Phase 7 Slice 2 - user-supplied interactive core setup
+Current phase: Phase 7 Slice 3 - input profiles and controller mapping
 
 Exit criterion: a non-developer can follow the golden path from starter project
 to agent/proof build, interactive keyboard Play, Verify, Save/Open, and Export
 without ambiguous controls, while Genteel proof and interactive Play remain
 distinct.
+
+## Phase 7 Slice 3 Checklist
+
+- [x] Add a compact Controls / Input setup surface near ROM player controls,
+  not Agent Settings.
+- [x] Keep the default keyboard mapping: arrows, `Z`, `X`, `C`, Enter.
+- [x] Introduce a shared input action map for keyboard and controller bindings.
+- [x] Persist the input profile locally in localStorage.
+- [x] Add Reset defaults.
+- [x] Detect browser Gamepad API availability and connected controller
+  presence.
+- [x] Show truthful states for Keyboard ready, Controller unavailable,
+  Controller detected, and Mapping not configured.
+- [x] Wire basic standard-gamepad button/D-pad transitions into the existing
+  player input actions when a controller is detected.
+- [x] Add browser smoke coverage for default mapping, Controls open/close,
+  Reset defaults, and no-controller truthfulness.
+- [x] Verify user-core and missing-core behavior are not regressed.
+- [x] Update README, progress/worklog, and Phase 7 docs.
 
 ## Phase 7 Slice 2 Checklist
 
@@ -70,15 +89,17 @@ distinct.
 
 ## Current Task
 
-Phase 7 Slice 2 implemented the user-supplied core path. The current posture is
-`Play ready` / `User core` when a compatible local core is installed,
-`Dev preview only` / `Dev CDN` during local development without a user core, and
-`Play setup needed` when no release-safe core path is available.
+Phase 7 Slice 3 implemented a local input profile and controller-ready Controls
+surface. The current posture is `Keyboard ready`, `Controller unavailable` when
+no controller is visible, `Controller detected` when a mapped browser gamepad
+is connected, and `Mapping not configured` if a visible controller lacks a
+complete action map.
 
 Evidence is recorded in:
 
 - `docs/phase7-interactive-core-distribution.md`
 - `docs/phase7-user-core-flow.md`
+- `docs/phase7-input-profiles.md`
 - `docs/product-v1-evidence.md`
 - `docs/post-v1-backlog.md`
 - `docs/phase6-to-product-v1-goal.md`
@@ -93,8 +114,10 @@ Evidence is recorded in:
 
 Product V1 closure is complete for the local review scope. The selected first
 post-v1 core-distribution work now has both the explicit policy and a
-user-supplied core setup flow. The next logical player slice is controller
-mapping and persistent input configuration on top of the stable local Play path.
+user-supplied core setup flow. Input profile persistence and basic controller
+detection/mapping are now complete. The next logical player slice is either a
+full remapping editor, multi-controller handling, packaged controller QA, or a
+different post-v1 product area.
 
 ## Completed Phase 6 Work
 

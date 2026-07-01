@@ -52,7 +52,7 @@ Evidence:
 
 ## Remaining Out Of Scope
 
-- Controller remapping and persistence.
+- Full controller remapping editor and packaged controller hardware QA.
 - Installer-managed core acquisition.
 - Public packaging, signing, notarization, or marketplace/library UX.
 - Choosing a permanent bundled Genesis core.

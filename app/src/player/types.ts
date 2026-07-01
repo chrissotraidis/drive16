@@ -86,9 +86,60 @@ export type PlayerInputAction = {
   spriteDelta?: number;
 };
 
+export type PlayerInputBindingKind = "keyboard" | "gamepad-button" | "gamepad-axis";
+
+export type KeyboardInputBinding = {
+  kind: "keyboard";
+  key: string;
+  label: string;
+};
+
+export type GamepadButtonInputBinding = {
+  kind: "gamepad-button";
+  index: number;
+  label: string;
+};
+
+export type GamepadAxisInputBinding = {
+  kind: "gamepad-axis";
+  axis: number;
+  direction: -1 | 1;
+  threshold: number;
+  label: string;
+};
+
+export type PlayerInputBinding =
+  | KeyboardInputBinding
+  | GamepadButtonInputBinding
+  | GamepadAxisInputBinding;
+
+export type PlayerInputProfile = {
+  version: 1;
+  source: "default" | "local";
+  updatedAt: string;
+  keyboard: Record<PlayerInputActionId, KeyboardInputBinding>;
+  controller: Record<PlayerInputActionId, PlayerInputBinding[]>;
+};
+
+export type GamepadReadinessState =
+  | "unavailable"
+  | "not-detected"
+  | "detected"
+  | "mapping-missing";
+
+export type GamepadReadiness = {
+  state: GamepadReadinessState;
+  label: string;
+  detail: string;
+  gamepadId?: string;
+  gamepadIndex?: number;
+};
+
 export type PlayerInputState = {
   focused: boolean;
   keyboardReady: boolean;
+  profile: PlayerInputProfile;
+  controller: GamepadReadiness;
   controllerReady: boolean;
   lastAction?: PlayerInputAction;
 };

@@ -41,18 +41,29 @@ import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   coreLaunchFailureReadiness,
+  activeGamepadActionIds,
+  controllerProfileConfigured,
   detectInteractiveCoreReadiness,
+  detectGamepadReadiness,
+  firstConnectedGamepad,
   launchNostalgistMegadrivePlayer,
+  loadInputProfile,
   pauseNostalgistPlayer,
+  playerInputActionForId,
   playerInputActionFromKey,
   playerProviderFromCoreReadiness,
   proofPreviewProvider,
   resetNostalgistPlayer,
+  resetInputProfile,
   resumeNostalgistPlayer,
   sendNostalgistInput,
+  sameGamepadReadiness,
   stopNostalgistPlayer,
+  visibleControllerBindings,
+  visibleKeyboardBindings,
   visibleKeyboardMappings,
   type ActiveRomSource,
+  type GamepadReadiness,
   type InteractivePlayerSession,
   type InteractiveCoreReadiness,
   type LoadedInteractiveCore,
@@ -60,6 +71,8 @@ import {
   type NostalgistPlayerRuntime,
   type PlayerAudioState,
   type PlayerInputAction,
+  type PlayerInputActionId,
+  type PlayerInputProfile,
   type PlayerProvider,
   type PlayerSessionState,
 } from "./player";
@@ -612,7 +625,12 @@ function App() {
   const [emulatorFocused, setEmulatorFocused] = useState(false);
   const [conversationCollapsed, setConversationCollapsed] = useState(false);
   const [statusCollapsed, setStatusCollapsed] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [romInputFocused, setRomInputFocused] = useState(false);
+  const [inputProfile, setInputProfile] = useState<PlayerInputProfile>(() => loadInputProfile());
+  const [gamepadReadiness, setGamepadReadiness] = useState<GamepadReadiness>(() =>
+    detectGamepadReadiness(),
+  );
   const [lastInputAction, setLastInputAction] = useState("No local input yet");
   const [lastPlayerInput, setLastPlayerInput] = useState<PlayerInputAction | undefined>();
   const [loadedPlayerRom, setLoadedPlayerRom] = useState<LoadedPlayerRom | undefined>();
@@ -668,6 +686,7 @@ function App() {
   const coreImportInputRef = useRef<HTMLInputElement | null>(null);
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
+  const controllerPressedRef = useRef<Set<PlayerInputActionId>>(new Set());
 
   useEffect(() => {
     void refreshPreflight();
@@ -731,6 +750,67 @@ function App() {
       disposeInteractivePlayer();
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let frame = 0;
+
+    const updateReadiness = () => {
+      const nextReadiness = detectGamepadReadiness(inputProfile);
+      setGamepadReadiness((current) =>
+        sameGamepadReadiness(current, nextReadiness) ? current : nextReadiness,
+      );
+      return nextReadiness;
+    };
+
+    const releasePressedActions = (pressed: Set<PlayerInputActionId>) => {
+      pressed.forEach((id) => {
+        releaseLocalRomInput(playerInputActionForId(id, "controller"));
+      });
+    };
+
+    const pollController = () => {
+      const readiness = updateReadiness();
+      const gamepad = readiness.state === "detected" ? firstConnectedGamepad() : undefined;
+      const nextPressed = gamepad
+        ? activeGamepadActionIds(gamepad, inputProfile)
+        : new Set<PlayerInputActionId>();
+      const previousPressed = controllerPressedRef.current;
+
+      nextPressed.forEach((id) => {
+        if (!previousPressed.has(id)) {
+          applyLocalRomInput(playerInputActionForId(id, "controller"), "controller");
+        }
+      });
+
+      previousPressed.forEach((id) => {
+        if (!nextPressed.has(id)) {
+          releaseLocalRomInput(playerInputActionForId(id, "controller"));
+        }
+      });
+
+      controllerPressedRef.current = nextPressed;
+      frame = window.requestAnimationFrame(pollController);
+    };
+
+    const handleControllerChange = () => {
+      updateReadiness();
+    };
+
+    updateReadiness();
+    window.addEventListener("gamepadconnected", handleControllerChange);
+    window.addEventListener("gamepaddisconnected", handleControllerChange);
+    frame = window.requestAnimationFrame(pollController);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("gamepadconnected", handleControllerChange);
+      window.removeEventListener("gamepaddisconnected", handleControllerChange);
+      releasePressedActions(controllerPressedRef.current);
+      controllerPressedRef.current = new Set();
+    };
+  }, [inputProfile]);
 
   const buildLabel = useMemo(() => {
     if (buildState === "building") return "Verifying";
@@ -876,7 +956,19 @@ function App() {
     () => [interactiveCoreHealthCheck(interactiveCoreReadiness), ...preflight.checks],
     [interactiveCoreReadiness, preflight.checks],
   );
-  const keyboardMappings = useMemo(() => visibleKeyboardMappings(), []);
+  const keyboardMappings = useMemo(() => visibleKeyboardMappings(inputProfile), [inputProfile]);
+  const keyboardBindingRows = useMemo(
+    () => visibleKeyboardBindings(inputProfile),
+    [inputProfile],
+  );
+  const controllerBindingRows = useMemo(
+    () => visibleControllerBindings(inputProfile),
+    [inputProfile],
+  );
+  const controllerMappingReady = useMemo(
+    () => controllerProfileConfigured(inputProfile),
+    [inputProfile],
+  );
   const playerSession = useMemo<InteractivePlayerSession>(
     () => ({
       provider: interactiveProvider,
@@ -887,12 +979,16 @@ function App() {
       input: {
         focused: romInputFocused,
         keyboardReady: true,
-        controllerReady: false,
+        profile: inputProfile,
+        controller: gamepadReadiness,
+        controllerReady: gamepadReadiness.state === "detected",
         lastAction: lastPlayerInput,
       },
     }),
     [
       activeRomSource,
+      gamepadReadiness,
+      inputProfile,
       interactiveProvider,
       loadedPlayerRom,
       lastPlayerInput,
@@ -2373,6 +2469,30 @@ function App() {
     });
   }
 
+  function toggleControlsPanel() {
+    setControlsOpen((current) => {
+      const next = !current;
+      noteAction(next ? "Controls opened." : "Controls closed.");
+      appendOpenCodeEvent(next ? "input.controls.opened" : "input.controls.closed", "ROM controls");
+      return next;
+    });
+  }
+
+  function closeControlsPanel() {
+    setControlsOpen(false);
+    noteAction("Controls closed.");
+    appendOpenCodeEvent("input.controls.closed", "ROM controls");
+  }
+
+  function resetControlsProfile() {
+    const profile = resetInputProfile();
+    setInputProfile(profile);
+    setGamepadReadiness(detectGamepadReadiness(profile));
+    setLastInputAction("Input defaults restored");
+    noteAction("Input profile reset to defaults.");
+    appendOpenCodeEvent("input.profile.reset", "Default keyboard and controller profile");
+  }
+
   function focusRomInput() {
     setRomInputFocused(true);
     romViewportRef.current?.focus();
@@ -2381,33 +2501,37 @@ function App() {
   }
 
   function handleRomKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const action = playerInputActionFromKey(event.key);
+    const action = playerInputActionFromKey(event.key, inputProfile);
     if (!action) return;
     event.preventDefault();
     applyLocalRomInput(action);
   }
 
   function handleRomKeyUp(event: KeyboardEvent<HTMLDivElement>) {
-    const action = playerInputActionFromKey(event.key);
+    const action = playerInputActionFromKey(event.key, inputProfile);
     if (!action) return;
     event.preventDefault();
     releaseLocalRomInput(action);
   }
 
-  function applyLocalRomInput(action: PlayerInputAction) {
+  function applyLocalRomInput(
+    action: PlayerInputAction,
+    source: "keyboard" | "controller" = "keyboard",
+  ) {
     const spriteDelta = action.spriteDelta ?? 0;
     if (spriteDelta !== 0) {
       setSpriteX((current) => Math.min(88, Math.max(12, current + spriteDelta)));
     }
+    const sourceLabel = source === "controller" ? "Controller" : "Keyboard";
     sendInteractivePlayerInput(action, "down");
     setLastPlayerInput(action);
-    setLastInputAction(action.label);
+    setLastInputAction(source === "controller" ? `${sourceLabel} ${action.label}` : action.label);
     noteAction(
       playerRuntimeRef.current
-        ? `${action.label} sent to the interactive player.`
-        : `${action.label} captured by the player input model. Press Play ROM to use it in the emulator.`,
+        ? `${sourceLabel} ${action.label} sent to the interactive player.`
+        : `${sourceLabel} ${action.label} captured by the player input model. Press Play ROM to use it in the emulator.`,
     );
-    appendOpenCodeEvent(action.event, action.detail);
+    appendOpenCodeEvent(action.event, `${sourceLabel}: ${action.detail}`);
   }
 
   function releaseLocalRomInput(action: PlayerInputAction) {
@@ -2953,6 +3077,15 @@ function App() {
                 ) : null}
                 <button
                   type="button"
+                  data-testid="open-controls"
+                  aria-expanded={controlsOpen}
+                  onClick={toggleControlsPanel}
+                >
+                  <Settings size={14} />
+                  Controls
+                </button>
+                <button
+                  type="button"
                   data-testid="rom-right-proof"
                   onClick={() => {
                     void runScriptedRightInputProof();
@@ -2963,6 +3096,17 @@ function App() {
                 </button>
               </div>
             </div>
+            {controlsOpen ? (
+              <InputControlsPanel
+                keyboardBindings={keyboardBindingRows}
+                controllerBindings={controllerBindingRows}
+                controllerConfigured={controllerMappingReady}
+                gamepadReadiness={gamepadReadiness}
+                profile={inputProfile}
+                onClose={closeControlsPanel}
+                onReset={resetControlsProfile}
+              />
+            ) : null}
           </div>
 
           <div
@@ -3353,6 +3497,94 @@ function activeRomSourceFor(
   };
 }
 
+function InputControlsPanel({
+  keyboardBindings,
+  controllerBindings,
+  controllerConfigured,
+  gamepadReadiness,
+  profile,
+  onClose,
+  onReset,
+}: {
+  keyboardBindings: Array<{ id: PlayerInputActionId; label: string; control: string }>;
+  controllerBindings: Array<{ id: PlayerInputActionId; label: string; control: string }>;
+  controllerConfigured: boolean;
+  gamepadReadiness: GamepadReadiness;
+  profile: PlayerInputProfile;
+  onClose: () => void;
+  onReset: () => void;
+}) {
+  const profileLabel = profile.source === "local" ? "Saved locally" : "Default profile";
+  const mappingLabel = controllerConfigured ? "Default mapping" : "Mapping not configured";
+  const controllerDetail =
+    gamepadReadiness.gamepadId && gamepadReadiness.state === "detected"
+      ? `${gamepadReadiness.detail} ${gamepadReadiness.gamepadId}`
+      : gamepadReadiness.detail;
+
+  return (
+    <div
+      className={`controls-panel ${gamepadReadiness.state}`}
+      data-testid="controls-panel"
+    >
+      <div className="controls-panel-head">
+        <span>
+          <Gamepad2 size={15} />
+          <strong>Controls</strong>
+          <small>{profileLabel}</small>
+        </span>
+        <button type="button" data-testid="close-controls" onClick={onClose}>
+          <X size={14} />
+          Close
+        </button>
+      </div>
+      <div className="input-status-grid">
+        <span data-testid="keyboard-readiness">
+          <KeyRound size={15} />
+          <strong>Keyboard ready</strong>
+        </span>
+        <span data-testid="controller-readiness" title={controllerDetail}>
+          <Gamepad2 size={15} />
+          <strong>{gamepadReadiness.label}</strong>
+        </span>
+        <span data-testid="controller-mapping-state">
+          <Wrench size={15} />
+          <strong>{mappingLabel}</strong>
+        </span>
+      </div>
+      <div className="input-binding-grid">
+        <section aria-label="Keyboard bindings">
+          <h4>Keyboard</h4>
+          <div className="input-binding-list">
+            {keyboardBindings.map((binding) => (
+              <span key={`keyboard-${binding.id}`}>
+                <kbd>{binding.control}</kbd>
+                {binding.label}
+              </span>
+            ))}
+          </div>
+        </section>
+        <section aria-label="Controller bindings">
+          <h4>Controller</h4>
+          <div className="input-binding-list controller">
+            {controllerBindings.map((binding) => (
+              <span key={`controller-${binding.id}`}>
+                <small>{binding.control}</small>
+                {binding.label}
+              </span>
+            ))}
+          </div>
+        </section>
+      </div>
+      <div className="controls-panel-actions">
+        <button type="button" data-testid="reset-input-profile" onClick={onReset}>
+          <RefreshCcw size={14} />
+          Reset defaults
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PlayerSessionStrip({
   proofProvider,
   readiness,
@@ -3363,7 +3595,7 @@ function PlayerSessionStrip({
   session: InteractivePlayerSession;
 }) {
   const providerState = playerProviderHealthState(session.provider.state);
-  const controllerLabel = session.input.controllerReady ? "Controller ready" : "Controller later";
+  const controllerLabel = compactControllerLabel(session.input.controller);
   const inputLabel = session.input.focused ? "Keyboard captured" : "Keyboard ready";
   const audioLabel =
     session.audio === "audible"
@@ -3401,9 +3633,9 @@ function PlayerSessionStrip({
         {inputLabel}
         <strong>{session.input.lastAction?.label ?? "No input"}</strong>
       </span>
-      <span>
+      <span title={session.input.controller.detail} data-testid="controller-session-status">
         <Gamepad2 size={15} />
-        Input
+        Pad
         <strong>{controllerLabel}</strong>
       </span>
       <span>
@@ -3413,6 +3645,12 @@ function PlayerSessionStrip({
       </span>
     </div>
   );
+}
+
+function compactControllerLabel(readiness: GamepadReadiness) {
+  if (readiness.state === "detected") return "Detected";
+  if (readiness.state === "mapping-missing") return "Mapping needed";
+  return "Unavailable";
 }
 
 function CoreReadinessPill({ readiness }: { readiness: InteractiveCoreReadiness }) {
@@ -4688,7 +4926,7 @@ function TopBar({
           <Box size={22} />
           <div>
             <strong>Drive16</strong>
-            <span>Phase 7 core setup</span>
+            <span>Phase 7 input profiles</span>
           </div>
         </div>
       </div>
