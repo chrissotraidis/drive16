@@ -10,15 +10,16 @@ D16 marks, and a bitmap wordmark.
 
 Decision:
 
-Use the orange D16 cartridge mark as both the in-app toolbar logo and the
-desktop icon source, with real transparency around the mark. Keep `Drive16` as
-real rendered text in the app instead of shipping the generated bitmap
-wordmark, so the UI stays crisp, accessible, and responsive.
+Use the orange D16 cartridge mark as the in-app toolbar logo. For the desktop
+icon and favicon, keep the original black/orange feel by placing the mark on a
+tightly trimmed dark backing, with real transparency outside the cartridge
+shape. Keep `Drive16` as real rendered text in the app instead of shipping the
+generated bitmap wordmark, so the UI stays crisp, accessible, and responsive.
 
 Consequence:
 
 The desktop icon, browser favicon, and header mark now share one recognizable
-identity without a baked black tile or image-model text.
+identity without a full baked black tile or image-model text.
 
 ## 2026-07-01 - Input profiles live with the ROM player
 

@@ -13,19 +13,19 @@ Plan:
 
 Did:
 
-- Rebuilt the app icon from the orange D16 cartridge mark with real
-  transparency around it.
+- Rebuilt the app icon as a black-backed orange D16 cartridge mark with real
+  transparency outside the trimmed logo shape.
 - Used the same D16 cartridge mark as the in-app toolbar logo.
 - Kept the Drive16 wordmark as real text instead of using the generated bitmap
   wordmark.
 - Generated the Tauri icon set, browser favicon, and React brand assets from
-  the transparent mark.
+  the corrected black/orange mark.
 
 Evidence:
 
 - `pnpm --dir app build` passed.
-- `pnpm --dir app tauri build --debug --no-bundle` passed and produced
-  `app/src-tauri/target/debug/drive16`.
+- `pnpm --dir app tauri build --debug --bundles app --no-sign` passed and
+  produced `app/src-tauri/target/debug/bundle/macos/Drive16.app`.
 - Browser render check showed the new header mark, new favicon path, no
   console errors, and no horizontal overflow.
 
