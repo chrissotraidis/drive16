@@ -1,7 +1,6 @@
 import {
   Activity,
   AlertCircle,
-  Box,
   CheckCircle2,
   Circle,
   Code2,
@@ -39,6 +38,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { unzipSync } from "fflate";
 import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import drive16Mark from "./assets/brand/drive16-mark.png";
 import {
   coreLaunchFailureReadiness,
   activeGamepadActionIds,
@@ -3343,9 +3343,10 @@ function isTauriRuntime() {
 
 function allowDevCoreCdnFallback() {
   const meta = import.meta as ImportMeta & {
-    env?: Record<string, boolean | string | undefined>;
+    env?: { DEV?: unknown };
   };
-  return meta.env?.DEV === true || meta.env?.DEV === "true";
+  const dev = meta.env?.DEV;
+  return dev === true || String(dev) === "true";
 }
 
 function isV1Prompt(text: string) {
@@ -4923,7 +4924,7 @@ function TopBar({
           <Menu size={18} />
         </button>
         <div className="brand">
-          <Box size={22} />
+          <img className="brand-mark" src={drive16Mark} alt="" aria-hidden="true" />
           <div>
             <strong>Drive16</strong>
             <span>Phase 7 input profiles</span>

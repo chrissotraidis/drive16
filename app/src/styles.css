@@ -125,8 +125,12 @@ button {
   min-width: 0;
 }
 
-.brand svg {
-  color: var(--accent);
+.brand-mark {
+  width: 42px;
+  height: 30px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(255, 139, 26, 0.12));
 }
 
 .brand strong {

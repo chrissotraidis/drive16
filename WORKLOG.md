@@ -1,5 +1,36 @@
 # Drive16 Worklog
 
+## 2026-07-02 - ITERATION 98 - Brand icon and header mark
+
+Plan:
+
+- Task: incorporate the generated Drive16 image set into the desktop icon,
+  browser favicon, and in-app header.
+- Files: `app/src/assets/brand`, `app/public`, `app/src-tauri/icons`,
+  `app/src/App.tsx`, `app/src/styles.css`, `app/index.html`,
+  `app/src-tauri/tauri.conf.json`, `DECISIONS.md`, and `WORKLOG.md`.
+- Verification: frontend build and visual check of the header mark.
+
+Did:
+
+- Chose the dark D16 cartridge image as the app icon source.
+- Chose the orange D16 cartridge mark as the in-app toolbar logo.
+- Kept the Drive16 wordmark as real text instead of using the generated bitmap
+  wordmark.
+- Generated the Tauri icon set, browser favicon, and React brand assets.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `pnpm --dir app tauri build --debug --no-bundle` passed and produced
+  `app/src-tauri/target/debug/drive16`.
+- Browser render check showed the new header mark, new favicon path, no
+  console errors, and no horizontal overflow.
+
+Gate:
+
+Passed for the brand asset refresh.
+
 ## 2026-07-01 - ITERATION 97 - Phase 7 input profiles and controller mapping
 
 Plan:
