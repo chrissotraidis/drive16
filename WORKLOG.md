@@ -13,11 +13,13 @@ Plan:
 
 Did:
 
-- Chose the dark D16 cartridge image as the app icon source.
-- Chose the orange D16 cartridge mark as the in-app toolbar logo.
+- Rebuilt the app icon from the orange D16 cartridge mark with real
+  transparency around it.
+- Used the same D16 cartridge mark as the in-app toolbar logo.
 - Kept the Drive16 wordmark as real text instead of using the generated bitmap
   wordmark.
-- Generated the Tauri icon set, browser favicon, and React brand assets.
+- Generated the Tauri icon set, browser favicon, and React brand assets from
+  the transparent mark.
 
 Evidence:
 
