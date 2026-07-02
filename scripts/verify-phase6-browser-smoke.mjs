@@ -160,6 +160,7 @@ async function main() {
   const warnings = [];
   const screenshots = [];
   const states = {};
+  let openRouterCompletionRequests = 0;
 
   try {
     const context = await browser.newContext({
@@ -176,6 +177,50 @@ async function main() {
         window.localStorage.setItem("drive16.interactiveCoreStatusOverride", coreStatus);
       }, args.coreStatus);
     }
+    await context.route("https://openrouter.ai/api/v1/key", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            label: "Drive16 smoke",
+          },
+        }),
+      });
+    });
+    await context.route("https://openrouter.ai/api/v1/chat/completions", async (route) => {
+      openRouterCompletionRequests += 1;
+      const requestBody = route.request().postDataJSON();
+      if (requestBody?.model !== "deepseek/deepseek-chat-v3.1") {
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: {
+              message: `Unexpected model ${requestBody?.model ?? "missing"}`,
+            },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          model: requestBody.model,
+          choices: [
+            {
+              message: {
+                content: "Mocked OpenRouter live reply for Drive16 smoke.",
+              },
+            },
+          ],
+          usage: {
+            prompt_tokens: 21,
+            completion_tokens: 9,
+            total_tokens: 30,
+          },
+        }),
+      });
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(args.timeoutMs);
     page.on("console", (message) => {
@@ -219,6 +264,49 @@ async function main() {
 
     await screenshot(page, args.outDir, screenshots, "01-initial.png");
 
+    await submitComposer(page, "What should I build next?");
+    await page.getByText(/Freeform model replies are paused/i).last().waitFor();
+    states.freeformGate = await visibleText(page, "conversation-mode-panel");
+    states.freeformGateMessage = await newestMessageText(page);
+    if (!/ROM proof only/i.test(states.freeformGate)) {
+      throw new Error(`No-key freeform gate did not stay in ROM proof mode: ${states.freeformGate}`);
+    }
+    if (openRouterCompletionRequests !== 0) {
+      throw new Error("OpenRouter completion was called before the key was tested.");
+    }
+
+    await page.locator(".agent-config-row button").click();
+    await page.getByTestId("openrouter-settings").waitFor();
+    await page.getByLabel("OpenRouter API key").fill("drive16-smoke-openrouter-key");
+    await page.getByRole("button", { name: "Test OpenRouter" }).click();
+    await page.waitForFunction(() => {
+      const status =
+        document.querySelector('[data-testid="model-connection-status"]')?.textContent ?? "";
+      return /Connected|OpenRouter key accepted/i.test(status);
+    });
+    states.openRouterConnection = await visibleText(page, "model-connection-status");
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByTestId("openrouter-settings").waitFor({ state: "detached" });
+    await page.waitForFunction(() => {
+      const mode = document.querySelector('[data-testid="conversation-mode-panel"]')?.textContent ?? "";
+      return /OpenRouter live/i.test(mode);
+    });
+    states.liveMode = await visibleText(page, "conversation-mode-panel");
+
+    await submitComposer(page, "Give me one compact idea for a Genesis demo.");
+    await page.getByText("Mocked OpenRouter live reply for Drive16 smoke.").waitFor();
+    states.openRouterReply = await newestMessageText(page);
+    if (openRouterCompletionRequests !== 1) {
+      throw new Error(`Expected one OpenRouter completion request, saw ${openRouterCompletionRequests}.`);
+    }
+
+    await submitComposer(page, "Make a sprite I can move left and right with music.");
+    await page.getByText(/Previewed the bundled sprite\/music ROM flow/i).last().waitFor();
+    states.corePromptReply = await newestMessageText(page);
+    if (openRouterCompletionRequests !== 1) {
+      throw new Error("CORE sprite/music prompt unexpectedly called OpenRouter.");
+    }
+
     if (args.userCorePath) {
       await page.getByTestId("core-import-input").setInputFiles(args.userCorePath);
       await page.waitForFunction(() => {
@@ -235,6 +323,26 @@ async function main() {
 
     await page.getByTestId("project-menu-toggle").click();
     await page.getByTestId("project-menu").waitFor();
+    await page.getByTestId("readiness-hub").waitFor();
+    states.readinessHub = await visibleText(page, "readiness-hub");
+    for (const expectedReadinessText of [
+      "ROM proof path",
+      "Interactive Play core",
+      "OpenRouter chat",
+      "Ollama",
+      "OpenCode and local tools",
+      "ComfyUI sprites",
+      "MML music",
+      "Release blockers",
+      "LICENSE",
+      "CSP",
+      "bundle.active",
+      "public Play core policy",
+    ]) {
+      if (!states.readinessHub.includes(expectedReadinessText)) {
+        throw new Error(`Readiness hub is missing ${expectedReadinessText}`);
+      }
+    }
     await screenshot(page, args.outDir, screenshots, "02-project-menu.png");
 
     await page.getByTestId("menu-new-project").click();
@@ -413,6 +521,19 @@ async function main() {
         `Mobile layout has horizontal overflow: ${states.mobileLayout.scrollWidth}px > ${states.mobileLayout.clientWidth}px`,
       );
     }
+    await page.getByTestId("readiness-hub-toggle").click();
+    await page.getByTestId("readiness-hub").waitFor();
+    states.mobileReadinessHub = await visibleText(page, "readiness-hub");
+    states.mobileReadinessLayout = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+      hasHorizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
+    }));
+    if (states.mobileReadinessLayout.hasHorizontalOverflow) {
+      throw new Error(
+        `Mobile readiness menu has horizontal overflow: ${states.mobileReadinessLayout.scrollWidth}px > ${states.mobileReadinessLayout.clientWidth}px`,
+      );
+    }
     await screenshot(page, args.outDir, screenshots, "04-mobile.png");
 
     const summary = {
@@ -456,6 +577,19 @@ async function screenshot(page, outDir, screenshots, name) {
 async function visibleText(page, testId) {
   return page
     .getByTestId(testId)
+    .textContent()
+    .then((text) => text?.replace(/\s+/g, " ").trim() ?? "");
+}
+
+async function submitComposer(page, text) {
+  await page.getByLabel("Message Drive16").fill(text);
+  await page.getByRole("button", { name: "Send message" }).click();
+}
+
+async function newestMessageText(page) {
+  return page
+    .locator(".messages .message")
+    .last()
     .textContent()
     .then((text) => text?.replace(/\s+/g, " ").trim() ?? "");
 }

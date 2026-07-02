@@ -22,6 +22,26 @@ interactive Play foundation, native generated-ROM Play is verified, provider
 setup is truthful, project lifecycle actions are covered, and post-v1 work is
 separated from the V1 stop line.
 
+Phase 8 Slice 1 adds live OpenRouter freeform replies. OpenRouter remains BYOK
+and the default tested model is `deepseek/deepseek-chat-v3.1`; after a key is
+tested, general chat prompts receive non-streaming OpenRouter replies while
+the CORE sprite/music prompt still routes through the local ROM proof path.
+Ollama generation remains out of scope for this slice.
+
+Phase 8 Slice 2 adds a first-run readiness hub. Click `Setup` in the top bar,
+or open the project menu, to see the current truth for ROM proof, interactive
+Play core setup, OpenRouter chat, Ollama readiness-only status, OpenCode/local
+tools, optional ComfyUI/MML enhancements, and public-release blockers.
+
+UI repair work is now paused on feature expansion and focused on making the
+normal desktop app usable. Slice 1 separates chat from proof and collapses
+secondary readiness/files/proof details. Slice 2 fixes the `Verify Right`
+stuck-status bug, improves browser-preview Play feedback, and verifies that
+the current native dev window shows the repaired Phase 8 shell. Slice 3 makes
+the default desktop shell calmer: provider/session truth sits by the composer,
+ROM/tool details start collapsed, and the player status strip keeps secondary
+details behind `More`.
+
 Phase 7 Slice 3 is implemented: interactive Play now has a local input profile
 surface. The ROM player keeps the default keyboard mapping visible, stores the
 current profile in localStorage, offers Reset defaults, detects browser
@@ -41,6 +61,14 @@ Evidence:
 - Phase 6 packet: `docs/phase6-evidence.md`
 - Product V1 packet: `docs/product-v1-evidence.md`
 - Post-v1 backlog: `docs/post-v1-backlog.md`
+- Phase 8 OpenRouter replies: `docs/phase8-openrouter-freeform-replies.md`
+- Phase 8 readiness hub: `docs/phase8-readiness-hub.md`
+- Phase 8 UI checkpoint: `docs/phase8-ui-optimization-checkpoint.md`
+- Phase 8 UI repair slice: `docs/phase8-ui-repair-slice1.md`
+- Phase 8 UI repair slice 2: `docs/phase8-ui-repair-slice2.md`
+- Phase 8 UI repair slice 3: `docs/phase8-ui-repair-slice3.md`
+- Phase 8 next-agent handoff: `docs/phase8-next-agent-handoff.md`
+- UI repair control map: `docs/ui-repair-control-map.md`
 - Phase 7 core policy: `docs/phase7-interactive-core-distribution.md`
 - Phase 7 user core flow: `docs/phase7-user-core-flow.md`
 - Phase 7 input profiles: `docs/phase7-input-profiles.md`
@@ -84,9 +112,11 @@ core as a settled commercial distribution dependency.
 
 ## What to do next
 
-Current next step: decide whether the next player slice should be a full
-remapping editor, multi-controller handling, packaged controller QA, or a
-different post-v1 product area.
+Current next step: finish the UI repair track before adding another feature
+slice. The next UI pass should run in the native Tauri window and verify every
+visible button either works, gives local feedback, or is clearly unavailable
+with a reason. If another agent picks this up, start with
+`docs/phase8-next-agent-handoff.md`.
 
 Current local validation:
 
@@ -189,8 +219,12 @@ OpenRouter hosted BYOK:
 
 1. Select OpenRouter in Agent Settings.
 2. Paste an OpenRouter API key.
-3. Select the hosted model.
+3. Select the hosted model. The current default is
+   `deepseek/deepseek-chat-v3.1`.
 4. Click Test OpenRouter.
+5. General chat prompts can now receive OpenRouter replies. The sprite/music
+   CORE prompt still uses the local proof path and does not depend on hosted
+   model replies.
 
 Ollama local:
 
@@ -248,13 +282,21 @@ scripts/validate-phase4-live-generated-assets.sh
 - Product V1 closure: generated-ROM native Play, golden path clarity, provider
   truth, project lifecycle, and final evidence packet, complete for local
   review.
+- Phase 8 Slice 1: OpenRouter-only live freeform replies, with CORE proof and
+  Ollama generation kept separate.
+- Phase 8 Slice 2: readiness / first-run hub for proof, Play, provider,
+  enhancement, and release-blocker truth.
+- Phase 8 UI repair: normal-window shell cleanup for chat/proof identity,
+  compact player controls, collapsed diagnostics, and trustworthy button
+  feedback.
 
 ## Model stance
 
 Drive16 is bring-your-own-key or local-only:
 
-- OpenRouter is the default hosted model path.
-- Ollama is the local model path.
+- OpenRouter is the default hosted model path and supports live freeform
+  replies after key testing.
+- Ollama is the local readiness path; live Ollama replies are not wired yet.
 - Direct provider keys can be added as configuration.
 - Consumer subscription login relay is out of scope.
 

@@ -1,11 +1,93 @@
 # Drive16 Progress
 
-Current phase: Phase 7 Slice 3 - input profiles and controller mapping
+Current phase: Phase 8 UI/IA repair track - Slice 3 implemented
 
 Exit criterion: a non-developer can follow the golden path from starter project
 to agent/proof build, interactive keyboard Play, Verify, Save/Open, and Export
 without ambiguous controls, while Genteel proof and interactive Play remain
 distinct.
+
+## Current Review Packet
+
+- [x] Codex current-issues report created in
+  `docs/review/2026-07-02-drive16-current-issues-report.md`.
+- [x] Fable 5 investigation prompt created in
+  `docs/review/2026-07-02-drive16-fable-5-investigation-prompt.md`.
+- [x] Fable 5 returned product audit added at
+  `docs/review/2026-07-02-fable5-product-audit.md`.
+- [x] Review packet indexed in `docs/review/README.md`.
+- [x] Post-v1 backlog updated with audit findings and the selected Phase 8
+  slice.
+- [x] Human approved the OpenRouter-only live freeform reply loop.
+- [x] Human approved the readiness / first-run truth hub loop.
+- [x] UI optimization checkpoint recorded in
+  `docs/phase8-ui-optimization-checkpoint.md`.
+- [x] UI repair control map recorded in `docs/ui-repair-control-map.md`.
+- [x] UI repair Slice 1 recorded in `docs/phase8-ui-repair-slice1.md`.
+- [x] UI repair Slice 2 recorded in `docs/phase8-ui-repair-slice2.md`.
+- [x] UI repair Slice 3 recorded in `docs/phase8-ui-repair-slice3.md`.
+- [x] Next-agent handoff recorded in `docs/phase8-next-agent-handoff.md`.
+- [ ] Human decision: confirm the project license before adding a `LICENSE`
+  file.
+
+## Phase 8 UI Repair Checklist
+
+- [x] Preserve the Phase 8 roadmap checkpoint before changing the UI.
+- [x] Create a visible-control map for primary buttons and feedback locations.
+- [x] Separate chat, setup/gating replies, proof results, and model replies.
+- [x] Move provider/session truth close to the composer.
+- [x] Collapse proof/files details out of the main conversation rail.
+- [x] Put project actions before readiness details in the project menu.
+- [x] Collapse secondary Settings sections by default.
+- [x] Fix normal-window status wrapping for the ROM/player surface.
+- [x] Default ROM/tool inspector details to collapsed on first load.
+- [x] Move provider/session truth down to the composer instead of the top of
+  the chat.
+- [x] Compress the player session strip behind a `More` disclosure.
+- [x] Run browser checks at realistic desktop sizes.
+- [x] Fix `Verify Right` so completed proof returns the header to `Ready`.
+- [x] Make browser-preview `Play ROM` feedback explain the import-or-desktop
+  next step instead of looking like a broken player.
+- [x] Relaunch and visually verify the current Phase 8 repair UI in the real
+  native Tauri window.
+- [x] Browser-audit every obvious non-file-picker primary control.
+- [ ] Run direct native Tauri-window click-through for OS file-picker flows.
+- [ ] Finish the every-visible-button trust audit for native file-picker
+  completion paths.
+
+## Phase 8 Slice 2 Checklist
+
+- [x] Keep the existing OpenRouter freeform reply and CORE proof routes intact.
+- [x] Add a compact readiness hub reachable from the main UI.
+- [x] Surface ROM proof, interactive Play core, OpenRouter chat, Ollama
+  readiness-only status, OpenCode/local tools, ComfyUI sprites, MML music, and
+  release blockers in one place.
+- [x] Keep release blockers truthful without changing licensing, bundling, CSP,
+  signing, or public core policy.
+- [x] Extend browser smoke coverage so the hub opens, required statuses render,
+  and the mobile-width hub has no horizontal overflow.
+- [x] Update README, progress/worklog, decisions, backlog, review index, and
+  Phase 8 docs.
+- [x] Run native formatting and tests.
+- [x] Run the full Phase 6 browser loop.
+- [x] Run secret hygiene checks.
+
+## Phase 8 Slice 1 Checklist
+
+- [x] Keep OpenRouter as the only live provider for this slice.
+- [x] Use `deepseek/deepseek-chat-v3.1` as the default cheap tested model.
+- [x] Add a small OpenRouter chat-completions client without persisting keys.
+- [x] Keep CORE sprite/music prompts on the local proof path.
+- [x] Render OpenRouter-tested freeform replies as model replies.
+- [x] Keep Ollama live replies out of scope with truthful copy.
+- [x] Leave OpenCode no-reply logging best-effort and non-blocking.
+- [x] Add browser smoke coverage for no-key gate, mocked OpenRouter reply, and
+  CORE prompt routing.
+- [x] Update README, progress/worklog, decisions, backlog, and Phase 8 docs.
+- [x] Run native formatting and tests.
+- [x] Run the full Phase 6 browser loop.
+- [x] Run a live one-shot OpenRouter manual test with the temporary key.
+- [x] Run secret hygiene checks for tracked files and generated artifacts.
 
 ## Phase 7 Slice 3 Checklist
 
@@ -89,14 +171,21 @@ distinct.
 
 ## Current Task
 
-Phase 7 Slice 3 implemented a local input profile and controller-ready Controls
-surface. The current posture is `Keyboard ready`, `Controller unavailable` when
-no controller is visible, `Controller detected` when a mapped browser gamepad
-is connected, and `Mapping not configured` if a visible controller lacks a
-complete action map.
+Phase 8 UI repair Slice 3 keeps feature work paused and makes the normal
+desktop shell calmer by default: chat stays chat, provider/session truth sits
+near the composer, ROM/tool details start collapsed, and the player status row
+is no longer a wall of clipped chips.
 
 Evidence is recorded in:
 
+- `docs/phase8-ui-repair-slice1.md`
+- `docs/phase8-ui-repair-slice2.md`
+- `docs/phase8-ui-repair-slice3.md`
+- `docs/phase8-next-agent-handoff.md`
+- `docs/ui-repair-control-map.md`
+- `docs/phase8-ui-optimization-checkpoint.md`
+- `docs/phase8-readiness-hub.md`
+- `docs/phase8-openrouter-freeform-replies.md`
 - `docs/phase7-interactive-core-distribution.md`
 - `docs/phase7-user-core-flow.md`
 - `docs/phase7-input-profiles.md`
@@ -115,9 +204,14 @@ Evidence is recorded in:
 Product V1 closure is complete for the local review scope. The selected first
 post-v1 core-distribution work now has both the explicit policy and a
 user-supplied core setup flow. Input profile persistence and basic controller
-detection/mapping are now complete. The next logical player slice is either a
-full remapping editor, multi-controller handling, packaged controller QA, or a
-different post-v1 product area.
+detection/mapping are now complete.
+
+Phase 8 Slice 2 is verified, but feature work is paused for a UI/IA repair
+track. Slices 1 through 3 of that repair are implemented. Browser interaction
+checks now pass for chat identity, player feedback, compact default details,
+Setup, Settings, and normal desktop scaling. Next, complete direct native
+click-through for OS file-picker flows before returning to the phase roadmap.
+For handoff, start with `docs/phase8-next-agent-handoff.md`.
 
 ## Completed Phase 6 Work
 

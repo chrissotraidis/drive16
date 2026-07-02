@@ -1,5 +1,345 @@
 # Drive16 Worklog
 
+## 2026-07-02 - ITERATION 106 - handoff checkpoint and publish prep
+
+Plan:
+
+- Task: document the current Phase 8 UI repair state so another agent can pick
+  up from the exact pause point, then prepare the current progress for GitHub.
+- Files: `docs/phase8-next-agent-handoff.md`, `README.md`, `PROGRESS.md`,
+  `WORKLOG.md`, `docs/phase8-ui-optimization-checkpoint.md`, and
+  `docs/post-v1-backlog.md`.
+- Verification: app build, diff hygiene, and secret scan before commit/push.
+
+Did:
+
+- Added a next-agent handoff doc with current truth, verified checks, native
+  gaps, release decisions, provider/secret rules, and the first resume slice.
+- Linked the handoff from README and the progress ledger.
+- Preserved the current next step: finish native file-picker click-through for
+  `Import ROM` and `Choose Core` / `Set Up Play` before returning to feature
+  work.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+- Strict repo secret scan found no actual OpenRouter key-shaped values.
+- Staged diff hygiene check passed.
+- Staged secret scan found no actual OpenRouter key-shaped values.
+
+Gate:
+
+No phase gate. This is a handoff and GitHub sync checkpoint.
+
+## 2026-07-02 - ITERATION 105 - UI repair slice 3
+
+Plan:
+
+- Task: continue the UI/IA repair track by making the default desktop shell
+  calmer and verifying normal-window behavior.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/phase8-ui-repair-slice3.md`, `docs/ui-repair-control-map.md`,
+  `docs/phase8-ui-optimization-checkpoint.md`, `PROGRESS.md`, `WORKLOG.md`,
+  and `README.md`.
+- Verification: frontend build, diff hygiene, browser responsive checks, and
+  browser interaction checks for chat, player feedback, Setup, Settings, and
+  details expansion.
+
+Did:
+
+- Moved provider/session truth from the top of the conversation to a compact
+  row above the composer.
+- Defaulted ROM/tool details to collapsed so the player and controls are the
+  default workspace.
+- Compressed the player session strip to current ROM, Play, Input, and `More`.
+- Moved Verify/core/controller/audio status behind the player `More`
+  disclosure.
+- Fixed normal-window wrapping in the composer session row and compact status
+  summary.
+- Recorded Slice 3 evidence and updated the UI repair checkpoint/control map.
+
+Evidence:
+
+- Browser checks at `1440x900`, `1180x780`, and `1040x740` found no horizontal
+  overflow and no detected clipped visible button/message/session/status text.
+- Sending `hey` with no session OpenRouter key rendered a normal `You` message
+  and a `Drive16` setup reply, not a proof result.
+- `Play ROM` showed browser-preview import-or-desktop feedback near the player.
+- `Verify Right` completed with `Right proof passed` and appended a
+  `Proof result`.
+- `Show Details` expanded the ROM/tool inspector.
+- `Setup` opened with Actions as the first visible section and readiness
+  details collapsed.
+- Agent Settings opened with secondary sections collapsed; switching to Ollama
+  hid OpenRouter fields and changed the composer to `Ollama readiness only`.
+- Browser console warning/error log was empty.
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+
+Gate:
+
+Passed for browser-preview Slice 3. Direct native file-picker click-through
+remains open for `Import ROM` and `Choose Core` / `Set Up Play`.
+
+Pause:
+
+- Native OS file-picker verification was started but deliberately stopped when
+  the user needed the computer.
+- The current native dev window had visually shown the Slice 3 UI before the
+  native click-through attempt.
+- A coordinate click was not trusted after macOS focus moved to another
+  foreground app, so no native file-picker completion should be considered
+  verified from that attempt.
+- Resume with the remaining native-only checks: `Import ROM` and `Choose Core`
+  / `Set Up Play`.
+
+## 2026-07-02 - ITERATION 104 - UI repair slice 2
+
+Plan:
+
+- Task: continue the UI/IA repair track by verifying button trust and current
+  native-window state.
+- Files: `app/src/App.tsx`, `docs/ui-repair-control-map.md`,
+  `docs/phase8-ui-repair-slice2.md`,
+  `docs/phase8-ui-optimization-checkpoint.md`, `PROGRESS.md`, `WORKLOG.md`,
+  and `README.md`.
+- Verification: browser responsive checks, browser interaction checks, native
+  current-window visual verification, frontend build, and diff hygiene.
+
+Did:
+
+- Fixed `Verify Right` so successful scripted proof returns the app header to
+  `Ready` instead of staying stuck on `Verifying`.
+- Changed browser-preview `Play ROM` feedback to explain that disk-backed ROMs
+  need either a browser-session import or the desktop app.
+- Added stable test hooks for Agent Settings, the composer mode label, and the
+  settings panel.
+- Expanded the control map with current actual action, feedback, and status.
+- Found and stopped stale Drive16 windows that were still showing the old Phase
+  7 UI, then relaunched the current Tauri dev app.
+- Verified the current native desktop window shows the repaired Phase 8 shell.
+
+Evidence:
+
+- Browser checks at `1440x900`, `1180x780`, and `1040x740` found no horizontal
+  overflow, no detected clipped button/message/status text, and correct
+  `Drive16` / `You` / `Proof result` message identity.
+- Browser interaction checks verified `Play ROM`, `Verify Right`, Agent
+  Settings, OpenRouter/Ollama switching, Settings collapse defaults, and
+  action-first Setup/project drawer behavior.
+- Browser console warning/error log was empty after the interaction pass.
+- Native window check verified the current raw dev process at `1440x900` and
+  captured the Phase 8 repair UI in the desktop window.
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+
+Gate:
+
+Passed for browser interaction and native visual verification. Direct native
+file-picker click-through remains open for `Import ROM` and `Choose Core`.
+
+## 2026-07-02 - ITERATION 103 - UI repair slice 1
+
+Plan:
+
+- Task: start the approved UI/IA repair track without adding backend features.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `docs/ui-repair-control-map.md`, `docs/phase8-ui-repair-slice1.md`,
+  `docs/phase8-ui-optimization-checkpoint.md`, `PROGRESS.md`, `WORKLOG.md`,
+  and `README.md`.
+- Verification: frontend build, whitespace diff check, and rendered browser
+  checks at realistic desktop window sizes.
+
+Did:
+
+- Added a visible-control map for primary shell, conversation, ROM workspace,
+  project drawer, and settings controls.
+- Separated normal chat, setup/gating replies, proof results, and OpenRouter
+  model replies.
+- Moved provider/session truth into the composer area so missing in-memory
+  OpenRouter keys are visible where chat happens.
+- Collapsed proof events and project files out of the main conversation rail.
+- Reordered the project menu so actions come before readiness details.
+- Collapsed Settings detail groups by default and hid irrelevant provider
+  fields after switching providers.
+- Reworked player/status rows so normal desktop windows do not destroy meaning
+  through truncation.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `git diff --check` passed.
+- In-app browser checks at `1440x900`, `1100x760`, and `900x760` found no
+  horizontal overflow, no detected meaning-destroying clipped text, and no
+  console warnings/errors.
+- Sending `hey` with no session OpenRouter key rendered a `You` message and a
+  `Drive16` setup reply, not a false proof result.
+- Project menu actions rendered before collapsed readiness details.
+- Settings provider switching hid OpenRouter fields when Ollama was selected,
+  and secondary sections were collapsed by default.
+
+Gate:
+
+Passed for browser-preview UI repair Slice 1. Native Tauri-window click-through
+and the full every-visible-button trust audit remain open before the UI repair
+track is complete.
+
+## 2026-07-02 - ITERATION 102 - UI optimization planning checkpoint
+
+Plan:
+
+- Task: pause feature work, document the current Phase 8 state, and plan the
+  UI/IA repair track before making further app changes.
+- Files: `docs/phase8-ui-optimization-checkpoint.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+
+Did:
+
+- Added a checkpoint doc with the verified Phase 8 state and the unresolved
+  decisions to return to after UI repair.
+- Recorded the user-observed UI problems: confusing chat/proof identity,
+  provider/key state confusion, poor normal-window scaling, excessive menu
+  sprawl, truncated status chips, and scattered control feedback.
+- Marked the next work as a UI/IA repair track rather than another feature
+  phase.
+
+Gate:
+
+Planning only. No UI implementation started in this iteration.
+
+## 2026-07-02 - ITERATION 101 - Phase 8 readiness / first-run hub
+
+Plan:
+
+- Task: implement the approved Phase 8 Slice 2 readiness / first-run truth hub.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `scripts/verify-phase6-browser-smoke.mjs`, `README.md`, `PROGRESS.md`,
+  `WORKLOG.md`, `DECISIONS.md`, `docs/post-v1-backlog.md`,
+  `docs/review/README.md`, and `docs/phase8-readiness-hub.md`.
+- Verification: frontend build, native checks, full browser loop, and secret
+  hygiene.
+
+Did:
+
+- Added a top-level `Setup` action that opens the project menu.
+- Added a compact readiness hub to the project menu.
+- Consolidated ROM proof, interactive Play core, OpenRouter chat, Ollama
+  readiness-only status, OpenCode/local tools, ComfyUI sprites, MML music, and
+  release blockers into one first-run surface.
+- Kept release blockers visible without changing license, packaging, CSP,
+  signing, public core policy, or emulator-core distribution.
+- Extended the browser smoke to open the hub, assert required statuses and
+  release blockers, and check mobile-width hub overflow.
+
+Evidence so far:
+
+- `pnpm --dir app build` passed.
+- `node --check scripts/verify-phase6-browser-smoke.mjs` passed.
+- In-app Browser rendered check passed: `Setup` opened the readiness hub,
+  required status labels were visible, no horizontal overflow was reported in
+  the checked viewport, and console warnings/errors were `0`.
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 51 passed,
+  0 failed, 4 ignored.
+- `scripts/verify-phase6-loop.sh --browser` passed with evidence under
+  `artifacts/phase6/verify-loop/20260702-152451`.
+- Explicit secret scan found no `sk-or-v1-` key pattern.
+- Tracked artifact scan found no tracked `.wasm`, `.zip`, `.safetensors`,
+  `.ckpt`, `.bin`, `.gen`, or `.smd` files.
+
+Gate:
+
+Passed for Phase 8 Slice 2.
+
+## 2026-07-02 - ITERATION 100 - Phase 8 OpenRouter freeform replies
+
+Plan:
+
+- Task: implement the approved Phase 8 Slice 1 loop for real OpenRouter
+  freeform replies.
+- Files: `app/src/App.tsx`, `app/src/agent/openrouter.ts`,
+  `scripts/verify-phase6-browser-smoke.mjs`, `README.md`, `PROGRESS.md`,
+  `WORKLOG.md`, `DECISIONS.md`, `docs/post-v1-backlog.md`, and
+  `docs/phase8-openrouter-freeform-replies.md`.
+- Verification: frontend build, browser smoke for no-key gate/mocked reply/CORE
+  route, native checks, full browser loop, live one-shot OpenRouter test, and
+  secret hygiene.
+
+Did:
+
+- Added a small OpenRouter chat-completions client.
+- Set `deepseek/deepseek-chat-v3.1` as the default OpenRouter model for the
+  first live-reply slice.
+- Wired tested OpenRouter freeform prompts to produce real non-streaming model
+  replies.
+- Kept the CORE sprite/music prompt on the local proof path.
+- Kept Ollama generation out of scope with truthful paused copy.
+- Made OpenCode no-reply logging best-effort so it does not block live hosted
+  replies.
+- Extended browser smoke to cover no-key gate, mocked OpenRouter reply, and
+  CORE prompt routing.
+
+Evidence so far:
+
+- `pnpm --dir app build` passed.
+- `node --check scripts/verify-phase6-browser-smoke.mjs` passed.
+- Focused browser smoke passed with evidence under
+  `artifacts/phase8/browser-smoke-openrouter-missing-core`.
+- `cargo fmt --manifest-path app/src-tauri/Cargo.toml -- --check` passed.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml` passed with 51 passed,
+  0 failed, 4 ignored.
+- Full Phase 6 browser loop passed after the Phase 8 label fix with evidence
+  under `artifacts/phase6/verify-loop/20260702-143052`.
+- Live OpenRouter one-shot passed on `deepseek/deepseek-chat-v3.1` with reply
+  `drive16-phase8-live-ok` and 34 total tokens. The temporary key was supplied
+  through a silent stdin prompt and was not written to repo files or artifacts.
+- Headless app-level live OpenRouter test passed: Agent Settings accepted the
+  temporary key, conversation mode switched to `OpenRouter live`, the rendered
+  model reply was `drive16-app-live-ok`, and console errors were `0`.
+- Secret scan found no `sk-or-v1-` key pattern in tracked files or generated
+  artifacts.
+- In-app browser sanity check showed `Phase 8 OpenRouter replies`, DeepSeek
+  V3.1, no framework overlay, and no console warnings/errors.
+
+Gate:
+
+Passed for Phase 8 Slice 1.
+
+## 2026-07-02 - ITERATION 99 - Fable audit ingestion
+
+Plan:
+
+- Task: incorporate the returned Fable 5 product audit into Drive16's review
+  record and compare its recommendations against the repo before choosing the
+  next implementation loop.
+- Files: `docs/review`, `docs/post-v1-backlog.md`, `PROGRESS.md`, and
+  `WORKLOG.md`.
+- Verification: spot-check the audit's major claims against the current code
+  and run docs whitespace hygiene.
+
+Did:
+
+- Added a review-packet index at `docs/review/README.md`.
+- Recorded the Fable audit as a decision-support document, not an approved
+  implementation plan.
+- Updated the post-v1 backlog to show the audit-backed candidate next slice:
+  OpenRouter-only live freeform replies with the local proof path untouched.
+- Updated `PROGRESS.md` so the current state reflects audit review instead of
+  implying controller mapping is still the active implementation slice.
+- Independently checked the major audit claims: freeform chat is still
+  gated/no-reply, the dev CDN core fallback is gated to development builds,
+  bundling remains disabled, CSP is null, and no `LICENSE` file exists while
+  Cargo declares MIT.
+
+Evidence:
+
+- `git diff --check` passed after the documentation updates.
+
+Gate:
+
+Ready for human discussion. No implementation decision has been made yet.
+
 ## 2026-07-02 - ITERATION 98 - Brand icon and header mark
 
 Plan:

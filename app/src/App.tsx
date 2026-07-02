@@ -40,6 +40,11 @@ import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import drive16Mark from "./assets/brand/drive16-mark.png";
 import {
+  defaultOpenRouterModel,
+  openRouterFreeformMessages,
+  sendOpenRouterFreeformReply,
+} from "./agent/openrouter";
+import {
   coreLaunchFailureReadiness,
   activeGamepadActionIds,
   controllerProfileConfigured,
@@ -81,7 +86,7 @@ type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
 type ModelProvider = "openrouter" | "ollama";
 type ConnectionState = HealthState | "idle" | "testing";
-type MessageSource = "local" | "opencode" | "model";
+type MessageSource = "proof" | "system" | "opencode" | "model";
 
 type Message = {
   id: number;
@@ -110,6 +115,20 @@ type HealthCheck = {
   state: HealthState;
   detail: string;
   hints?: string[];
+};
+
+type ReadinessHubItem = {
+  name: string;
+  state: HealthState;
+  status: string;
+  detail: string;
+  nextAction: string;
+};
+
+type ReadinessHubSummary = {
+  state: HealthState;
+  label: string;
+  detail: string;
 };
 
 type PreflightReport = {
@@ -380,6 +399,7 @@ const defaultComfyUiCheckpoint = "sd_xl_base_1.0.safetensors";
 const defaultComfyUiLora = "pixel-art-xl.safetensors";
 
 const preferredOpenRouterModels = [
+  defaultOpenRouterModel,
   "~anthropic/claude-sonnet-latest",
   "~openai/gpt-latest",
   "~google/gemini-pro-latest",
@@ -389,6 +409,10 @@ const preferredOpenRouterModels = [
 ];
 
 const fallbackModelOptions: ModelOption[] = [
+  {
+    id: defaultOpenRouterModel,
+    name: "DeepSeek V3.1",
+  },
   {
     id: "~anthropic/claude-sonnet-latest",
     name: "Claude Sonnet Latest",
@@ -407,7 +431,7 @@ const starterMessages: Message[] = [
   {
     id: 1,
     role: "agent",
-    source: "local",
+    source: "system",
     body: "Starter project loaded. Blank ROM proof preview is ready.",
     time: "09:41",
   },
@@ -420,7 +444,7 @@ const starterMessages: Message[] = [
   {
     id: 3,
     role: "agent",
-    source: "local",
+    source: "proof",
     body: "Local proof path is ready: that prompt builds the bundled sprite/music ROM and verifies movement and audio.",
     time: "09:42",
   },
@@ -624,7 +648,7 @@ function App() {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [emulatorFocused, setEmulatorFocused] = useState(false);
   const [conversationCollapsed, setConversationCollapsed] = useState(false);
-  const [statusCollapsed, setStatusCollapsed] = useState(false);
+  const [statusCollapsed, setStatusCollapsed] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [romInputFocused, setRomInputFocused] = useState(false);
   const [inputProfile, setInputProfile] = useState<PlayerInputProfile>(() => loadInputProfile());
@@ -940,8 +964,9 @@ function App() {
         ollamaModel,
         modelConnection,
         openCode,
+        openRouterKey.trim().length > 0,
       ),
-    [activeModel, modelConnection, modelProvider, ollamaModel, openCode],
+    [activeModel, modelConnection, modelProvider, ollamaModel, openCode, openRouterKey],
   );
 
   const activeRomSource = useMemo(
@@ -1021,11 +1046,11 @@ function App() {
         activeModel,
         ollamaModel,
         modelConnection,
-        openCode,
+        openRouterKey.trim().length > 0,
       );
       if (gateMessage) {
         appendOpenCodeEvent("message.gated", gateMessage);
-        setMessages((current) => [...current, makeMessage("agent", gateMessage, "local")]);
+        setMessages((current) => [...current, makeMessage("agent", gateMessage, "system")]);
         noteAction("Freeform model replies are paused. ROM-changing prompts still work.");
         setOpenCodeBusy(false);
         return;
@@ -1040,17 +1065,6 @@ function App() {
     } catch (error) {
       const detail = error instanceof Error ? error.message : "OpenCode message send failed";
       appendOpenCodeEvent("message.local", detail);
-      if (!shouldRunV1) {
-        const agentMessage = makeMessage(
-          "agent",
-          `The message stayed local. Freeform model replies are paused because ${detail}. ROM-changing prompts still use the verified local build path.`,
-          "local",
-        );
-        setMessages((current) => [...current, agentMessage]);
-        noteAction("Message handled locally. ROM-changing prompts are still available.");
-        setOpenCodeBusy(false);
-        return;
-      }
     }
 
     try {
@@ -1074,7 +1088,7 @@ function App() {
         const agentMessage = makeMessage(
           "agent",
           promptReadyMessage(shouldRunGeneratedMusic, shouldRunGeneratedSprite),
-          "local",
+          "proof",
         );
         setMessages((current) => [...current, agentMessage]);
         const readyEvent = shouldRunGeneratedSprite
@@ -1084,32 +1098,46 @@ function App() {
             : "v1.ready";
         appendOpenCodeEvent(readyEvent, promptResult.romPath);
       } else {
+        const reply = await sendOpenRouterFreeformReply({
+          apiKey: openRouterKey,
+          model: activeModel,
+          messages: openRouterFreeformMessages(messages, trimmed),
+        });
         const agentMessage = makeMessage(
           "agent",
-          openCodeResult
-            ? `Logged to OpenCode session ${shortIdentifier(
-                openCodeResult.sessionId,
-              )} without requesting a model reply. Live freeform answer streaming is not wired in this shell yet; ROM-changing prompts use the verified local build path.`
-            : "Message captured locally. Live freeform answer streaming is not wired in this shell yet; ROM-changing prompts use the verified local build path.",
-          openCodeResult ? "opencode" : "local",
+          reply.content,
+          "model",
         );
         setMessages((current) => [...current, agentMessage]);
-        noteAction("Message captured without a live model reply.");
+        appendOpenCodeEvent(
+          "message.model",
+          `${shortModelLabel(reply.model)} replied${
+            reply.totalTokens ? ` (${reply.totalTokens} tokens)` : ""
+          }.`,
+        );
+        if (openCodeResult) {
+          appendOpenCodeEvent("message.logged", shortIdentifier(openCodeResult.sessionId));
+        }
+        noteAction("OpenRouter freeform reply received. ROM proof path unchanged.");
       }
       setBuildState("running");
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "OpenCode message send failed";
+      const detail = error instanceof Error ? error.message : "OpenRouter reply failed";
       const agentMessage = makeMessage(
         "agent",
         shouldRunV1
           ? `The v1 ROM proof could not finish yet. ${detail}`
-          : `OpenCode bridge could not send that yet. ${detail}`,
-        "local",
+          : `${openRouterReplyFailureMessage(detail)} ROM-changing prompts still use the verified local build path.`,
+        shouldRunV1 ? "proof" : "system",
       );
       setMessages((current) => [...current, agentMessage]);
-      appendOpenCodeEvent(shouldRunV1 ? "v1.failed" : "message.failed", detail);
-      setBuildState("error");
-      setV1PromptSource("error");
+      appendOpenCodeEvent(shouldRunV1 ? "v1.failed" : "message.model.failed", detail);
+      if (shouldRunV1) {
+        setBuildState("error");
+        setV1PromptSource("error");
+      } else {
+        setBuildState("running");
+      }
     } finally {
       setOpenCodeBusy(false);
     }
@@ -1357,6 +1385,7 @@ function App() {
     setImportResult(undefined);
     setV1PromptResult(result);
     setV1PromptSource(isTauriRuntime() ? "tauri" : "preview");
+    setBuildState("running");
     setStarterSource(isTauriRuntime() ? "tauri" : "preview");
     setStarterBusy(false);
     setTransport("running");
@@ -2248,6 +2277,21 @@ function App() {
       return;
     }
 
+    if (!isTauriRuntime() && loadedPlayerRom?.sourcePath !== activeRomSource.path) {
+      const detail =
+        "Browser preview cannot read this ROM from disk. Import a ROM in this browser session or use the desktop app to Play the current project.";
+      setPlayerState("stopped");
+      setPlayerCanvasActive(false);
+      setProjectActionNotice({
+        state: "warning",
+        label: "Desktop app needed for Play",
+        detail,
+      });
+      noteAction(detail);
+      appendOpenCodeEvent("player.desktop_needed", detail);
+      return;
+    }
+
     setPlayerState("loading");
     setPlayerCanvasActive(true);
     noteAction(`Preparing ${activeRomSource.label} for interactive Play.`);
@@ -2570,7 +2614,7 @@ function App() {
         makeMessage(
           "agent",
           "Scripted Right-input proof passed. The CORE ROM moved the sprite right through the verified Genteel path.",
-          "local",
+          "proof",
         ),
       ]);
       noteAction("Scripted Right-input proof completed.");
@@ -2582,7 +2626,7 @@ function App() {
       setLastInputAction("Right proof failed");
       setMessages((current) => [
         ...current,
-        makeMessage("agent", `Scripted Right-input proof failed. ${detail}`, "local"),
+        makeMessage("agent", `Scripted Right-input proof failed. ${detail}`, "proof"),
       ]);
       noteAction(`Right-input proof failed: ${detail}`);
       appendOpenCodeEvent("input.proof.failed", detail);
@@ -2709,6 +2753,7 @@ function App() {
           void saveProject();
         }}
         onToggleMenu={() => setProjectMenuOpen((current) => !current)}
+        onOpenReadiness={() => setProjectMenuOpen(true)}
         runBusy={starterBusy || buildState === "building"}
         saveBusy={saveBusy}
       />
@@ -2732,34 +2777,12 @@ function App() {
               <button
                 className="icon-button"
                 aria-label="Agent settings"
+                data-testid="agent-settings-icon"
                 onClick={() => setSettingsOpen(true)}
               >
                 <Settings size={18} />
               </button>
             </div>
-          </div>
-
-          <div className="agent-config-row" data-testid="agent-config-row">
-            <span title={providerTitle(modelProvider, activeModel, ollamaEndpoint, ollamaModel)}>
-              <KeyRound size={15} />
-              Inference
-              <strong>{providerDisplayLabel(modelProvider, activeModel, ollamaModel)}</strong>
-            </span>
-            <button type="button" onClick={() => setSettingsOpen(true)}>
-              Agent Settings
-            </button>
-          </div>
-
-          <div
-            className={`conversation-mode-panel ${conversationMode.state}`}
-            data-testid="conversation-mode-panel"
-          >
-            <span>
-              {healthIcon(conversationMode.state)}
-              Mode
-              <strong>{conversationMode.label}</strong>
-            </span>
-            <small>{conversationMode.detail}</small>
           </div>
 
           <div className="messages" aria-label="Message history" ref={messagesRef}>
@@ -2777,79 +2800,40 @@ function App() {
             ))}
           </div>
 
-          <div className="split-panel">
-            <section className="tool-stream" aria-label="Agent steps">
-              <SectionTitle icon={<TerminalSquare size={16} />} title="Proof" />
-              <ol>
-                {runSteps.map((step) => (
-                  <li className={step.state} key={step.label}>
-                    <span className="step-dot" aria-hidden="true">
-                      {step.state === "done" ? (
-                        <CheckCircle2 size={14} />
-                      ) : step.state === "active" ? (
-                        <Activity size={14} />
-                      ) : (
-                        <Circle size={14} />
-                      )}
-                    </span>
-                    <span>
-                      <strong>{step.label}</strong>
-                      <small>{step.detail}</small>
-                    </span>
-                  </li>
-                ))}
-              </ol>
-              <div className="event-feed" data-testid="opencode-event-feed">
-                <strong>Events</strong>
-                {openCodeEvents.length > 0 ? (
-                  openCodeEvents.map((event) => (
-                    <p key={event.id}>
-                      <span>{event.time}</span>
-                      <b>{event.type}</b>
-                      <small>{event.detail}</small>
-                    </p>
-                  ))
-                ) : (
-                  <p>
-                    <span>{sourceLabel(openCodeSource, "OpenCode bridge")}</span>
-                    <b>{openCode.state === "ready" ? "ready" : "waiting"}</b>
-                    <small>{openCode.detail}</small>
-                  </p>
-                )}
-              </div>
-            </section>
-
-            <section className="file-tree" aria-label="Project files">
-              <SectionTitle icon={<FolderTree size={16} />} title="Files" />
-              <div className="project-summary" data-testid="project-summary">
-                <strong>{projectSummary.name}</strong>
-                <span title={projectSummary.projectPath}>
-                  {shortPath(projectSummary.projectPath)}
-                </span>
-                <small>{sourceLabel(projectSource, "Native project")}</small>
-              </div>
-              <ul>
-                {projectSummary.files.map((file) => (
-                  <li className={file.state} key={file.path}>
-                    <Code2 size={14} />
-                    <span>
-                      <b>{file.label}</b>
-                      <small title={file.path}>{shortPath(file.path)}</small>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+          <div
+            className={`composer-session ${conversationMode.state}`}
+            data-testid="conversation-mode-panel"
+          >
+            <span title={providerTitle(modelProvider, activeModel, ollamaEndpoint, ollamaModel)}>
+              {healthIcon(conversationMode.state)}
+              <strong>{conversationMode.label}</strong>
+              <small>{conversationMode.detail}</small>
+            </span>
+            <button
+              type="button"
+              data-testid="agent-settings-open"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings size={15} />
+              Settings
+            </button>
           </div>
 
-          <form className="composer" onSubmit={submitMessage}>
+          <form className={`composer ${conversationMode.state}`} onSubmit={submitMessage}>
             <MessageSquareText size={18} />
-            <input
-              aria-label="Message Drive16"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask Drive16 to change the ROM"
-            />
+            <label className="composer-field" data-testid="composer-mode-label">
+              <span>{conversationMode.label}</span>
+              <input
+                aria-label="Message Drive16"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={
+                  conversationMode.state === "ready"
+                    ? "Message Drive16 or ask for a ROM change"
+                    : "Ask for ROM changes"
+                }
+              />
+            </label>
             <button aria-label="Send message" type="submit" disabled={openCodeBusy}>
               <Send size={18} />
             </button>
@@ -3212,6 +3196,31 @@ function App() {
                     : "Pending"}
                 </strong>
               </div>
+              <details className="inspector-details">
+                <summary>
+                  <FolderTree size={15} />
+                  Project files
+                  <small>{sourceLabel(projectSource, "Native project")}</small>
+                </summary>
+                <div className="project-summary" data-testid="project-summary">
+                  <strong>{projectSummary.name}</strong>
+                  <span title={projectSummary.projectPath}>
+                    {shortPath(projectSummary.projectPath)}
+                  </span>
+                  <small>{sourceLabel(projectSource, "Native project")}</small>
+                </div>
+                <ul className="compact-file-list" aria-label="Project files">
+                  {projectSummary.files.map((file) => (
+                    <li className={file.state} key={file.path}>
+                      <Code2 size={14} />
+                      <span>
+                        <b>{file.label}</b>
+                        <small title={file.path}>{shortPath(file.path)}</small>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </section>
 
             <section className="runtime-panel" aria-label="Tool health">
@@ -3251,6 +3260,50 @@ function App() {
                   </div>
                 ))}
               </div>
+              <details className="inspector-details">
+                <summary>
+                  <TerminalSquare size={15} />
+                  Proof and events
+                  <small>{openCodeEvents.length > 0 ? `${openCodeEvents.length} recent` : "waiting"}</small>
+                </summary>
+                <ol className="proof-step-list" aria-label="Proof steps">
+                  {runSteps.map((step) => (
+                    <li className={step.state} key={step.label}>
+                      <span className="step-dot" aria-hidden="true">
+                        {step.state === "done" ? (
+                          <CheckCircle2 size={14} />
+                        ) : step.state === "active" ? (
+                          <Activity size={14} />
+                        ) : (
+                          <Circle size={14} />
+                        )}
+                      </span>
+                      <span>
+                        <strong>{step.label}</strong>
+                        <small>{step.detail}</small>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <div className="event-feed compact" data-testid="opencode-event-feed">
+                  <strong>Events</strong>
+                  {openCodeEvents.length > 0 ? (
+                    openCodeEvents.map((event) => (
+                      <p key={event.id}>
+                        <span>{event.time}</span>
+                        <b>{event.type}</b>
+                        <small>{event.detail}</small>
+                      </p>
+                    ))
+                  ) : (
+                    <p>
+                      <span>{sourceLabel(openCodeSource, "OpenCode bridge")}</span>
+                      <b>{openCode.state === "ready" ? "ready" : "waiting"}</b>
+                      <small>{openCode.detail}</small>
+                    </p>
+                  )}
+                </div>
+              </details>
             </section>
           </div>
         </section>
@@ -3264,6 +3317,7 @@ function App() {
           comfyUiLora={comfyUiLora}
           connection={modelConnection}
           enhancements={enhancements}
+          interactiveCoreReadiness={interactiveCoreReadiness}
           modelOptions={modelOptions}
           modelProvider={modelProvider}
           modelsSource={modelsSource}
@@ -3276,6 +3330,9 @@ function App() {
           onComfyUiEndpointChange={handleComfyUiEndpointChange}
           onComfyUiLoraChange={handleComfyUiLoraChange}
           onEnhancementChange={handleEnhancementChange}
+          onChooseCore={() => {
+            void chooseInteractiveCore();
+          }}
           onModelChange={handleOpenRouterModelChange}
           onOllamaEndpointChange={handleOllamaEndpointChange}
           onOllamaModelChange={handleOllamaModelChange}
@@ -3290,22 +3347,34 @@ function App() {
       {projectMenuOpen ? (
         <ProjectMenu
           activeModel={activeModel}
+          buildState={buildState}
+          comfyUiCheckpoint={comfyUiCheckpoint}
+          comfyUiConnection={comfyUiConnection}
+          comfyUiLora={comfyUiLora}
+          conversationMode={conversationMode}
+          enhancements={enhancements}
           exportBusy={exportBusy}
           exportResult={exportResult}
           interactiveCoreBusy={interactiveCoreBusy}
+          interactiveCoreReadiness={interactiveCoreReadiness}
           interactiveCoreStatus={interactiveCoreStatus}
           importBusy={importBusy}
           importReadiness={importReadiness}
           importResult={importResult}
+          modelConnection={modelConnection}
           modelProvider={modelProvider}
           ollamaEndpoint={ollamaEndpoint}
           ollamaModel={ollamaModel}
+          openCode={openCode}
+          openRouterKeyPresent={openRouterKey.trim().length > 0}
           preflight={preflight}
           projectActionNotice={projectActionNotice}
           projectSummary={projectSummary}
           recentProjects={recentProjects}
           saveBusy={saveBusy}
           saveResult={saveResult}
+          starterRom={starterRom}
+          starterSource={starterSource}
           onClose={() => setProjectMenuOpen(false)}
           onExportRom={() => {
             void exportRom();
@@ -3377,8 +3446,9 @@ function promptReadyMessage(generatedMusic: boolean, generatedSprite: boolean) {
 function messageMetaLabel(message: Message) {
   if (message.role === "user") return "You";
   if (message.source === "opencode") return "OpenCode log";
-  if (message.source === "model") return "Model";
-  return "Local proof";
+  if (message.source === "model") return "OpenRouter";
+  if (message.source === "proof") return "Proof result";
+  return "Drive16";
 }
 
 function getConversationMode(
@@ -3387,33 +3457,54 @@ function getConversationMode(
   ollamaModel: string,
   connection: ModelConnectionReport,
   openCode: OpenCodeBridgeStatus,
+  openRouterKeyPresent: boolean,
 ): ConversationMode {
   const providerLabel = providerDisplayLabel(provider, activeModel, ollamaModel);
 
-  if (connection.state !== "ready") {
+  if (provider === "ollama") {
     return {
       state: "warning",
-      label: "ROM proof only",
-      detail: `${providerLabel} is ${connectionLabel(
-        connection.state,
-      ).toLowerCase()}; freeform model replies are paused.`,
+      label: "Ollama readiness only",
+      detail:
+        "Ollama can be checked locally, but live Ollama replies are not wired yet.",
     };
   }
 
-  if (openCode.state !== "ready") {
+  if (connection.state !== "ready") {
+    if (!openRouterKeyPresent) {
+      return {
+        state: "missing",
+        label: "OpenRouter key needed",
+        detail: "Paste a session key in Settings; keys are forgotten after reload.",
+      };
+    }
+
     return {
       state: "warning",
-      label: "Provider checked",
-      detail: `OpenCode is ${stateLabel(
-        openCode.state,
-      ).toLowerCase()}; freeform model replies are paused.`,
+      label: "OpenRouter not tested",
+      detail: `${providerLabel} is ${connectionLabel(
+        connection.state,
+      ).toLowerCase()}. Test the key to enable freeform replies.`,
+    };
+  }
+
+  if (provider === "openrouter") {
+    return {
+      state: openCode.state === "ready" ? "ready" : "warning",
+      label: "OpenRouter live",
+      detail:
+        openCode.state === "ready"
+          ? "Freeform messages get real OpenRouter replies; ROM-changing prompts still use local proof."
+          : `Freeform messages can use OpenRouter, but OpenCode logging is ${stateLabel(
+              openCode.state,
+            ).toLowerCase()}.`,
     };
   }
 
   return {
     state: "warning",
-    label: "OpenCode no-reply",
-    detail: "Provider and OpenCode are reachable; this shell logs freeform messages without live answer streaming.",
+    label: "ROM proof only",
+    detail: "Freeform replies are not available for the selected provider.",
   };
 }
 
@@ -3422,9 +3513,17 @@ function freeformGateMessage(
   activeModel: string,
   ollamaModel: string,
   connection: ModelConnectionReport,
-  openCode: OpenCodeBridgeStatus,
+  openRouterKeyPresent: boolean,
 ) {
   const providerLabel = providerDisplayLabel(provider, activeModel, ollamaModel);
+
+  if (provider === "ollama") {
+    return "Ollama live replies are not wired in this slice. Switch to OpenRouter and test the key for freeform replies; ROM-changing prompts still use the verified local build path.";
+  }
+
+  if (!openRouterKeyPresent) {
+    return "OpenRouter needs a session key before freeform chat can answer. Paste a BYOK key in Agent Settings and test it; keys stay in memory only and are forgotten after reload. ROM-changing prompts still use the verified local build path.";
+  }
 
   if (connection.state !== "ready") {
     return `${providerLabel} is ${connectionLabel(
@@ -3432,13 +3531,271 @@ function freeformGateMessage(
     ).toLowerCase()}. Freeform model replies are paused; ROM-changing prompts still use the verified local build path.`;
   }
 
-  if (openCode.state !== "ready") {
-    return `OpenCode is ${stateLabel(
-      openCode.state,
-    ).toLowerCase()}. Freeform model replies are paused; ROM-changing prompts still use the verified local build path.`;
+  return undefined;
+}
+
+function openRouterReplyFailureMessage(detail: string) {
+  if (/401|403|key|auth|credit|quota|rate/i.test(detail)) {
+    return `OpenRouter could not answer: ${detail}. Check the key, credits, or model access.`;
+  }
+  if (/network|fetch|failed|timeout|load/i.test(detail)) {
+    return `OpenRouter could not answer because the request failed: ${detail}.`;
+  }
+  return `OpenRouter could not answer: ${detail}.`;
+}
+
+function firstRunReadinessItems({
+  activeModel,
+  buildState,
+  comfyUiCheckpoint,
+  comfyUiConnection,
+  comfyUiLora,
+  conversationMode,
+  enhancements,
+  interactiveCoreReadiness,
+  modelConnection,
+  modelProvider,
+  ollamaModel,
+  openCode,
+  openRouterKeyPresent,
+  preflight,
+  starterRom,
+  starterSource,
+}: {
+  activeModel: string;
+  buildState: BuildState;
+  comfyUiCheckpoint: string;
+  comfyUiConnection: ComfyUiEndpointStatus;
+  comfyUiLora: string;
+  conversationMode: ConversationMode;
+  enhancements: EnhancementSettings;
+  interactiveCoreReadiness: InteractiveCoreReadiness;
+  modelConnection: ModelConnectionReport;
+  modelProvider: ModelProvider;
+  ollamaModel: string;
+  openCode: OpenCodeBridgeStatus;
+  openRouterKeyPresent: boolean;
+  preflight: PreflightReport;
+  starterRom: StarterRomPreview;
+  starterSource: string;
+}): ReadinessHubItem[] {
+  const spriteReadiness = spriteEnhancementReadiness(
+    enhancements.spriteGeneration,
+    comfyUiConnection,
+    comfyUiCheckpoint,
+    comfyUiLora,
+  );
+  const musicReadiness = musicEnhancementReadiness(enhancements.musicGeneration);
+  const romProofState =
+    buildState === "error" || starterRom.status === "missing"
+      ? "missing"
+      : starterSource === "preview"
+        ? "warning"
+        : starterRom.status;
+  const openCodeAndToolsState =
+    openCode.state === "missing" || preflight.summaryState === "missing"
+      ? "missing"
+      : openCode.state === "ready" && preflight.summaryState === "ready"
+        ? "ready"
+        : "warning";
+
+  return [
+    {
+      name: "ROM proof path",
+      state: romProofState,
+      status:
+        buildState === "error"
+          ? "Failing"
+          : starterSource === "preview"
+            ? "Preview proof"
+            : stateLabel(starterRom.status),
+      detail:
+        starterSource === "preview"
+          ? "Browser preview is using simulated frames; native Verify/Capture Proof runs Genteel."
+          : starterRom.detail,
+      nextAction:
+        buildState === "error"
+          ? "Fix the native setup, then click Verify again."
+          : "Use Verify for deterministic proof; Play uses a separate emulator core.",
+    },
+    {
+      name: "Interactive Play core",
+      state: interactiveCoreHealthState(interactiveCoreReadiness),
+      status: interactiveCoreStatusLabel(interactiveCoreReadiness.status),
+      detail: `${interactiveCoreReadiness.source}: ${interactiveCoreReadiness.detail}`,
+      nextAction:
+        interactiveCoreReadiness.status === "available"
+          ? "Play ROM can use the user core; Verify remains independent."
+          : interactiveCoreReadiness.setupAction,
+    },
+    openRouterReadinessItem(
+      modelProvider,
+      activeModel,
+      modelConnection,
+      openRouterKeyPresent,
+      conversationMode,
+    ),
+    ollamaReadinessItem(modelProvider, ollamaModel, modelConnection),
+    {
+      name: "OpenCode and local tools",
+      state: openCodeAndToolsState,
+      status:
+        openCodeAndToolsState === "ready"
+          ? "Ready"
+          : openCodeAndToolsState === "missing"
+            ? "Blocked"
+            : "Limited",
+      detail: `OpenCode is ${stateLabel(openCode.state).toLowerCase()}; ${preflightSummaryLabel(
+        preflight.summaryState,
+      ).toLowerCase()}.`,
+      nextAction:
+        openCodeAndToolsState === "ready"
+          ? "Used for logging, local checks, and proof events."
+          : "Refresh tool health or run the native app for exact local setup checks.",
+    },
+    {
+      name: "ComfyUI sprites",
+      state: enhancementReadinessHealthState(spriteReadiness.state),
+      status: spriteReadiness.label,
+      detail: spriteReadiness.detail,
+      nextAction: spriteReadiness.nextAction,
+    },
+    {
+      name: "MML music",
+      state: enhancementReadinessHealthState(musicReadiness.state),
+      status: musicReadiness.label,
+      detail: musicReadiness.detail,
+      nextAction: musicReadiness.nextAction,
+    },
+    {
+      name: "Release blockers",
+      state: "missing",
+      status: "Not release-ready",
+      detail:
+        "LICENSE needs confirmation; bundle.active is false; CSP is null; public Play core policy is undecided.",
+      nextAction:
+        "Confirm license, public core policy, packaging, signing, and CSP before calling this public v1.",
+    },
+  ];
+}
+
+function openRouterReadinessItem(
+  provider: ModelProvider,
+  activeModel: string,
+  connection: ModelConnectionReport,
+  keyPresent: boolean,
+  conversationMode: ConversationMode,
+): ReadinessHubItem {
+  if (provider !== "openrouter") {
+    return {
+      name: "OpenRouter chat",
+      state: "warning",
+      status: "Not selected",
+      detail: "OpenRouter is the only live freeform reply path currently wired.",
+      nextAction: "Switch to OpenRouter in Agent Settings and test a BYOK key.",
+    };
   }
 
-  return undefined;
+  if (connection.state === "ready") {
+    return {
+      name: "OpenRouter chat",
+      state: conversationMode.state,
+      status: "Live",
+      detail: `${shortModelLabel(activeModel)} can answer freeform prompts after key testing.`,
+      nextAction: "CORE sprite/music prompts still use the local ROM proof path.",
+    };
+  }
+
+  if (!keyPresent) {
+    return {
+      name: "OpenRouter chat",
+      state: "missing",
+      status: "Key needed",
+      detail: "No OpenRouter key is stored; keys stay in app memory only.",
+      nextAction: "Paste a BYOK key in Agent Settings and click Test OpenRouter.",
+    };
+  }
+
+  return {
+    name: "OpenRouter chat",
+    state: connection.state === "missing" ? "missing" : "warning",
+    status: connectionLabel(connection.state),
+    detail: connection.detail,
+    nextAction: "Run Test OpenRouter again or choose a model the key can access.",
+  };
+}
+
+function ollamaReadinessItem(
+  provider: ModelProvider,
+  ollamaModel: string,
+  connection: ModelConnectionReport,
+): ReadinessHubItem {
+  if (provider !== "ollama") {
+    return {
+      name: "Ollama",
+      state: "warning",
+      status: "Readiness only",
+      detail: "Ollama local generation is not wired for live chat in this slice.",
+      nextAction: "Use Agent Settings only to check local Ollama readiness for now.",
+    };
+  }
+
+  if (connection.state === "ready") {
+    return {
+      name: "Ollama",
+      state: "warning",
+      status: "Readiness checked",
+      detail: `${shortOllamaLabel(ollamaModel)} is reachable, but live Ollama replies are not wired.`,
+      nextAction: "Switch to OpenRouter for freeform replies, or keep Ollama as a setup check.",
+    };
+  }
+
+  return {
+    name: "Ollama",
+    state: connection.state === "missing" ? "missing" : "warning",
+    status: connectionLabel(connection.state),
+    detail: connection.detail,
+    nextAction: "Start Ollama, install the model, then run Test Ollama.",
+  };
+}
+
+function readinessHubSummary(items: ReadinessHubItem[]): ReadinessHubSummary {
+  const releaseBlocked = items.some((item) => item.name === "Release blockers" && item.state !== "ready");
+  const criticalMissing = items.some(
+    (item) =>
+      item.state === "missing" &&
+      item.name !== "Release blockers" &&
+      item.name !== "ComfyUI sprites" &&
+      item.name !== "MML music",
+  );
+
+  if (criticalMissing) {
+    return {
+      state: "missing",
+      label: "Setup needed",
+      detail: "One or more local first-run paths needs attention before the app feels complete.",
+    };
+  }
+
+  if (releaseBlocked) {
+    return {
+      state: "warning",
+      label: "Local review usable",
+      detail: "Core app paths are visible, but public release decisions are still blocked.",
+    };
+  }
+
+  return {
+    state: "ready",
+    label: "Ready for local review",
+    detail: "Proof, Play setup, providers, and release posture are all accounted for.",
+  };
+}
+
+function enhancementReadinessHealthState(state: EnhancementReadinessState): HealthState {
+  if (state === "ready") return "ready";
+  if (state === "failed") return "missing";
+  return "warning";
 }
 
 function preflightSummaryLabel(state: HealthState, source = "") {
@@ -3621,29 +3978,44 @@ function PlayerSessionStrip({
       </span>
       <span title={session.provider.detail}>
         {connectionIcon(providerHealthToConnection(providerState))}
-        {session.provider.label}
+        Play
         <strong>{playerSessionLabel(session.state, session.provider.state)}</strong>
-      </span>
-      <span title={readiness.verifyDetail || proofProvider.detail}>
-        <ShieldCheck size={15} />
-        Verify
-        <strong>Still available</strong>
       </span>
       <span title={session.input.lastAction?.detail ?? "Keyboard input model is ready"}>
         <KeyRound size={15} />
-        {inputLabel}
-        <strong>{session.input.lastAction?.label ?? "No input"}</strong>
+        Input
+        <strong>{session.input.lastAction?.label ?? "Ready"}</strong>
       </span>
-      <span title={session.input.controller.detail} data-testid="controller-session-status">
-        <Gamepad2 size={15} />
-        Pad
-        <strong>{controllerLabel}</strong>
-      </span>
-      <span>
-        <Activity size={15} />
-        Sound
-        <strong>{audioLabel}</strong>
-      </span>
+      <details className="player-session-more">
+        <summary>More</summary>
+        <div>
+          <span title={readiness.verifyDetail || proofProvider.detail}>
+            <ShieldCheck size={15} />
+            Verify
+            <strong>Still available</strong>
+          </span>
+          <span title={session.provider.detail}>
+            <Gamepad2 size={15} />
+            Core
+            <strong>{session.provider.label}</strong>
+          </span>
+          <span title={session.input.controller.detail} data-testid="controller-session-status">
+            <Gamepad2 size={15} />
+            Pad
+            <strong>{controllerLabel}</strong>
+          </span>
+          <span title={inputLabel}>
+            <KeyRound size={15} />
+            Keyboard
+            <strong>{inputLabel.replace("Keyboard ", "")}</strong>
+          </span>
+          <span>
+            <Activity size={15} />
+            Sound
+            <strong>{audioLabel}</strong>
+          </span>
+        </div>
+      </details>
     </div>
   );
 }
@@ -4455,6 +4827,7 @@ function SettingsPanel({
   comfyUiLora,
   connection,
   enhancements,
+  interactiveCoreReadiness,
   modelOptions,
   modelProvider,
   modelsSource,
@@ -4463,6 +4836,7 @@ function SettingsPanel({
   openRouterKey,
   showOpenRouterKey,
   onClose,
+  onChooseCore,
   onComfyUiCheckpointChange,
   onComfyUiEndpointChange,
   onComfyUiLoraChange,
@@ -4484,6 +4858,7 @@ function SettingsPanel({
   comfyUiLora: string;
   connection: ModelConnectionReport;
   enhancements: EnhancementSettings;
+  interactiveCoreReadiness: InteractiveCoreReadiness;
   modelOptions: ModelOption[];
   modelProvider: ModelProvider;
   modelsSource: string;
@@ -4492,6 +4867,7 @@ function SettingsPanel({
   openRouterKey: string;
   showOpenRouterKey: boolean;
   onClose: () => void;
+  onChooseCore: () => void;
   onComfyUiCheckpointChange: (value: string) => void;
   onComfyUiEndpointChange: (value: string) => void;
   onComfyUiLoraChange: (value: string) => void;
@@ -4522,6 +4898,7 @@ function SettingsPanel({
         aria-label="Agent settings"
         aria-modal="true"
         className="settings-panel"
+        data-testid="settings-panel"
         role="dialog"
       >
         <div className="settings-header">
@@ -4685,7 +5062,49 @@ function SettingsPanel({
             </section>
           )}
 
-          <section className="settings-section" aria-label="Enhancement toggles">
+          <details className="settings-disclosure">
+            <summary>
+              <Gamepad2 size={16} />
+              <span>
+                <strong>Play Core</strong>
+                <small>{interactiveCoreReadiness.label}</small>
+              </span>
+            </summary>
+            <section className="settings-section settings-section-inner" aria-label="Play core setup">
+              <div
+                className={`connection-summary ${providerHealthToConnection(
+                  interactiveCoreHealthState(interactiveCoreReadiness),
+                )}`}
+                data-testid="settings-play-core-status"
+              >
+                {healthIcon(interactiveCoreHealthState(interactiveCoreReadiness))}
+                <span>{interactiveCoreStatusLabel(interactiveCoreReadiness.status)}</span>
+                <small>{interactiveCoreReadiness.detail}</small>
+              </div>
+              <div className="settings-meta">
+                <span>{interactiveCoreReadiness.source}</span>
+                <strong>{interactiveCoreReadiness.setupAction}</strong>
+              </div>
+              <button className="settings-inline-action" type="button" onClick={onChooseCore}>
+                <Upload size={15} />
+                Choose Core
+              </button>
+            </section>
+          </details>
+
+          <details className="settings-disclosure">
+            <summary>
+              <Wrench size={16} />
+              <span>
+                <strong>Enhancements</strong>
+                <small>
+                  {enhancements.spriteGeneration || enhancements.musicGeneration
+                    ? "Optional generation paths enabled"
+                    : "Optional generators are off"}
+                </small>
+              </span>
+            </summary>
+            <section className="settings-section settings-section-inner" aria-label="Enhancement toggles">
             <SectionTitle icon={<Wrench size={16} />} title="Enhancements" />
             <div className="enhancement-list">
               <label className="enhancement-toggle" data-testid="sprite-enhancement-toggle">
@@ -4859,7 +5278,29 @@ function SettingsPanel({
               <span>CORE path</span>
               <strong>Bundled assets remain default</strong>
             </div>
-          </section>
+            </section>
+          </details>
+
+          <details className="settings-disclosure">
+            <summary>
+              <ShieldCheck size={16} />
+              <span>
+                <strong>Release Readiness</strong>
+                <small>Public v1 decisions still pending</small>
+              </span>
+            </summary>
+            <section className="settings-section settings-section-inner" aria-label="Release readiness">
+              <div className="connection-summary missing">
+                <AlertCircle size={15} />
+                <span>Not release-ready</span>
+                <small>License, public Play core policy, packaging, signing, and CSP need decisions.</small>
+              </div>
+              <div className="settings-meta">
+                <span>Local review</span>
+                <strong>Usable; release decisions pending</strong>
+              </div>
+            </section>
+          </details>
         </div>
 
         <div className="settings-footer">
@@ -4892,6 +5333,7 @@ function TopBar({
   exportBusy,
   menuOpen,
   onExportRom,
+  onOpenReadiness,
   onRunProject,
   onSaveProject,
   onToggleMenu,
@@ -4904,6 +5346,7 @@ function TopBar({
   exportBusy: boolean;
   menuOpen: boolean;
   onExportRom: () => void;
+  onOpenReadiness: () => void;
   onRunProject: () => void;
   onSaveProject: () => void;
   onToggleMenu: () => void;
@@ -4927,7 +5370,7 @@ function TopBar({
           <img className="brand-mark" src={drive16Mark} alt="" aria-hidden="true" />
           <div>
             <strong>Drive16</strong>
-            <span>Phase 7 input profiles</span>
+            <span>Phase 8 readiness hub</span>
           </div>
         </div>
       </div>
@@ -4943,6 +5386,10 @@ function TopBar({
       </div>
 
       <nav className="top-actions" aria-label="Project actions">
+        <button type="button" data-testid="readiness-hub-toggle" onClick={onOpenReadiness}>
+          <Wrench size={16} />
+          Setup
+        </button>
         <button
           type="button"
           data-testid="verify-rom"
@@ -4977,22 +5424,34 @@ function TopBar({
 
 function ProjectMenu({
   activeModel,
+  buildState,
+  comfyUiCheckpoint,
+  comfyUiConnection,
+  comfyUiLora,
+  conversationMode,
+  enhancements,
   exportBusy,
   exportResult,
   interactiveCoreBusy,
+  interactiveCoreReadiness,
   interactiveCoreStatus,
   importBusy,
   importReadiness,
   importResult,
+  modelConnection,
   modelProvider,
   ollamaEndpoint,
   ollamaModel,
+  openCode,
+  openRouterKeyPresent,
   preflight,
   projectActionNotice,
   projectSummary,
   recentProjects,
   saveBusy,
   saveResult,
+  starterRom,
+  starterSource,
   onClose,
   onExportRom,
   onChooseCore,
@@ -5004,22 +5463,34 @@ function ProjectMenu({
   onSaveProject,
 }: {
   activeModel: string;
+  buildState: BuildState;
+  comfyUiCheckpoint: string;
+  comfyUiConnection: ComfyUiEndpointStatus;
+  comfyUiLora: string;
+  conversationMode: ConversationMode;
+  enhancements: EnhancementSettings;
   exportBusy: boolean;
   exportResult?: RomExportResult;
   interactiveCoreBusy: boolean;
+  interactiveCoreReadiness: InteractiveCoreReadiness;
   interactiveCoreStatus: InteractiveCoreStatusResult;
   importBusy: boolean;
   importReadiness?: RomImportReadiness;
   importResult?: RomImportResult;
+  modelConnection: ModelConnectionReport;
   modelProvider: ModelProvider;
   ollamaEndpoint: string;
   ollamaModel: string;
+  openCode: OpenCodeBridgeStatus;
+  openRouterKeyPresent: boolean;
   preflight: PreflightReport;
   projectActionNotice: ProjectActionNotice;
   projectSummary: ProjectSummary;
   recentProjects: ProjectSnapshot[];
   saveBusy: boolean;
   saveResult?: ProjectSaveResult;
+  starterRom: StarterRomPreview;
+  starterSource: string;
   onClose: () => void;
   onExportRom: () => void;
   onChooseCore: () => void;
@@ -5031,6 +5502,25 @@ function ProjectMenu({
   onSaveProject: () => void;
 }) {
   const attentionChecks = preflight.checks.filter((check) => check.state !== "ready");
+  const readinessItems = firstRunReadinessItems({
+    activeModel,
+    buildState,
+    comfyUiCheckpoint,
+    comfyUiConnection,
+    comfyUiLora,
+    conversationMode,
+    enhancements,
+    interactiveCoreReadiness,
+    modelConnection,
+    modelProvider,
+    ollamaModel,
+    openCode,
+    openRouterKeyPresent,
+    preflight,
+    starterRom,
+    starterSource,
+  });
+  const readiness = readinessHubSummary(readinessItems);
 
   return (
     <div className="project-menu-backdrop" onClick={onClose}>
@@ -5056,7 +5546,41 @@ function ProjectMenu({
         </div>
 
         <div className="project-menu-body">
-          <section className="menu-section" aria-label="Current project">
+          <section
+            className="menu-section readiness-hub"
+            aria-label="Readiness and first-run setup"
+            data-testid="readiness-hub"
+          >
+            <SectionTitle icon={<ShieldCheck size={16} />} title="Readiness" />
+            <div
+              className={`readiness-hub-summary ${readiness.state}`}
+              data-testid="readiness-hub-summary"
+            >
+              {healthIcon(readiness.state)}
+              <span>
+                <strong>{readiness.label}</strong>
+                <small>{readiness.detail}</small>
+              </span>
+            </div>
+            <details className="menu-disclosure">
+              <summary>Show readiness details</summary>
+              <div className="readiness-hub-list">
+                {readinessItems.map((item) => (
+                  <article className={`readiness-hub-item ${item.state}`} key={item.name}>
+                    {healthIcon(item.state)}
+                    <span>
+                      <strong>{item.name}</strong>
+                      <b>{item.status}</b>
+                      <small>{item.detail}</small>
+                      <em>{item.nextAction}</em>
+                    </span>
+                  </article>
+                ))}
+              </div>
+            </details>
+          </section>
+
+          <section className="menu-section menu-current" aria-label="Current project">
             <SectionTitle icon={<FolderOpen size={16} />} title="Current Project" />
             <div className="menu-meta-grid">
               <span>Project</span>
@@ -5102,7 +5626,7 @@ function ProjectMenu({
             </div>
           </section>
 
-          <section className="menu-section" aria-label="Project actions">
+          <section className="menu-section menu-actions" aria-label="Project actions">
             <SectionTitle icon={<Save size={16} />} title="Actions" />
             <div
               className={`menu-action-status ${projectActionNotice.state}`}
@@ -5216,7 +5740,7 @@ function ProjectMenu({
             </div>
           </section>
 
-          <section className="menu-section" aria-label="Recent projects">
+          <section className="menu-section menu-projects" aria-label="Recent projects">
             <SectionTitle icon={<FolderTree size={16} />} title="Projects" />
             <button className="project-choice active" type="button" onClick={onClose}>
               <strong>Starter Project</strong>
@@ -5243,7 +5767,7 @@ function ProjectMenu({
             )}
           </section>
 
-          <section className="menu-section" aria-label="Agent setup">
+          <section className="menu-section menu-agent" aria-label="Agent setup">
             <SectionTitle icon={<KeyRound size={16} />} title="Agent" />
             <div className="menu-meta-grid">
               <span>Inference</span>
@@ -5264,7 +5788,7 @@ function ProjectMenu({
             </button>
           </section>
 
-          <section className="menu-section" aria-label="Needs attention">
+          <section className="menu-section menu-attention" aria-label="Needs attention">
             <SectionTitle icon={<AlertCircle size={16} />} title="Needs Attention" />
             <div className="attention-list">
               {attentionChecks.length > 0 ? (

@@ -1,5 +1,104 @@
 # Drive16 Decisions
 
+## 2026-07-02 - Default shell shows work first, diagnostics on demand
+
+Context:
+
+The UI repair pass showed that even truthful status can make the app feel
+broken when it is pinned open by default. The ROM/tool inspector, player core
+facts, proof events, and provider setup details were competing with the actual
+workflow in normal desktop windows.
+
+Decision:
+
+Open the app on the primary working surface: conversation, ROM player, player
+controls, immediate local feedback, and compact setup truth near the composer.
+Move secondary ROM/tool diagnostics, proof events, files, core/provider details,
+controller/audio facts, and release-readiness explanations behind disclosures
+or drawers.
+
+Consequence:
+
+The details are still available for debugging and review, but the default app
+no longer asks a user to parse backend status before using the ROM builder.
+Future feature slices should remove or collapse an existing secondary surface
+before adding another always-visible status card.
+
+## 2026-07-02 - UI repair pauses feature expansion
+
+Context:
+
+After the readiness hub landed, Drive16 had enough visible capability that the
+main product risk shifted from missing features to confusing information
+architecture. Chat, proof events, setup truth, project actions, and player
+state were all visible at once, and normal desktop window sizes exposed
+truncation and hierarchy problems.
+
+Decision:
+
+Pause new feature slices and treat the next work as a UI/IA repair track. The
+app shell should prioritize three zones: conversation, ROM workspace, and
+inspector/drawer details. Chat identity, proof identity, provider/session
+truth, project actions, settings groups, and player controls should be made
+clear before more capability is added.
+
+Consequence:
+
+Phase 8 feature work remains recoverable through
+`docs/phase8-ui-optimization-checkpoint.md`, but the active product focus is
+usability in a normal macOS app window. Browser-preview Slice 1 is recorded in
+`docs/phase8-ui-repair-slice1.md`; native-window click-through and the full
+button-trust audit remain open.
+
+## 2026-07-02 - First-run readiness truth lives in the project menu
+
+Context:
+
+After OpenRouter freeform replies landed, the remaining Fable audit gap was
+not one missing capability but scattered truth. Proof, Play setup, provider
+readiness, optional local generators, and release blockers were all documented
+or visible somewhere, but a fresh user still had to stitch them together.
+
+Decision:
+
+Add a compact readiness hub to the project menu and expose it from a top-level
+`Setup` action. Build it from existing app state rather than adding a new
+pretend readiness service. The hub reports ROM proof, interactive Play core,
+OpenRouter chat, Ollama readiness-only status, OpenCode/local tools, ComfyUI
+sprites, MML music, and public-release blockers.
+
+Consequence:
+
+Drive16 now has one first-run truth surface without changing licensing,
+packaging, CSP, signing, emulator core distribution, or Ollama generation.
+Release blockers stay visible until the human decisions behind them are made.
+
+## 2026-07-02 - OpenRouter freeform replies go direct from the browser first
+
+Context:
+
+The Fable 5 product audit identified Drive16's inert freeform chat surface as
+the largest remaining product-promise mismatch after Product V1 and Phase 7.
+OpenRouter BYOK testing already used a browser fetch with an in-memory key,
+while native Rust has no TLS-capable HTTP client dependency. Ollama generation
+is useful later but was explicitly out of scope for this slice.
+
+Decision:
+
+Add a narrow OpenRouter-only live freeform reply path using browser
+`chat/completions` fetches. Use `deepseek/deepseek-chat-v3.1` as the default
+cheap tested model. Keep the API key in React state only. Leave OpenCode
+`noReply` logging best-effort and non-blocking. Keep CORE sprite/music prompts
+on Drive16's local proof path and keep Ollama generation paused until a later
+slice.
+
+Consequence:
+
+Drive16 can now honestly show `OpenRouter live` and return real freeform model
+answers without claiming ROM work happened remotely. A future slice can add
+streaming, Ollama generation, or a native/Tauri transport if browser fetch
+proves insufficient.
+
 ## 2026-07-02 - Brand mark uses generated D16 cartridge art
 
 Context:
