@@ -9,6 +9,7 @@ use std::{
 
 const STARTER_PROJECT: &str = "examples/app-starter-blank";
 const STARTER_ROM: &str = "examples/app-starter-blank/out/rom.bin";
+const ACTIVE_PROJECT_DIRECTORY: &str = "artifacts/phase3/active-project";
 const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
 const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
 const ROM_IMPORT_DIRECTORY: &str = "artifacts/phase5/imports";
@@ -19,6 +20,10 @@ const INTERACTIVE_CORE_JS: &str = "genesis_plus_gx_libretro.js";
 const INTERACTIVE_CORE_WASM: &str = "genesis_plus_gx_libretro.wasm";
 const INTERACTIVE_CORE_INPUT_EXTENSIONS: [&str; 3] = [".zip", ".js", ".wasm"];
 const INTERACTIVE_CORE_STORAGE_EXTENSIONS: [&str; 2] = [".js", ".wasm"];
+// Genesis ROMs top out around 8 MB with mappers; emscripten cores run tens
+// of MB. Anything past these caps is a wrong file, not a big game.
+const MAX_ROM_IMPORT_BYTES: usize = 16 * 1024 * 1024;
+const MAX_CORE_FILE_BYTES: usize = 96 * 1024 * 1024;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -61,6 +66,18 @@ pub struct ProjectSaveResult {
     pub source_project_path: String,
     pub snapshot_path: String,
     pub files: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveProjectResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub project_path: String,
+    pub rom_path: String,
+    pub rom_exists: bool,
+    pub created: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -204,6 +221,62 @@ pub fn save_project_path(source_project_path: String) -> Result<ProjectSaveResul
 
 pub fn list_project_snapshots() -> Vec<ProjectSnapshot> {
     list_project_snapshots_for_repo(repo_root())
+}
+
+pub fn ensure_active_project() -> Result<ActiveProjectResult, String> {
+    ensure_active_project_for_repo(repo_root())
+}
+
+// New Project: throw away the working copy and start from the template.
+pub fn reset_active_project() -> Result<ActiveProjectResult, String> {
+    let root = repo_root();
+    let active = root.join(ACTIVE_PROJECT_DIRECTORY);
+    if active.is_dir() {
+        fs::remove_dir_all(&active).map_err(|error| {
+            format!(
+                "Could not clear the active project {}: {}",
+                active.display(),
+                error
+            )
+        })?;
+    }
+    ensure_active_project_for_repo(root)
+}
+
+// The agent needs a mutable SGDK workspace; the starter template stays
+// pristine and the active project lives under ignored artifacts.
+fn ensure_active_project_for_repo(repo_root: PathBuf) -> Result<ActiveProjectResult, String> {
+    let starter = repo_root.join(STARTER_PROJECT);
+    let active = repo_root.join(ACTIVE_PROJECT_DIRECTORY);
+    let marker = active.join("src").join("main.c");
+
+    let created = if marker.is_file() {
+        false
+    } else {
+        if !starter.is_dir() {
+            return Err(format!(
+                "Starter project template is missing: {}",
+                starter.display()
+            ));
+        }
+        copy_project_tree(&starter, &active)?;
+        true
+    };
+
+    let rom_path = active.join("out").join("rom.bin");
+    Ok(ActiveProjectResult {
+        generated_at: unix_timestamp(),
+        status: "ready".to_string(),
+        detail: if created {
+            "Active project created from the starter template".to_string()
+        } else {
+            "Active project is ready".to_string()
+        },
+        project_path: repo_relative(&repo_root, &active),
+        rom_path: repo_relative(&repo_root, &rom_path),
+        rom_exists: rom_path.is_file(),
+        created,
+    })
 }
 
 pub fn prepare_rom_import() -> Result<RomImportReadiness, String> {
@@ -508,6 +581,7 @@ fn import_rom_bytes_for_repo(
     repo_root: PathBuf,
     request: RomImportRequest,
 ) -> Result<RomImportResult, String> {
+    check_base64_size(&request.data_base64, MAX_ROM_IMPORT_BYTES, "ROM file")?;
     let data = general_purpose::STANDARD
         .decode(request.data_base64.trim())
         .map_err(|error| format!("ROM data was not valid base64: {}", error))?;
@@ -598,7 +672,7 @@ fn interactive_core_status_for_repo(repo_root: PathBuf) -> InteractiveCoreStatus
         detail: if has_core {
             "User-supplied Genesis core is installed in ignored local storage.".to_string()
         } else {
-            "Choose a compatible .zip archive or .js + .wasm pair to enable local Play.".to_string()
+            "Set Up Play with a core .zip or .js + .wasm pair.".to_string()
         },
         core_name: INTERACTIVE_CORE_NAME.to_string(),
         source: if has_core {
@@ -655,6 +729,7 @@ fn import_interactive_core_files_for_repo(
                     INTERACTIVE_CORE_STORAGE_EXTENSIONS.join(", ")
                 )
             })?;
+        check_base64_size(&upload.data_base64, MAX_CORE_FILE_BYTES, "Play core file")?;
         let data = general_purpose::STANDARD
             .decode(upload.data_base64.trim())
             .map_err(|error| format!("Core file {} was not valid base64: {}", safe_name, error))?;
@@ -776,17 +851,13 @@ fn ensure_rom(paths: &ProjectPaths) -> Result<(), String> {
         ));
     }
 
-    let output = Command::new(&paths.build_sgdk_script)
-        .current_dir(&paths.repo_root)
-        .arg(STARTER_PROJECT)
-        .output()
-        .map_err(|error| format!("SGDK starter ROM build could not run: {}", error))?;
-    if !output.status.success() {
-        return Err(format!(
-            "SGDK starter ROM build failed:\n{}",
-            tail(&combined_output(&output.stdout, &output.stderr), 4000)
-        ));
-    }
+    let mut command = Command::new(&paths.build_sgdk_script);
+    command.current_dir(&paths.repo_root).arg(STARTER_PROJECT);
+    crate::starter_rom::run_command_with_timeout(
+        &mut command,
+        "SGDK starter ROM build",
+        std::time::Duration::from_secs(15 * 60),
+    )?;
     if paths.rom_path.is_file() {
         Ok(())
     } else {
@@ -803,6 +874,20 @@ fn file_entry(repo_root: &Path, path: PathBuf, label: &str) -> ProjectFileEntry 
         path: repo_relative(repo_root, &path),
         state: if path.is_file() { "ready" } else { "missing" }.to_string(),
     }
+}
+
+fn check_base64_size(encoded: &str, max_bytes: usize, label: &str) -> Result<(), String> {
+    // Base64 expands by 4/3, so the decoded size is bounded before decoding.
+    let decoded_upper_bound = encoded.trim().len() / 4 * 3;
+    if decoded_upper_bound > max_bytes {
+        return Err(format!(
+            "{} is too large ({} MB). The limit is {} MB — check that you picked the right file.",
+            label,
+            decoded_upper_bound / (1024 * 1024),
+            max_bytes / (1024 * 1024)
+        ));
+    }
+    Ok(())
 }
 
 fn resolve_repo_path(repo_root: &Path, source_rom_path: &str) -> Result<PathBuf, String> {
@@ -982,26 +1067,6 @@ fn repo_relative(repo_root: &Path, path: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .to_string()
-}
-
-fn combined_output(stdout: &[u8], stderr: &[u8]) -> String {
-    let mut combined = String::new();
-    combined.push_str(&String::from_utf8_lossy(stdout));
-    if !stderr.is_empty() {
-        if !combined.ends_with('\n') && !combined.is_empty() {
-            combined.push('\n');
-        }
-        combined.push_str(&String::from_utf8_lossy(stderr));
-    }
-    combined
-}
-
-fn tail(text: &str, max_chars: usize) -> String {
-    if text.len() <= max_chars {
-        text.to_string()
-    } else {
-        text[text.len() - max_chars..].to_string()
-    }
 }
 
 fn unix_timestamp() -> String {

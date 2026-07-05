@@ -2,10 +2,16 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::Serialize;
 use std::{
     env, fs,
+    io::Read,
     path::{Path, PathBuf},
-    process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+
+const SGDK_BUILD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const GENTEEL_BUILD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+const GENTEEL_RUN_TIMEOUT: Duration = Duration::from_secs(3 * 60);
 
 const STARTER_PROJECT: &str = "examples/app-starter-blank";
 const STARTER_FRAMES: u32 = 180;
@@ -122,7 +128,7 @@ fn launch_rom_for_paths(
         .arg(&paths.screenshot_path)
         .arg(&rom_path);
 
-    run_command(&mut command, "Genteel starter ROM launch")?;
+    run_command_with_timeout(&mut command, "Genteel starter ROM launch", GENTEEL_RUN_TIMEOUT)?;
 
     let screenshot_bytes = fs::read(&paths.screenshot_path).map_err(|error| {
         format!(
@@ -212,7 +218,7 @@ fn ensure_rom(paths: &StarterPaths) -> Result<(), String> {
 
     let mut command = Command::new(&paths.build_sgdk_script);
     command.current_dir(&paths.repo_root).arg(STARTER_PROJECT);
-    run_command(&mut command, "SGDK starter ROM build")?;
+    run_command_with_timeout(&mut command, "SGDK starter ROM build", SGDK_BUILD_TIMEOUT)?;
 
     if paths.rom_path.is_file() {
         Ok(())
@@ -247,7 +253,7 @@ fn find_genteel_bin(paths: &StarterPaths) -> Result<PathBuf, String> {
 
     let mut command = Command::new(&paths.build_genteel_script);
     command.current_dir(&paths.repo_root);
-    let output = run_command(&mut command, "Genteel build")?;
+    let output = run_command_with_timeout(&mut command, "Genteel build", GENTEEL_BUILD_TIMEOUT)?;
     let printed_path = output
         .lines()
         .map(str::trim)
@@ -266,16 +272,65 @@ fn find_genteel_bin(paths: &StarterPaths) -> Result<PathBuf, String> {
     }
 }
 
-fn run_command(command: &mut Command, label: &str) -> Result<String, String> {
-    let output = command
-        .output()
+// Toolchain shell-outs (Docker builds, emulator runs) must never hang the
+// app: spawn with piped output, poll, and kill past the deadline. Output is
+// drained on threads so a chatty build cannot deadlock the pipe buffer.
+pub(crate) fn run_command_with_timeout(
+    command: &mut Command,
+    label: &str,
+    timeout: Duration,
+) -> Result<String, String> {
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
         .map_err(|error| format!("{} could not run: {}", label, error))?;
-    let combined = combined_output(&output.stdout, &output.stderr);
-    if output.status.success() {
+
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let stdout_reader = thread::spawn(move || drain_pipe(stdout));
+    let stderr_reader = thread::spawn(move || drain_pipe(stderr));
+
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if started.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!(
+                        "{} timed out after {} minutes and was stopped. Check that Docker is running and try again.",
+                        label,
+                        timeout.as_secs() / 60
+                    ));
+                }
+                thread::sleep(Duration::from_millis(150));
+            }
+            Err(error) => {
+                return Err(format!("{} could not be monitored: {}", label, error));
+            }
+        }
+    };
+
+    let stdout_bytes = stdout_reader.join().unwrap_or_default();
+    let stderr_bytes = stderr_reader.join().unwrap_or_default();
+    let combined = combined_output(&stdout_bytes, &stderr_bytes);
+    if status.success() {
         Ok(combined)
     } else {
         Err(format!("{} failed:\n{}", label, tail(&combined, 4000)))
     }
+}
+
+fn drain_pipe(pipe: Option<impl Read>) -> Vec<u8> {
+    let mut buffer = Vec::new();
+    if let Some(mut pipe) = pipe {
+        let _ = pipe.read_to_end(&mut buffer);
+    }
+    buffer
 }
 
 fn read_frame_stream(path: &Path) -> Result<Vec<FramebufferFrame>, String> {

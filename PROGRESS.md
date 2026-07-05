@@ -1,11 +1,45 @@
 # Drive16 Progress
 
-Current phase: Phase 8 UI/IA repair track - Slice 3 implemented
+Current phase: Overhaul (see `docs/overhaul-plan.md`)
 
-Exit criterion: a non-developer can follow the golden path from starter project
-to agent/proof build, interactive keyboard Play, Verify, Save/Open, and Export
-without ambiguous controls, while Genteel proof and interactive Play remain
-distinct.
+Exit criterion: any reasonable chat prompt builds a playable, audible ROM in
+the right pane, in a UI a stranger can use.
+
+## Overhaul status (2026-07-05)
+
+- [x] Track A - real agent loop: chat routes to the OpenCode agent with the
+  SGDK build / emulator / RAG / music / ComfyUI MCP tools; builder skill at
+  `agent/skills/drive16-app-builder.md`; active project workspace at
+  `artifacts/phase3/active-project`; agent-built ROM auto-loads into the
+  player. Verified end-to-end ("make the background red" and "add an upbeat
+  song" both produced rebuilt ROMs; the song is original 4-channel FM MML
+  and non-silent in Genteel).
+- [x] Track B - player audio: Web Audio wired into the Nostalgist player
+  with a mute/unmute control; no more silent Play.
+- [x] Track C - UI rebuild: two-pane shell (chat left, game right), six
+  components under `app/src/components/`, App.tsx 6,014 -> ~3,600 lines,
+  styles.css rewritten at half size, dev-process jargon removed from
+  user-facing copy. Browser smoke updated and passing.
+- [x] Track E (partial) - hardening: timeouts + kill on Docker/Genteel
+  shell-outs; ROM (16 MB) and core (96 MB) import size caps.
+- [x] Track D - generation via chat: the agent composed an original
+  4-channel FM song (non-silent in Genteel) and generated a validated
+  32x32/16-color sprite through local ComfyUI, wired both into a built ROM
+  from single chat prompts. `--prompt` added to the sprite pipeline script.
+- [x] In-app trust pass (from live user testing): OpenCode auth activates
+  via automatic server restart; saved keys are detected on launch (no
+  re-pasting); action results show as visible toasts; real error strings
+  are preserved; silent provider rejections surface as re-test-key errors;
+  Play works in the native app via the CDN core fallback; New Project
+  resets the agent workspace; desktop chat has exactly one path (the
+  agent) — the freeform gate path is browser-preview-only.
+- [x] Structure formalized: `docs/project-structure.md`, starter template
+  ships `res/` scaffold, project menu shows the Workspace folder, agent
+  skill carries identity/capabilities and a no-tools-for-greetings rule.
+- [ ] Track E (rest) - packaging: app-data paths, enable Tauri bundling,
+  LICENSE, CSP, core distribution policy.
+
+Older phase history follows below.
 
 ## Current Review Packet
 
@@ -26,6 +60,10 @@ distinct.
 - [x] UI repair Slice 1 recorded in `docs/phase8-ui-repair-slice1.md`.
 - [x] UI repair Slice 2 recorded in `docs/phase8-ui-repair-slice2.md`.
 - [x] UI repair Slice 3 recorded in `docs/phase8-ui-repair-slice3.md`.
+- [x] UI repair Slice 4 recorded in `docs/phase8-ui-repair-slice4.md`.
+- [x] UI repair Slice 5 recorded in `docs/phase8-ui-repair-slice5.md`.
+- [x] UI repair Slice 6 recorded in `docs/phase8-ui-repair-slice6.md`.
+- [x] UI repair Slice 7 recorded in `docs/phase8-ui-repair-slice7.md`.
 - [x] Next-agent handoff recorded in `docs/phase8-next-agent-handoff.md`.
 - [ ] Human decision: confirm the project license before adding a `LICENSE`
   file.
@@ -35,15 +73,23 @@ distinct.
 - [x] Preserve the Phase 8 roadmap checkpoint before changing the UI.
 - [x] Create a visible-control map for primary buttons and feedback locations.
 - [x] Separate chat, setup/gating replies, proof results, and model replies.
-- [x] Move provider/session truth close to the composer.
+- [x] Keep provider/session truth in Settings while preserving clear chat
+  fallback messages.
 - [x] Collapse proof/files details out of the main conversation rail.
 - [x] Put project actions before readiness details in the project menu.
 - [x] Collapse secondary Settings sections by default.
 - [x] Fix normal-window status wrapping for the ROM/player surface.
 - [x] Default ROM/tool inspector details to collapsed on first load.
-- [x] Move provider/session truth down to the composer instead of the top of
-  the chat.
+- [x] Keep the chat composer neutral instead of showing provider status beside
+  messages.
 - [x] Compress the player session strip behind a `More` disclosure.
+- [x] Block OpenRouter replies that claim local ROM build/proof completion
+  without local proof evidence.
+- [x] Make missing interactive-Play copy say `Set Up Play` and clarify that
+  Verify still works without a Play core.
+- [x] Tighten chat card spacing.
+- [x] Keep OpenRouter BYOK keys available across refreshes in the current app
+  window without committing them to the project.
 - [x] Run browser checks at realistic desktop sizes.
 - [x] Fix `Verify Right` so completed proof returns the header to `Ready`.
 - [x] Make browser-preview `Play ROM` feedback explain the import-or-desktop
@@ -51,9 +97,11 @@ distinct.
 - [x] Relaunch and visually verify the current Phase 8 repair UI in the real
   native Tauri window.
 - [x] Browser-audit every obvious non-file-picker primary control.
-- [ ] Run direct native Tauri-window click-through for OS file-picker flows.
-- [ ] Finish the every-visible-button trust audit for native file-picker
-  completion paths.
+- [x] Run direct native Tauri-window click-through for OS file-picker flows.
+- [x] Add a fresh native app launch helper so macOS does not reopen stale
+  embedded UI bundles during review.
+- [x] Finish the every-visible-button trust audit for save/open/export and
+  settings detail paths.
 
 ## Phase 8 Slice 2 Checklist
 
@@ -171,16 +219,31 @@ distinct.
 
 ## Current Task
 
-Phase 8 UI repair Slice 3 keeps feature work paused and makes the normal
-desktop shell calmer by default: chat stays chat, provider/session truth sits
-near the composer, ROM/tool details start collapsed, and the player status row
-is no longer a wall of clipped chips.
+Phase 8 UI repair Slice 6 keeps feature work paused and completes the native
+visible-button trust pass. Save, Export, Open Project after Save, Agent
+Settings, provider switching, Controls, Reset defaults, Show/Hide Details, and
+Hide/Show conversation are verified in the rebuilt desktop app. The remaining
+gaps are now specific file-ingestion and release-policy work: valid user ROM
+selection, valid user Play-core setup, import/core limits, license, public core
+policy, signing, notarization, and CSP.
+
+Follow-up key-retention fix: OpenRouter session keys now survive browser/native
+webview refreshes in the current app window through session storage, while
+remaining outside source, docs, localStorage, and committed project state.
+
+Follow-up chat cleanup: the bulky `OpenRouter live` status strip was removed
+from the conversation rail. Provider details now live in Agent Settings, while
+the composer stays labeled `Message`.
 
 Evidence is recorded in:
 
 - `docs/phase8-ui-repair-slice1.md`
 - `docs/phase8-ui-repair-slice2.md`
 - `docs/phase8-ui-repair-slice3.md`
+- `docs/phase8-ui-repair-slice4.md`
+- `docs/phase8-ui-repair-slice5.md`
+- `docs/phase8-ui-repair-slice6.md`
+- `docs/phase8-ui-repair-slice7.md`
 - `docs/phase8-next-agent-handoff.md`
 - `docs/ui-repair-control-map.md`
 - `docs/phase8-ui-optimization-checkpoint.md`
@@ -207,10 +270,15 @@ user-supplied core setup flow. Input profile persistence and basic controller
 detection/mapping are now complete.
 
 Phase 8 Slice 2 is verified, but feature work is paused for a UI/IA repair
-track. Slices 1 through 3 of that repair are implemented. Browser interaction
-checks now pass for chat identity, player feedback, compact default details,
-Setup, Settings, and normal desktop scaling. Next, complete direct native
-click-through for OS file-picker flows before returning to the phase roadmap.
+track. Slices 1 through 7 of that repair are implemented. Browser interaction
+checks now pass for chat identity, OpenRouter overclaim guarding, player
+feedback, compact default details, provider details in Settings, Setup,
+Settings, and normal desktop scaling. Native checks now confirm the rebuilt
+`.app` opens the current Phase 8 UI, file-picker open/cancel paths give
+feedback, and the visible Save, Open, Export, Settings, Controls, details, and
+layout controls work. Next, finish the narrow local-file trust slice with real
+valid ROM/core files and import/core guardrails before returning to the phase
+roadmap.
 For handoff, start with `docs/phase8-next-agent-handoff.md`.
 
 ## Completed Phase 6 Work

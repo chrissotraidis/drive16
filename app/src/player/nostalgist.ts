@@ -2,6 +2,7 @@ import { Nostalgist } from "nostalgist";
 import type {
   LoadedInteractiveCore,
   LoadedPlayerRom,
+  PlayerAudioState,
   PlayerInputAction,
   PlayerInputActionId,
   PlayerProvider,
@@ -23,6 +24,7 @@ export type NostalgistPlayerRuntime = {
   coreSource: "dev-cdn" | "user";
   rom: LoadedPlayerRom;
   startedAt: string;
+  muted: boolean;
 };
 
 type NostalgistLaunchOptions = Parameters<typeof Nostalgist.launch>[0];
@@ -78,6 +80,11 @@ export async function launchNostalgistMegadrivePlayer({
       : GENESIS_PLUS_GX_CORE,
     emscriptenModule,
     element: canvas,
+    retroarchConfig: {
+      audio_enable: true,
+      audio_mute_enable: false,
+      audio_volume: 0,
+    },
     rom: {
       fileContent,
       fileName: rom.sourceName,
@@ -90,7 +97,55 @@ export async function launchNostalgistMegadrivePlayer({
     coreSource: core ? "user" : "dev-cdn",
     rom,
     startedAt: new Date().toISOString(),
+    muted: false,
   };
+}
+
+// The RetroArch Emscripten build routes audio through OpenAL; browsers keep
+// its AudioContext suspended until a user gesture, so playback starts silent
+// unless we resume it explicitly.
+function findAudioContext(runtime: NostalgistPlayerRuntime): AudioContext | undefined {
+  try {
+    const al = runtime.instance.getEmscriptenAL?.();
+    const ctx = al?.currentCtx?.audioCtx;
+    if (ctx && typeof ctx.resume === "function") {
+      return ctx as AudioContext;
+    }
+  } catch {
+    // Audio context is not available for this core/session.
+  }
+  return undefined;
+}
+
+export function nostalgistAudioState(runtime: NostalgistPlayerRuntime): PlayerAudioState {
+  const ctx = findAudioContext(runtime);
+  if (!ctx || ctx.state !== "running") {
+    return "unavailable";
+  }
+  return runtime.muted ? "muted" : "audible";
+}
+
+export async function resumeNostalgistAudio(
+  runtime: NostalgistPlayerRuntime,
+): Promise<PlayerAudioState> {
+  const ctx = findAudioContext(runtime);
+  if (!ctx) {
+    return "unavailable";
+  }
+  if (ctx.state === "suspended") {
+    try {
+      await ctx.resume();
+    } catch {
+      // The browser refused; a later user gesture can retry.
+    }
+  }
+  return nostalgistAudioState(runtime);
+}
+
+export function toggleNostalgistMute(runtime: NostalgistPlayerRuntime): PlayerAudioState {
+  runtime.instance.sendCommand("MUTE");
+  runtime.muted = !runtime.muted;
+  return nostalgistAudioState(runtime);
 }
 
 export function pauseNostalgistPlayer(runtime: NostalgistPlayerRuntime) {

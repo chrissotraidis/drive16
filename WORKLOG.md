@@ -1,5 +1,291 @@
 # Drive16 Worklog
 
+## 2026-07-05 - ITERATION 114 - one chat path in the desktop app, project structure formalized
+
+Did:
+
+- Desktop chat now has exactly one route: the build agent. The freeform
+  OpenRouter fallback and its gate messages ("Freeform model replies are
+  paused", "X is check") no longer exist in the Tauri app; they remain only
+  in the browser preview (with fixed copy). The agent path reconnects to
+  OpenCode on demand and reports real, actionable errors (bridge down, no
+  key, Ollama not wired).
+- Silent provider failures surfaced: OpenCode returns an empty assistant
+  stub when a provider rejects a request; the bridge now converts that into
+  a clear re-test-your-key error instead of an endless spinner.
+- New Project now resets the agent workspace (`reset_active_project`
+  command) so a fresh project does not inherit the previous game.
+- Project structure formalized and documented in
+  `docs/project-structure.md`; the starter template ships a `res/` scaffold;
+  the project menu shows the Workspace folder; the agent skill gained an
+  identity/capabilities section and a no-tools-for-greetings rule (identity
+  knowledge verified by direct probe).
+
+## 2026-07-05 - ITERATION 113 - fix in-app agent auth, feedback visibility, native Play
+
+Did, from live user testing of the rebuilt app:
+
+- Root cause of "The agent request failed": OpenCode only activates a
+  provider's model catalog at server start, so the BYOK key handed over at
+  runtime never took effect. `set_opencode_auth` now verifies the provider is
+  connected and automatically restarts the OpenCode server when needed.
+- `connect_opencode` reports connected providers; a key saved in OpenCode's
+  auth store marks OpenRouter ready on launch, so the app no longer "forgets"
+  the API key between restarts (the key lives in OpenCode, not the webview).
+- Tauri invoke errors are strings; error handling now preserves the real
+  reason instead of a generic message, and agent failures set a visible
+  notice. Empty-body model replies (bad key) return a clear error.
+- Added a visible toast for every action notice; Save/Export/Play feedback
+  was previously screen-reader-only in the rebuilt shell.
+- Play ROM now works in the native app: the streamed-CDN Genesis core
+  fallback is allowed in the desktop app (was Vite-dev-only), with the
+  release caveat tracked in the overhaul plan.
+- Provider switching no longer wipes a ready OpenRouter state; Settings got
+  a "Settings apply immediately" note and a Done button; enabled
+  enhancements are auto-tested when Settings opens.
+
+## 2026-07-05 - ITERATION 112 - overhaul: real agent loop, player audio, UI rebuild
+
+Plan:
+
+- Task: execute `docs/overhaul-plan.md` tracks A/B/C plus hardening: wire the
+  real OpenCode agent loop into chat, add player audio, rebuild the UI shell,
+  and add timeouts/size caps.
+- Files: `app/src-tauri/src/{opencode,project,starter_rom,main}.rs`,
+  `app/src/agent/opencodeSession.ts`, `app/src/App.tsx`,
+  `app/src/components/*`, `app/src/styles.css`, `app/src/player/nostalgist.ts`,
+  `agent/skills/drive16-app-builder.md`, `opencode.json`,
+  `scripts/verify-phase6-browser-smoke.mjs`.
+- Verification: cargo tests, app build, browser smoke, live agent runs via the
+  OpenCode API, Genteel audio dump.
+
+Did:
+
+- Chat now routes to the real OpenCode agent (model-selected, long-timeout,
+  chunked HTTP) with the MCP tool belt; BYOK key handed over via
+  `set_opencode_auth`; agent works in `artifacts/phase3/active-project` and
+  the built ROM auto-plays. The `isV1Prompt` string-match is fallback-only and
+  the overclaim regex guards are gone.
+- Verified live: "make the screen background bright red" (24 s) and "add a
+  short upbeat looping background song" (117 s) both edited the project,
+  built through Docker SGDK, and produced truthful replies; the composed
+  4-channel MML song is non-silent in a Genteel audio dump (max_abs 14043).
+- Player audio: RetroArch OpenAL context resumed on Play/click, mute toggle
+  in the player pane; `PlayerAudioState` is finally real.
+- UI rebuilt: chat-left/game-right shell, components extracted, App.tsx
+  6,014 -> ~3,600 lines, styles.css rewritten (~1,500 lines), jargon purged;
+  smoke selectors updated and passing.
+- Hardening: run_command_with_timeout kills hung Docker/Genteel calls;
+  base64 import size caps for ROMs and Play cores.
+- Builder skill extended with music (MML presets -> compile_music -> XGM)
+  and sprite (ComfyUI workflow -> validator -> SPRITE resource) recipes; all
+  6 MML presets re-validated locally.
+
+## 2026-07-03 - ITERATION 111 - move provider detail out of chat
+
+Plan:
+
+- Task: remove the bulky `OpenRouter live` status from the chat rail and keep
+  provider detail in Settings.
+- Files: `app/src/App.tsx`, `app/src/styles.css`,
+  `scripts/verify-phase6-browser-smoke.mjs`,
+  `docs/phase8-ui-repair-slice7.md`, `PROGRESS.md`, `README.md`,
+  `WORKLOG.md`, `docs/phase8-next-agent-handoff.md`,
+  `docs/phase8-ui-optimization-checkpoint.md`, and
+  `docs/ui-repair-control-map.md`.
+- Verification: app build, browser smoke, rendered browser check, diff hygiene,
+  and secret scan.
+
+Did:
+
+- Removed the provider-status strip from the bottom of the conversation rail.
+- Changed the composer label to neutral `Message`.
+- Kept provider/key/model details in Agent Settings.
+- Updated browser smoke to fail if `OpenRouter live` leaks back into the chat
+  pane after provider setup.
+
+Gate:
+
+Provider setup remains visible in Settings, and freeform chat still works after
+OpenRouter is tested. Chat no longer carries a persistent provider info panel.
+
+## 2026-07-03 - ITERATION 110 - OpenRouter session key retention
+
+Plan:
+
+- Task: stop the OpenRouter BYOK key from disappearing during normal app use
+  and refreshes.
+- Files: `app/src/App.tsx`, `scripts/verify-phase6-browser-smoke.mjs`,
+  `PROGRESS.md`, `WORKLOG.md`, `README.md`,
+  `docs/phase8-next-agent-handoff.md`, and
+  `docs/ui-repair-control-map.md`.
+- Verification: app build, browser smoke with reload persistence assertion,
+  script syntax, diff hygiene, and secret scan.
+
+Did:
+
+- Persisted the OpenRouter key in browser/native session storage for the
+  current app window.
+- Kept the key out of committed files, docs, localStorage, and project state.
+- Updated app copy so it no longer says keys are forgotten after reload.
+- Extended browser smoke to fill the key, reload the app, reopen Settings, and
+  assert the key is still present before testing OpenRouter.
+
+Gate:
+
+The key should remain available through refreshes while the app window is open.
+Closing the app/window still clears the session-scoped key.
+
+## 2026-07-03 - ITERATION 109 - native visible-button trust pass
+
+Plan:
+
+- Task: finish the remaining native visible-button trust audit after the
+  file-picker open/cancel pass.
+- Files: `docs/phase8-ui-repair-slice6.md`, `PROGRESS.md`, `WORKLOG.md`,
+  `README.md`, `docs/phase8-next-agent-handoff.md`,
+  `docs/phase8-ui-optimization-checkpoint.md`, and
+  `docs/ui-repair-control-map.md`.
+- Verification: inspect the current native app state, confirm the compact
+  default shell, click through Save/Open/Export, Settings, Controls, details,
+  and conversation collapse/restore, then rerun build/test/diff/secret checks.
+
+Did:
+
+- Confirmed the native app is the current Phase 8 shell with ROM details
+  collapsed by default.
+- Verified `Save` creates a snapshot and reports the path.
+- Verified `Export` copies the active ROM and reports the path.
+- Verified `Open Project` loads the latest saved snapshot after Save.
+- Verified Settings opens, provider switching hides irrelevant fields, and
+  provider state remains inside Settings.
+- Verified Controls opens, Reset defaults saves the default profile locally,
+  and the panel closes cleanly.
+- Verified `Show Details` / `Hide ROM details` and `Hide conversation pane` /
+  `Show conversation pane`.
+
+Evidence:
+
+- Native desktop inspection showed `Phase 8 readiness hub` and compact
+  `ROM details collapsed` state.
+- Save path observed under `artifacts/phase3/projects`.
+- Export path observed under `artifacts/phase3/exports`.
+- Open Project loaded the saved snapshot
+  `drive16-app-starter-blank-1783075370701`.
+- Controls feedback showed `Input profile reset to defaults` and returned to
+  compact player controls.
+- Details and conversation panes collapsed and restored without losing the ROM
+  player state.
+
+Gate:
+
+Native visible-button trust pass is complete for the available local paths.
+Remaining work is now specifically valid-file ingestion and release policy:
+valid user ROM import, valid user Play-core setup, size/error guardrails,
+license, public core policy, signing, notarization, and CSP.
+
+## 2026-07-03 - ITERATION 108 - native app freshness and file-picker trust
+
+Plan:
+
+- Task: continue the UI repair pass by proving the current native app is not a
+  stale Phase 7 bundle, then verify native Import and Set Up Play paths.
+- Files: `app/src/App.tsx`, `app/src/player/coreReadiness.ts`,
+  `app/package.json`, `scripts/launch-drive16-native.sh`,
+  `docs/phase8-ui-repair-slice5.md`, `PROGRESS.md`, `WORKLOG.md`,
+  `README.md`, `docs/phase8-next-agent-handoff.md`,
+  `docs/phase8-ui-optimization-checkpoint.md`, and
+  `docs/ui-repair-control-map.md`.
+- Verification: rebuild the native debug app bundle, inspect the desktop
+  window, click through native Import Test ROM, Import ROM, Set Up Play, run
+  frontend build, script syntax, smoke-script syntax, and diff hygiene.
+
+Did:
+
+- Found that macOS was reopening an old debug `.app` bundle with embedded
+  Phase 7 UI even though the browser preview and source were current.
+- Rebuilt the debug app bundle from the current frontend and confirmed the
+  native window now shows the Phase 8 readiness hub.
+- Added `scripts/launch-drive16-native.sh` plus an app package script so
+  future native reviews rebuild and reopen the current debug `.app`.
+- Verified `Import Test ROM` imports the repo-generated ROM, switches the
+  player to Imported ROM, and captures proof.
+- Verified `Import ROM` and `Set Up Play` open the macOS file picker and return
+  visible feedback after cancel.
+- Shortened missing Play-core copy so player/status surfaces do not turn into
+  clipped paragraphs.
+
+Evidence:
+
+- `pnpm --dir app tauri build --debug --bundles app` passed and rebuilt
+  `app/src-tauri/target/debug/bundle/macos/Drive16.app`.
+- Native desktop inspection showed `Phase 8 readiness hub` in the rebuilt app.
+- Native click-through verified:
+  - `Import Test ROM` -> `Imported ROM` plus `Test ROM imported and proof
+    captured`;
+  - `Set Up Play` -> macOS Open dialog, then `Choose Play core`;
+  - `Import ROM` -> macOS Open dialog, then `Choose ROM file`;
+  - `Play ROM` without a core -> `Play setup needed` with concise setup copy.
+- `pnpm --dir app build` passed.
+- `bash -n scripts/launch-drive16-native.sh` passed.
+- `node --check scripts/verify-phase6-browser-smoke.mjs` passed.
+- `git diff --check` passed.
+- `node scripts/verify-phase6-browser-smoke.mjs --url
+  'http://127.0.0.1:1420/?core-status=dev-only' --out
+  artifacts/phase8/browser-smoke-native-trust-20260703 --core-status dev-only`
+  passed.
+
+Gate:
+
+Native file-picker open/cancel trust pass is complete. Valid user-core import
+still requires a compatible local core file, and the broader visible-button
+trust audit remains open for save/open/export and Settings detail paths.
+
+## 2026-07-03 - ITERATION 107 - UI trust repair slice 4
+
+Plan:
+
+- Task: address the reported "OpenRouter says the ROM was built but nothing
+  visibly happens" trust failure and reduce left-rail chat bloat.
+- Files: `app/src/App.tsx`, `app/src/agent/openrouter.ts`,
+  `app/src/player/coreReadiness.ts`, `app/src/styles.css`,
+  `scripts/verify-phase6-browser-smoke.mjs`,
+  `docs/phase8-ui-repair-slice4.md`, `PROGRESS.md`, `WORKLOG.md`, and
+  `README.md`.
+- Verification: app build, browser rendered check, browser smoke with mocked
+  OpenRouter overclaim, script syntax check, and diff hygiene.
+
+Did:
+
+- Added an app-side guard that blocks OpenRouter replies claiming local ROM
+  build/proof/play completion without a local proof result.
+- Tightened the OpenRouter system prompt to prohibit claims that it built,
+  compiled, verified, exported, ran, or played a ROM.
+- Made chat message cards denser.
+- Changed missing interactive-Play copy toward `Set Up Play` and clarified
+  that Verify still works without the interactive Play core.
+- Updated the browser smoke to cover mocked model overclaims and repaired stale
+  selectors from the older UI.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `node --check scripts/verify-phase6-browser-smoke.mjs` passed.
+- `git diff --check` passed.
+- Browser preview rendered at `http://127.0.0.1:1420/?core-status=dev-only`
+  with no console warnings or errors.
+- Rendered style check confirmed compact chat card values: `10px` message
+  padding and `13px` message body text.
+- `node scripts/verify-phase6-browser-smoke.mjs --url
+  'http://127.0.0.1:1420/?core-status=dev-only' --out
+  artifacts/phase8/browser-smoke-ui-trust-20260703 --core-status dev-only`
+  passed.
+
+Gate:
+
+Passed for browser-preview UI trust repair. Native OS file-picker click-through
+for `Import ROM` and `Set Up Play` remains open.
+
 ## 2026-07-02 - ITERATION 106 - handoff checkpoint and publish prep
 
 Plan:

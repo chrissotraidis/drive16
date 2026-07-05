@@ -69,6 +69,25 @@ def workflow_with_models(workflow: Any, checkpoint: str, lora: str) -> Any:
     return updated
 
 
+def workflow_with_subject(workflow: Any, subject: str) -> Any:
+    """Swap the sprite subject into the tuned positive prompt, keeping the
+    pixel-art and palette constraints that make output tile-legal."""
+    updated = copy.deepcopy(workflow)
+    positive = updated.get("2")
+    if not isinstance(positive, dict) or positive.get("class_type") != "CLIPTextEncode":
+        raise RunnerError("Workflow node 2 must be the positive CLIPTextEncode prompt.")
+    inputs = positive.setdefault("inputs", {})
+    if not isinstance(inputs, dict):
+        raise RunnerError("Positive prompt inputs must be an object.")
+    inputs["text"] = (
+        f"single 32x32 Sega Genesis Mega Drive sprite of {subject.strip()}, "
+        "full body, centered, clean pixel art silhouette, flat magenta "
+        "background for transparency, limited 16 color game palette, "
+        "readable at small size, crisp hard edges"
+    )
+    return updated
+
+
 def read_json_lines(text: str) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     for line in text.splitlines():
@@ -328,6 +347,11 @@ def main() -> int:
         default=os.environ.get("DRIVE16_COMFYUI_LORA"),
         help="Pixel Art XL LoRA filename to use.",
     )
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Sprite subject, e.g. 'a small green spaceship'. Uses the tuned default when omitted.",
+    )
     args = parser.parse_args()
 
     manifest = load_json(MANIFEST)
@@ -337,6 +361,8 @@ def main() -> int:
     args.checkpoint = str(args.checkpoint or manifest_checkpoint)
     args.lora = str(args.lora or manifest_lora)
     workflow = workflow_with_models(workflow, args.checkpoint, args.lora)
+    if args.prompt:
+        workflow = workflow_with_subject(workflow, args.prompt)
     validator = manifest.get("validator", {})
     symbol = args.symbol or (
         validator.get("defaultSymbol") if isinstance(validator, dict) else None

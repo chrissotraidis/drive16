@@ -1,49 +1,20 @@
-import {
-  Activity,
-  AlertCircle,
-  CheckCircle2,
-  Circle,
-  Code2,
-  Download,
-  Eye,
-  EyeOff,
-  FolderInput,
-  FolderOpen,
-  FolderTree,
-  Gamepad2,
-  KeyRound,
-  Maximize2,
-  Menu,
-  MessageSquareText,
-  Minimize2,
-  PanelBottomClose,
-  PanelBottomOpen,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Pause,
-  Play,
-  Plus,
-  RefreshCcw,
-  Save,
-  Send,
-  Settings,
-  ShieldCheck,
-  Square,
-  TerminalSquare,
-  Upload,
-  Wrench,
-  X,
-} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { unzipSync } from "fflate";
-import type { ChangeEvent, KeyboardEvent, ReactNode } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import drive16Mark from "./assets/brand/drive16-mark.png";
 import {
   defaultOpenRouterModel,
   openRouterFreeformMessages,
   sendOpenRouterFreeformReply,
 } from "./agent/openrouter";
+import {
+  agentActivityFromEvent,
+  agentPromptWithProject,
+  ensureActiveProject,
+  resetActiveProject,
+  sendAgentPrompt,
+  setAgentProviderKey,
+} from "./agent/opencodeSession";
 import {
   coreLaunchFailureReadiness,
   activeGamepadActionIds,
@@ -56,12 +27,12 @@ import {
   pauseNostalgistPlayer,
   playerInputActionForId,
   playerInputActionFromKey,
-  playerProviderFromCoreReadiness,
-  proofPreviewProvider,
   resetNostalgistPlayer,
   resetInputProfile,
+  resumeNostalgistAudio,
   resumeNostalgistPlayer,
   sendNostalgistInput,
+  toggleNostalgistMute,
   sameGamepadReadiness,
   stopNostalgistPlayer,
   visibleControllerBindings,
@@ -69,7 +40,6 @@ import {
   visibleKeyboardMappings,
   type ActiveRomSource,
   type GamepadReadiness,
-  type InteractivePlayerSession,
   type InteractiveCoreReadiness,
   type LoadedInteractiveCore,
   type LoadedPlayerRom,
@@ -78,9 +48,23 @@ import {
   type PlayerInputAction,
   type PlayerInputActionId,
   type PlayerInputProfile,
-  type PlayerProvider,
   type PlayerSessionState,
 } from "./player";
+import { ChatRail } from "./components/ChatRail";
+import { PlayerPane } from "./components/PlayerPane";
+import { ProjectMenu } from "./components/ProjectMenu";
+import { SettingsPanel } from "./components/SettingsPanel";
+import { TopBar } from "./components/TopBar";
+import {
+  base64ToBytes,
+  connectionLabel,
+  defaultComfyUiCheckpoint,
+  defaultComfyUiLora,
+  formatBytes,
+  shortModelLabel,
+  shortOllamaLabel,
+  shortPath,
+} from "./components/ui";
 
 type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
@@ -102,12 +86,6 @@ type ConversationMode = {
   detail: string;
 };
 
-type ToolStep = {
-  label: string;
-  detail: string;
-  state: "done" | "active" | "queued";
-};
-
 type HealthState = "ready" | "warning" | "missing";
 
 type HealthCheck = {
@@ -115,20 +93,6 @@ type HealthCheck = {
   state: HealthState;
   detail: string;
   hints?: string[];
-};
-
-type ReadinessHubItem = {
-  name: string;
-  state: HealthState;
-  status: string;
-  detail: string;
-  nextAction: string;
-};
-
-type ReadinessHubSummary = {
-  state: HealthState;
-  label: string;
-  detail: string;
 };
 
 type PreflightReport = {
@@ -316,6 +280,7 @@ type OpenCodeBridgeStatus = {
   eventUrl: string;
   version?: string;
   launched: boolean;
+  connectedProviders?: string[];
 };
 
 type OpenCodeSendResult = {
@@ -324,6 +289,8 @@ type OpenCodeSendResult = {
   partId: string;
   state: HealthState;
   detail: string;
+  replyText?: string | null;
+  finish?: string | null;
 };
 
 type OpenCodeEvent = {
@@ -392,11 +359,10 @@ type DecodedFramebufferFrame = {
 
 const openRouterKeyUrl = "https://openrouter.ai/api/v1/key";
 const openRouterModelsUrl = "https://openrouter.ai/api/v1/models";
+const openRouterSessionKeyStorageKey = "drive16.openrouter.sessionKey.v1";
 const defaultOllamaEndpoint = "http://127.0.0.1:11434";
 const defaultOllamaModel = "qwen2.5-coder:7b";
 const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
-const defaultComfyUiCheckpoint = "sd_xl_base_1.0.safetensors";
-const defaultComfyUiLora = "pixel-art-xl.safetensors";
 
 const preferredOpenRouterModels = [
   defaultOpenRouterModel,
@@ -427,12 +393,37 @@ const fallbackModelOptions: ModelOption[] = [
   },
 ];
 
+function loadOpenRouterSessionKey() {
+  if (typeof window === "undefined") return "";
+
+  try {
+    return window.sessionStorage.getItem(openRouterSessionKeyStorageKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveOpenRouterSessionKey(value: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    const trimmed = value.trim();
+    if (trimmed) {
+      window.sessionStorage.setItem(openRouterSessionKeyStorageKey, trimmed);
+    } else {
+      window.sessionStorage.removeItem(openRouterSessionKeyStorageKey);
+    }
+  } catch {
+    // Some locked-down WebViews can reject storage; the in-memory key still works.
+  }
+}
+
 const starterMessages: Message[] = [
   {
     id: 1,
     role: "agent",
     source: "system",
-    body: "Starter project loaded. Blank ROM proof preview is ready.",
+    body: "Starter project loaded. Describe what you want to build.",
     time: "09:41",
   },
   {
@@ -445,7 +436,7 @@ const starterMessages: Message[] = [
     id: 3,
     role: "agent",
     source: "proof",
-    body: "Local proof path is ready: that prompt builds the bundled sprite/music ROM and verifies movement and audio.",
+    body: "Try a prompt like that one: it builds the bundled sprite-and-music demo and loads it in the player.",
     time: "09:42",
   },
 ];
@@ -472,7 +463,7 @@ const previewPreflight: PreflightReport = {
     {
       name: "Genteel",
       state: "ready",
-      detail: "sidecar path tracked from Phase 0",
+      detail: "Genteel sidecar path is tracked",
     },
   ],
 };
@@ -575,7 +566,7 @@ const previewImportResult: RomImportResult = {
 const previewInteractiveCoreStatus: InteractiveCoreStatusResult = {
   generatedAt: "preview",
   status: "missing",
-  detail: "Choose a compatible .zip archive or .js + .wasm pair to enable local Play.",
+  detail: "Set Up Play with a core .zip or .js + .wasm pair.",
   coreName: "genesis_plus_gx",
   source: "No user core",
   importDirectory: "artifacts/phase7/interactive-core",
@@ -662,7 +653,11 @@ function App() {
     useState<LoadedInteractiveCore | undefined>();
   const [playerState, setPlayerState] = useState<PlayerSessionState>("idle");
   const [playerCanvasActive, setPlayerCanvasActive] = useState(false);
-  const [playerAudio] = useState<PlayerAudioState>("unavailable");
+  const [playerAudio, setPlayerAudio] = useState<PlayerAudioState>("unavailable");
+  const [agentRom, setAgentRom] = useState<{ path: string; stamp: number } | undefined>();
+  const [agentProviders, setAgentProviders] = useState<string[]>([]);
+  const [workspacePath, setWorkspacePath] = useState<string | undefined>();
+  const [toastNotice, setToastNotice] = useState<ProjectActionNotice | undefined>();
   const [interactiveCoreReadiness, setInteractiveCoreReadiness] =
     useState<InteractiveCoreReadiness>(() =>
       detectInteractiveCoreReadiness({
@@ -672,13 +667,13 @@ function App() {
     );
   const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
-    "Starter template loaded. Verify the ROM or ask for sprite and music.",
+    "Starter project loaded. Describe what you want to build.",
   );
   const [modelProvider, setModelProvider] = useState<ModelProvider>("openrouter");
   const [activeModel, setActiveModel] = useState(fallbackModelOptions[0].id);
   const [modelOptions, setModelOptions] = useState<ModelOption[]>(fallbackModelOptions);
   const [modelsSource, setModelsSource] = useState("fallback");
-  const [openRouterKey, setOpenRouterKey] = useState("");
+  const [openRouterKey, setOpenRouterKey] = useState(() => loadOpenRouterSessionKey());
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
   const [ollamaEndpoint, setOllamaEndpoint] = useState(defaultOllamaEndpoint);
   const [ollamaModel, setOllamaModel] = useState(defaultOllamaModel);
@@ -719,6 +714,11 @@ function App() {
     void loadProjectSummary();
     void loadRecentProjects();
     void loadInteractiveCoreStatus();
+    if (isTauriRuntime()) {
+      void ensureActiveProject()
+        .then((project) => setWorkspacePath(project.projectPath))
+        .catch(() => undefined);
+    }
   }, []);
 
   useEffect(() => {
@@ -727,6 +727,15 @@ function App() {
 
     void refreshOpenRouterModels();
   }, [modelProvider, modelsSource, settingsOpen]);
+
+  // Check enabled enhancements automatically when Settings opens so their
+  // status is real without an extra Test click.
+  useEffect(() => {
+    if (!settingsOpen || !enhancements.spriteGeneration) return;
+    if (comfyUiConnection.state !== "idle") return;
+    void testComfyUiConnection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen, enhancements.spriteGeneration]);
 
   useEffect(() => {
     if (openCode.state !== "ready" || !openCode.eventUrl) return;
@@ -744,6 +753,10 @@ function App() {
 
     events.onmessage = (event) => {
       appendOpenCodeEventFromData(event.data);
+      const activity = agentActivityFromEvent(event.data);
+      if (activity && activity.kind === "tool") {
+        noteAction(activity.label);
+      }
     };
 
     events.onerror = () => {
@@ -760,6 +773,28 @@ function App() {
     if (!element) return;
     element.scrollTop = element.scrollHeight;
   }, [messages]);
+
+  // When the agent finishes a build, load the fresh ROM into the player.
+  // The stamp changes on every build so a rebuild at the same path replays.
+  useEffect(() => {
+    if (!agentRom) return;
+    setLoadedPlayerRom(undefined);
+    void playActiveRom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentRom?.stamp]);
+
+  // Surface every action result as a visible toast; the notice state also
+  // feeds the sr-only live region for assistive tech.
+  const noticeSeenRef = useRef(false);
+  useEffect(() => {
+    if (!noticeSeenRef.current) {
+      noticeSeenRef.current = true;
+      return;
+    }
+    setToastNotice(projectActionNotice);
+    const timer = window.setTimeout(() => setToastNotice(undefined), 8000);
+    return () => window.clearTimeout(timer);
+  }, [projectActionNotice]);
 
   useEffect(() => {
     return () => {
@@ -837,48 +872,10 @@ function App() {
   }, [inputProfile]);
 
   const buildLabel = useMemo(() => {
-    if (buildState === "building") return "Verifying";
-    if (buildState === "running") return "Ready";
+    if (buildState === "building") return "Working";
     if (buildState === "error") return "Error";
-    return "Idle";
+    return "Ready";
   }, [buildState]);
-
-  const runSteps = useMemo<ToolStep[]>(() => {
-    const openCodeConnected = openCode.state === "ready";
-    return [
-      {
-        label: "OpenCode HTTP",
-        detail: openCodeConnected
-          ? `${openCode.version ?? "server"} at ${openCode.baseUrl}`
-          : openCode.detail,
-        state: openCodeConnected ? "done" : "active",
-      },
-      {
-        label: "SSE stream",
-        detail:
-          openCodeEvents.length > 0
-            ? openCodeEvents[0].type
-            : openCodeConnected
-              ? "Waiting for server events"
-              : "Connect OpenCode first",
-        state: openCodeConnected ? "active" : "queued",
-      },
-      {
-        label: "User message",
-        detail: openCodeSessionId
-          ? `Session ${shortIdentifier(openCodeSessionId)}`
-          : "Create session on first send",
-        state: openCodeSessionId ? "done" : openCodeConnected ? "active" : "queued",
-      },
-      {
-        label: "CORE ROM",
-        detail: v1PromptResult
-          ? `Sprite and music verified, audio ${v1PromptResult.audioMaxAbs}`
-          : "Ask for sprite and music",
-        state: v1PromptResult ? "done" : "queued",
-      },
-    ];
-  }, [openCode, openCodeEvents, openCodeSessionId, v1PromptResult]);
 
   const actionFeedback = useMemo<ProjectActionNotice>(() => {
     if (buildState === "error") {
@@ -970,12 +967,8 @@ function App() {
   );
 
   const activeRomSource = useMemo(
-    () => activeRomSourceFor(projectSummary, importResult, v1PromptResult),
-    [importResult, projectSummary, v1PromptResult],
-  );
-  const interactiveProvider = useMemo(
-    () => playerProviderFromCoreReadiness(interactiveCoreReadiness),
-    [interactiveCoreReadiness],
+    () => activeRomSourceFor(projectSummary, importResult, v1PromptResult, agentRom?.path),
+    [importResult, projectSummary, v1PromptResult, agentRom],
   );
   const preflightWithInteractivePlay = useMemo(
     () => [interactiveCoreHealthCheck(interactiveCoreReadiness), ...preflight.checks],
@@ -994,35 +987,6 @@ function App() {
     () => controllerProfileConfigured(inputProfile),
     [inputProfile],
   );
-  const playerSession = useMemo<InteractivePlayerSession>(
-    () => ({
-      provider: interactiveProvider,
-      state: playerState,
-      audio: playerAudio,
-      rom: activeRomSource,
-      loadedRom: loadedPlayerRom?.sourcePath === activeRomSource.path ? loadedPlayerRom : undefined,
-      input: {
-        focused: romInputFocused,
-        keyboardReady: true,
-        profile: inputProfile,
-        controller: gamepadReadiness,
-        controllerReady: gamepadReadiness.state === "detected",
-        lastAction: lastPlayerInput,
-      },
-    }),
-    [
-      activeRomSource,
-      gamepadReadiness,
-      inputProfile,
-      interactiveProvider,
-      loadedPlayerRom,
-      lastPlayerInput,
-      playerAudio,
-      playerState,
-      romInputFocused,
-    ],
-  );
-
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = draft.trim();
@@ -1032,6 +996,19 @@ function App() {
     setMessages((current) => [...current, userMessage]);
     setDraft("");
     setOpenCodeBusy(true);
+
+    // In the desktop app there is exactly one path: the build agent. It
+    // reconnects on demand and reports real errors. The freeform/gated chat
+    // below only exists for the browser preview, which has no agent bridge.
+    if (isTauriRuntime()) {
+      try {
+        await runAgentPrompt(trimmed);
+      } finally {
+        setOpenCodeBusy(false);
+      }
+      return;
+    }
+
     const shouldRunV1 = isV1Prompt(trimmed);
     const shouldRunGeneratedMusic = shouldRunV1 && enhancements.musicGeneration;
     const shouldRunGeneratedSprite = shouldRunGeneratedMusic && enhancements.spriteGeneration;
@@ -1080,10 +1057,10 @@ function App() {
         applyV1PromptResult(promptResult, promptAssetMode);
         noteAction(
           shouldRunGeneratedSprite
-            ? "Generated sprite and MML ROM proof completed."
+            ? "Generated sprite and music demo ready."
             : shouldRunGeneratedMusic
-              ? "Generated MML ROM proof completed."
-              : "CORE ROM proof completed.",
+              ? "Generated music demo ready."
+              : "Sprite and music demo ready.",
         );
         const agentMessage = makeMessage(
           "agent",
@@ -1118,7 +1095,7 @@ function App() {
         if (openCodeResult) {
           appendOpenCodeEvent("message.logged", shortIdentifier(openCodeResult.sessionId));
         }
-        noteAction("OpenRouter freeform reply received. ROM proof path unchanged.");
+        noteAction("Model reply received.");
       }
       setBuildState("running");
     } catch (error) {
@@ -1126,7 +1103,7 @@ function App() {
       const agentMessage = makeMessage(
         "agent",
         shouldRunV1
-          ? `The v1 ROM proof could not finish yet. ${detail}`
+          ? `The ROM build could not finish. ${detail}`
           : `${openRouterReplyFailureMessage(detail)} ROM-changing prompts still use the verified local build path.`,
         shouldRunV1 ? "proof" : "system",
       );
@@ -1140,6 +1117,101 @@ function App() {
       }
     } finally {
       setOpenCodeBusy(false);
+    }
+  }
+
+  async function runAgentPrompt(trimmed: string) {
+    // Reconnect on demand: startup connection may have raced the server
+    // boot, and the server restarts when a key is saved.
+    let bridge = openCode;
+    let providers = agentProviders;
+    if (bridge.state !== "ready" || !providers.includes("openrouter")) {
+      const report = await connectOpenCode();
+      if (report) {
+        bridge = report;
+        providers = report.connectedProviders ?? [];
+      }
+    }
+
+    if (bridge.state !== "ready") {
+      setMessages((current) => [
+        ...current,
+        makeMessage(
+          "agent",
+          `I could not reach the build agent: ${bridge.detail} Try again in a few seconds.`,
+          "system",
+        ),
+      ]);
+      setBuildState("error");
+      return;
+    }
+
+    if (modelProvider === "ollama") {
+      setMessages((current) => [
+        ...current,
+        makeMessage(
+          "agent",
+          "Building through Ollama is not wired up yet. Switch to OpenRouter in Settings to build; Ollama support is on the roadmap.",
+          "system",
+        ),
+      ]);
+      return;
+    }
+
+    if (!providers.includes("openrouter")) {
+      setMessages((current) => [
+        ...current,
+        makeMessage(
+          "agent",
+          "I need a model to build with. Open Settings, paste your OpenRouter API key, and click Test OpenRouter — you only have to do this once.",
+          "system",
+        ),
+      ]);
+      return;
+    }
+
+    setBuildState("building");
+    noteAction("The agent is working on your request.");
+    try {
+      const project = await ensureActiveProject();
+      setWorkspacePath(project.projectPath);
+      const result = await sendAgentPrompt({
+        sessionId: openCodeSessionId ?? undefined,
+        text: agentPromptWithProject(project.projectPath, trimmed),
+        providerId: "openrouter",
+        modelId: activeModel,
+      });
+      setOpenCodeSessionId(result.sessionId);
+
+      const reply =
+        result.replyText?.trim() ||
+        "The agent finished but did not send a reply. Check the activity feed.";
+      setMessages((current) => [...current, makeMessage("agent", reply, "opencode")]);
+      appendOpenCodeEvent("agent.reply", `finish: ${result.finish ?? "unknown"}`);
+
+      const after = await ensureActiveProject();
+      if (after.romExists) {
+        setAgentRom({ path: after.romPath, stamp: Date.now() });
+        noteAction("The project ROM is ready. Loading it into the player.");
+      } else {
+        noteAction("The agent replied. No ROM has been built yet.");
+      }
+      setBuildState("running");
+    } catch (error) {
+      const detail = errorDetail(error, "The agent request failed with no detail");
+      setMessages(
+        (current) => [
+          ...current,
+          makeMessage("agent", `Something went wrong while working on that: ${detail}`, "system"),
+        ],
+      );
+      setProjectActionNotice({
+        state: "missing",
+        label: "Agent request failed",
+        detail,
+      });
+      appendOpenCodeEvent("agent.failed", detail);
+      setBuildState("error");
     }
   }
 
@@ -1204,7 +1276,7 @@ function App() {
     }
   }
 
-  async function connectOpenCode() {
+  async function connectOpenCode(): Promise<OpenCodeBridgeStatus | undefined> {
     setOpenCodeSource("checking");
 
     if (isTauriRuntime()) {
@@ -1216,16 +1288,27 @@ function App() {
           report.state === "ready" ? "server.ready" : "server.warning",
           report.detail,
         );
-        return;
+        const providers = report.connectedProviders ?? [];
+        setAgentProviders(providers);
+        // A key saved in a previous session lives in OpenCode's auth store,
+        // so the agent is ready without re-pasting it.
+        if (providers.includes("openrouter")) {
+          setModelConnection((current) =>
+            current.state === "ready"
+              ? current
+              : { state: "ready", detail: "Using the saved OpenRouter key" },
+          );
+        }
+        return report;
       } catch (error) {
         setOpenCode({
           ...previewOpenCode,
           state: "warning",
-          detail: error instanceof Error ? error.message : "OpenCode command unavailable",
+          detail: errorDetail(error, "OpenCode command unavailable"),
           generatedAt: "error",
         });
         setOpenCodeSource("error");
-        return;
+        return undefined;
       }
     }
 
@@ -1256,6 +1339,7 @@ function App() {
       });
       setOpenCodeSource("preview");
     }
+    return undefined;
   }
 
   async function sendOpenCodeMessage(text: string): Promise<OpenCodeSendResult> {
@@ -1264,6 +1348,7 @@ function App() {
         request: {
           sessionId: openCodeSessionId,
           text,
+          noReply: true,
         },
       });
     }
@@ -1376,8 +1461,8 @@ function App() {
       framebufferFrames,
       streamedFrames: framebufferFrames.length,
       detail: useGeneratedSprite
-        ? "Preview Phase 4 generated sprite and MML music verification"
-        : "Preview Phase 4 generated MML music verification",
+        ? "Preview of the generated sprite and music build"
+        : "Preview of the generated music build",
     };
   }
 
@@ -1409,10 +1494,10 @@ function App() {
       generatedAt: result.generatedAt,
       name:
         assetMode === "generatedAssets"
-          ? "Generated Sprite and MML ROM"
+          ? "Generated Sprite and Music ROM"
           : assetMode === "generatedMusic"
-            ? "Generated MML Music ROM"
-            : "Generated CORE ROM",
+            ? "Generated Music ROM"
+            : "Sprite and Music Demo",
       projectPath: result.projectPath,
       romPath: result.romPath,
       exportDirectory: "artifacts/phase3/exports",
@@ -1757,6 +1842,39 @@ function App() {
         detail: "OpenRouter key accepted",
       });
       appendOpenCodeEvent("model.ready", shortModelLabel(activeModel));
+
+      // Hand the BYOK key to the OpenCode agent so chat prompts can build.
+      // OpenCode activates the provider on a quick automatic restart.
+      if (isTauriRuntime()) {
+        try {
+          const auth = await setAgentProviderKey("openrouter", trimmedKey);
+          appendOpenCodeEvent("agent.auth", auth.detail);
+          if (auth.connected) {
+            setAgentProviders((current) =>
+              current.includes("openrouter") ? current : [...current, "openrouter"],
+            );
+            setModelConnection({
+              state: "ready",
+              detail: "OpenRouter key accepted and saved for the agent",
+            });
+          } else {
+            setModelConnection({
+              state: "warning",
+              detail: `Key accepted, but the agent could not activate OpenRouter: ${auth.detail}`,
+            });
+          }
+          if (auth.restarted) {
+            void connectOpenCode();
+          }
+        } catch (error) {
+          const detail = errorDetail(error, "Could not hand the key to the agent");
+          appendOpenCodeEvent("agent.auth.failed", detail);
+          setModelConnection({
+            state: "warning",
+            detail: `Key accepted by OpenRouter, but the agent setup failed: ${detail}`,
+          });
+        }
+      }
     } catch (error) {
       setModelConnection({
         state: "missing",
@@ -1900,15 +2018,22 @@ function App() {
 
   function handleOpenRouterKeyChange(value: string) {
     setOpenRouterKey(value);
+    saveOpenRouterSessionKey(value);
     resetModelConnectionIfChecked("OpenRouter not tested");
   }
 
   function handleProviderChange(value: ModelProvider) {
     setModelProvider(value);
-    setModelConnection({
-      state: "idle",
-      detail: value === "openrouter" ? "OpenRouter not tested" : "Ollama not tested",
-    });
+    // A provider already connected in OpenCode stays ready across switches;
+    // only untested providers start from idle.
+    if (value === "openrouter" && agentProviders.includes("openrouter")) {
+      setModelConnection({ state: "ready", detail: "Using the saved OpenRouter key" });
+    } else {
+      setModelConnection({
+        state: "idle",
+        detail: value === "openrouter" ? "OpenRouter not tested" : "Ollama not tested",
+      });
+    }
     if (value === "ollama") {
       setShowOpenRouterKey(false);
     }
@@ -2010,7 +2135,7 @@ function App() {
     setMessages([
       makeMessage(
         "agent",
-        "New starter project ready. It uses the blank SGDK template; ask for sprite and music when you want the CORE demo.",
+        "New starter project ready. Describe what to build, or ask for a sprite you can move with music.",
       ),
     ]);
     setDraft("");
@@ -2021,6 +2146,14 @@ function App() {
     setV1PromptResult(undefined);
     setV1PromptSource("idle");
     setOpenCodeSessionId(undefined);
+    setAgentRom(undefined);
+    if (isTauriRuntime()) {
+      void resetActiveProject()
+        .then((project) => setWorkspacePath(project.projectPath))
+        .catch((error) => {
+          noteAction(errorDetail(error, "Could not reset the project workspace"));
+        });
+    }
     setTransport("running");
     setSpriteX(52);
     setProjectSummary(previewProjectSummary);
@@ -2033,7 +2166,7 @@ function App() {
     noteAction("New project started from the blank starter template.");
     appendOpenCodeEvent("project.new", "Blank starter template loaded");
     void loadProjectSummary();
-    void launchRom(undefined, "New starter project proof preview ready.");
+    void launchRom(undefined, "New starter project ready.");
   }
 
   async function saveProject() {
@@ -2115,7 +2248,7 @@ function App() {
     });
     appendOpenCodeEvent("project.open.selected", target.projectPath);
     noteAction(`Project opened from ${target.projectPath}.`);
-    void launchRom(`${target.projectPath}/out/rom.bin`, "Project snapshot proof preview ready.");
+    void launchRom(`${target.projectPath}/out/rom.bin`, "Saved project loaded.");
   }
 
   async function loadRomImportReadiness() {
@@ -2152,6 +2285,7 @@ function App() {
     setExportResult(undefined);
     setV1PromptResult(undefined);
     setV1PromptSource("idle");
+    setAgentRom(undefined);
     setProjectActionNotice({
       state: result.status,
       label: "Imported ROM active",
@@ -2212,7 +2346,7 @@ function App() {
       activateImportedRom(result);
       setLoadedPlayerRom(playerRomFromBytes(result.importPath, result.sourceName, selectedBytes));
       appendOpenCodeEvent("rom.imported", result.importPath);
-      void launchRom(result.importPath, "Imported ROM proof captured.");
+      void launchRom(result.importPath, "Imported ROM ready.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "ROM import setup failed";
       setProjectActionNotice({
@@ -2237,7 +2371,7 @@ function App() {
         : previewTestRomImport();
       activateImportedRom(result);
       appendOpenCodeEvent("rom.imported.test", result.importPath);
-      void launchRom(result.importPath, "Test ROM imported and proof captured.");
+      void launchRom(result.importPath, "Test ROM imported and ready.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Test ROM import failed";
       setProjectActionNotice({
@@ -2258,7 +2392,7 @@ function App() {
     appendOpenCodeEvent("verify.started", activePath);
     void launchRom(
       importResult?.importPath,
-      importResult ? "Imported ROM proof captured." : "Current starter ROM proof captured.",
+      importResult ? "Imported ROM verified." : "Project ROM verified.",
     );
   }
 
@@ -2315,6 +2449,7 @@ function App() {
       });
       playerRuntimeRef.current = runtime;
       setPlayerState("playing");
+      void resumeNostalgistAudio(runtime).then(setPlayerAudio);
       setProjectActionNotice({
         state: "ready",
         label: "Interactive player started",
@@ -2348,7 +2483,10 @@ function App() {
   }
 
   async function readActiveRomForPlayer(source: ActiveRomSource): Promise<LoadedPlayerRom> {
-    if (loadedPlayerRom?.sourcePath === source.path) {
+    // Only reuse in-memory bytes in the browser preview, where there is no
+    // disk access. In the desktop app the ROM at this path may have just
+    // been rebuilt, so always re-read it.
+    if (!isTauriRuntime() && loadedPlayerRom?.sourcePath === source.path) {
       return loadedPlayerRom;
     }
 
@@ -2381,7 +2519,7 @@ function App() {
     }
 
     if (!isTauriRuntime()) {
-      throw new Error("Choose Core again before Play; browser preview keeps user cores in memory.");
+      throw new Error("Set Up Play again before playing; browser preview keeps user cores in memory.");
     }
 
     const result = await invoke<InteractiveCoreReadResult>("read_interactive_core_files");
@@ -2483,6 +2621,7 @@ function App() {
       );
     } finally {
       playerRuntimeRef.current = undefined;
+      setPlayerAudio("unavailable");
     }
   }
 
@@ -2540,8 +2679,22 @@ function App() {
   function focusRomInput() {
     setRomInputFocused(true);
     romViewportRef.current?.focus();
+    const runtime = playerRuntimeRef.current;
+    if (runtime && playerAudio === "unavailable") {
+      void resumeNostalgistAudio(runtime).then(setPlayerAudio);
+    }
     noteAction("ROM input focus is on the viewport.");
     appendOpenCodeEvent("input.focused", projectSummary.romPath);
+  }
+
+  function toggleInteractivePlayerMute() {
+    const runtime = playerRuntimeRef.current;
+    if (!runtime) return;
+    if (playerAudio === "unavailable") {
+      void resumeNostalgistAudio(runtime).then(setPlayerAudio);
+      return;
+    }
+    setPlayerAudio(toggleNostalgistMute(runtime));
   }
 
   function handleRomKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -2671,11 +2824,11 @@ function App() {
     }
   }
 
-  async function launchRom(romPath?: string, doneMessage = "Starter ROM proof captured.") {
+  async function launchRom(romPath?: string, doneMessage = "ROM preview ready.") {
     setStarterBusy(true);
     setStarterSource("checking");
     setBuildState("building");
-    noteAction(romPath ? "Capturing active ROM proof." : "Capturing starter ROM proof.");
+    noteAction(romPath ? "Loading the ROM preview." : "Loading the starter ROM preview.");
 
     if (!isTauriRuntime()) {
       setStarterRom(makePreviewStarterRom(romPath));
@@ -2740,574 +2893,102 @@ function App() {
         }}
       />
       <TopBar
-        actionDetail={actionDetail}
         buildLabel={buildLabel}
         buildState={buildState}
         exportBusy={exportBusy}
         menuOpen={projectMenuOpen}
-        onExportRom={() => {
+        projectName={projectSummary.name}
+        saveBusy={saveBusy}
+        onExport={() => {
           void exportRom();
         }}
-        onRunProject={runCurrentProject}
-        onSaveProject={() => {
+        onOpenSettings={() => setSettingsOpen(true)}
+        onSave={() => {
           void saveProject();
         }}
         onToggleMenu={() => setProjectMenuOpen((current) => !current)}
-        onOpenReadiness={() => setProjectMenuOpen(true)}
-        runBusy={starterBusy || buildState === "building"}
-        saveBusy={saveBusy}
       />
 
       <section className="workspace" aria-label="Drive16 workspace">
-        <aside className="left-pane" aria-label="Conversation and project">
-          <div className="pane-header">
-            <div>
-              <p className="label">Conversation</p>
-              <h1>Drive16 Agent</h1>
-            </div>
-            <div className="header-tools">
-              <div
-                className={`opencode-chip ${openCode.state}`}
-                data-testid="opencode-bridge-status"
-                title={openCode.detail}
-              >
-                {healthIcon(openCode.state)}
-                <span>{openCode.state === "ready" ? "OpenCode live" : "OpenCode check"}</span>
-              </div>
-              <button
-                className="icon-button"
-                aria-label="Agent settings"
-                data-testid="agent-settings-icon"
-                onClick={() => setSettingsOpen(true)}
-              >
-                <Settings size={18} />
-              </button>
-            </div>
-          </div>
-
-          <div className="messages" aria-label="Message history" ref={messagesRef}>
-            {messages.map((message) => (
-              <article
-                className={`message ${message.role} ${message.source ?? ""}`}
-                key={message.id}
-              >
-                <div className="message-meta">
-                  <span>{messageMetaLabel(message)}</span>
-                  <time>{message.time}</time>
-                </div>
-                <p>{message.body}</p>
-              </article>
-            ))}
-          </div>
-
-          <div
-            className={`composer-session ${conversationMode.state}`}
-            data-testid="conversation-mode-panel"
-          >
-            <span title={providerTitle(modelProvider, activeModel, ollamaEndpoint, ollamaModel)}>
-              {healthIcon(conversationMode.state)}
-              <strong>{conversationMode.label}</strong>
-              <small>{conversationMode.detail}</small>
-            </span>
-            <button
-              type="button"
-              data-testid="agent-settings-open"
-              onClick={() => setSettingsOpen(true)}
-            >
-              <Settings size={15} />
-              Settings
-            </button>
-          </div>
-
-          <form className={`composer ${conversationMode.state}`} onSubmit={submitMessage}>
-            <MessageSquareText size={18} />
-            <label className="composer-field" data-testid="composer-mode-label">
-              <span>{conversationMode.label}</span>
-              <input
-                aria-label="Message Drive16"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder={
-                  conversationMode.state === "ready"
-                    ? "Message Drive16 or ask for a ROM change"
-                    : "Ask for ROM changes"
-                }
-              />
-            </label>
-            <button aria-label="Send message" type="submit" disabled={openCodeBusy}>
-              <Send size={18} />
-            </button>
-          </form>
-        </aside>
-
-        <section className="right-pane" aria-label="ROM player">
-          <div className="emulator-toolbar">
-            <div>
-              <p className="label">ROM Player</p>
-              <h2>{projectSummary.name}</h2>
-            </div>
-            <div className="toolbar-actions" aria-label="Emulator actions">
-              <IconControl
-                label={transport === "running" ? "Pause proof preview" : "Resume proof preview"}
-                onClick={() => {
-                  const next = transport === "running" ? "paused" : "running";
-                  setTransport(next);
-                  noteAction(next === "running" ? "Proof preview resumed." : "Proof preview paused.");
-                  appendOpenCodeEvent(
-                    next === "running" ? "preview.resumed" : "preview.paused",
-                    projectSummary.romPath,
-                  );
-                }}
-              >
-                {transport === "running" ? <Pause size={18} /> : <Play size={18} />}
-              </IconControl>
-              <IconControl
-                label="Capture current ROM proof"
-                onClick={resetPreview}
-                disabled={starterBusy}
-              >
-                <RefreshCcw size={18} />
-              </IconControl>
-              <IconControl
-                label={
-                  conversationCollapsed
-                    ? "Show conversation pane"
-                    : "Hide conversation pane"
-                }
-                onClick={toggleConversationPane}
-              >
-                {conversationCollapsed ? (
-                  <PanelLeftOpen size={18} />
-                ) : (
-                  <PanelLeftClose size={18} />
-                )}
-              </IconControl>
-              <IconControl
-                label={statusCollapsed ? "Show ROM details" : "Hide ROM details"}
-                onClick={toggleStatusPanels}
-              >
-                {statusCollapsed ? (
-                  <PanelBottomOpen size={18} />
-                ) : (
-                  <PanelBottomClose size={18} />
-                )}
-              </IconControl>
-              <IconControl
-                label={emulatorFocused ? "Exit focused emulator" : "Focus emulator"}
-                onClick={toggleEmulatorFocus}
-              >
-                {emulatorFocused ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-              </IconControl>
-            </div>
-          </div>
-
-          <div className="emulator-frame">
-            <PlayerSessionStrip
-              proofProvider={proofPreviewProvider}
-              readiness={interactiveCoreReadiness}
-              session={playerSession}
-            />
-            <div className="screen-bezel">
-              <div
-                className={`genesis-screen ${transport} ${
-                  playerCanvasActive || playerState === "loading"
-                    ? "interactive"
-                    : starterRom.framebufferFrames.length > 0
-                    ? "framebuffer"
-                    : starterRom.screenshotDataUrl
-                      ? "captured"
-                      : "fallback"
-                } ${romInputFocused ? "input-focused" : ""}`}
-                ref={romViewportRef}
-                role="application"
-                tabIndex={0}
-                data-testid="starter-rom-screen"
-                onBlur={() => setRomInputFocused(false)}
-                onClick={focusRomInput}
-                onFocus={() => setRomInputFocused(true)}
-                onKeyDown={handleRomKeyDown}
-                onKeyUp={handleRomKeyUp}
-              >
-                <canvas
-                  ref={playerCanvasRef}
-                  aria-label="Interactive Genesis player"
-                  className={`nostalgist-canvas ${
-                    playerCanvasActive || playerState === "loading" ? "active" : ""
-                  }`}
-                  data-testid="interactive-player-canvas"
-                />
-                {playerCanvasActive || playerState === "loading" ? (
-                  playerState === "loading" ? (
-                    <span className="player-loading">LOADING PLAYER</span>
-                  ) : null
-                ) : (
-                  <FramebufferCanvas
-                    fallback={
-                      starterRom.screenshotDataUrl ? (
-                        <img
-                          className="starter-frame"
-                          src={starterRom.screenshotDataUrl}
-                          alt="Starter project ROM frame"
-                        />
-                      ) : (
-                        <>
-                          <div className="scanlines" />
-                          <span className="screen-title">DRIVE16 BLANK ROM</span>
-                          <span className="screen-status">
-                            {starterBusy
-                              ? "LOADING"
-                              : transport === "running"
-                                ? "PREVIEW"
-                                : "PAUSED"}
-                          </span>
-                          <span
-                            className="sprite-cursor"
-                            style={{ left: `${spriteX}%` }}
-                            aria-hidden="true"
-                          />
-                        </>
-                      )
-                    }
-                    frames={starterRom.framebufferFrames}
-                    streamEvery={starterRom.streamEvery}
-                    transport={transport}
-                  />
-                )}
-                <span className={`screen-badge ${starterRom.status}`}>
-                  {playerCanvasActive
-                    ? playerState.toUpperCase()
-                    : starterBadge(starterRom, starterBusy, transport)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={`rom-controls ${romInputFocused ? "ready" : "warning"}`}
-            data-testid="rom-controls"
-          >
-            <button
-              type="button"
-              data-testid="rom-focus-control"
-              onClick={focusRomInput}
-            >
-              <Gamepad2 size={16} />
-              <span>{romInputFocused ? "Input focused" : "Click ROM for keyboard"}</span>
-            </button>
-            <div className="rom-key-map" aria-label="Keyboard mapping">
-              {keyboardMappings.map((mapping) => (
-                <span key={`${mapping.control}-${mapping.label}`}>
-                  <kbd>{mapping.control}</kbd>
-                  {mapping.label}
-                </span>
-              ))}
-            </div>
-            <div className="rom-input-proof">
-              <span data-testid="rom-last-input">{lastInputAction}</span>
-              <CoreReadinessPill readiness={interactiveCoreReadiness} />
-              <div
-                className="rom-player-actions"
-                onMouseDown={(event) => event.preventDefault()}
-              >
-                <button
-                  type="button"
-                  data-testid="choose-play-core"
-                  onClick={() => {
-                    void chooseInteractiveCore();
-                  }}
-                  disabled={interactiveCoreBusy}
-                >
-                  <Upload size={14} />
-                  {interactiveCoreBusy ? "Setting Up" : "Choose Core"}
-                </button>
-                <button
-                  type="button"
-                  data-testid="play-active-rom"
-                  onClick={() => {
-                    void playActiveRom();
-                  }}
-                  disabled={playerState === "loading" || playerState === "playing"}
-                >
-                  <Play size={14} />
-                  {playerState === "loading" ? "Preparing" : "Play ROM"}
-                </button>
-                {playerRuntimeRef.current ? (
-                  <>
-                    <button
-                      type="button"
-                      data-testid="pause-player"
-                      onClick={toggleInteractivePlayerPause}
-                    >
-                      {playerState === "paused" ? <Play size={14} /> : <Pause size={14} />}
-                      {playerState === "paused" ? "Resume" : "Pause"}
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="reset-player"
-                      onClick={resetInteractivePlayer}
-                    >
-                      <RefreshCcw size={14} />
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="stop-player"
-                      onClick={stopInteractivePlayer}
-                    >
-                      <Square size={14} />
-                      Stop
-                    </button>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  data-testid="open-controls"
-                  aria-expanded={controlsOpen}
-                  onClick={toggleControlsPanel}
-                >
-                  <Settings size={14} />
-                  Controls
-                </button>
-                <button
-                  type="button"
-                  data-testid="rom-right-proof"
-                  onClick={() => {
-                    void runScriptedRightInputProof();
-                  }}
-                  disabled={inputProofBusy || openCodeBusy}
-                >
-                  {inputProofBusy ? "Verifying Right" : "Verify Right"}
-                </button>
-              </div>
-            </div>
-            {controlsOpen ? (
-              <InputControlsPanel
-                keyboardBindings={keyboardBindingRows}
-                controllerBindings={controllerBindingRows}
-                controllerConfigured={controllerMappingReady}
-                gamepadReadiness={gamepadReadiness}
-                profile={inputProfile}
-                onClose={closeControlsPanel}
-                onReset={resetControlsProfile}
-              />
-            ) : null}
-          </div>
-
-          <div
-            className={`rom-action-feedback ${actionFeedback.state}`}
-            data-testid="rom-action-feedback"
-          >
-            {healthIcon(actionFeedback.state)}
-            <span>
-              <strong>{actionFeedback.label}</strong>
-              <small>{actionFeedback.detail}</small>
-            </span>
-            <div className="feedback-paths" aria-label="Recent action paths">
-              {importResult ? (
-                <span title={importResult.importPath}>
-                  <Upload size={13} />
-                  {shortPath(importResult.importPath)}
-                </span>
-              ) : null}
-              {saveResult ? (
-                <span title={saveResult.snapshotPath}>
-                  <Save size={13} />
-                  {shortPath(saveResult.snapshotPath)}
-                </span>
-              ) : null}
-              {exportResult ? (
-                <span title={exportResult.exportPath}>
-                  <Download size={13} />
-                  {shortPath(exportResult.exportPath)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          {statusCollapsed || emulatorFocused ? (
-            <div className="status-compact" data-testid="status-compact">
-              <span title={projectSummary.romPath}>
-                <Gamepad2 size={15} />
-                ROM
-                <strong>{shortPath(projectSummary.romPath)}</strong>
-              </span>
-              <span title={preflight.summaryState}>
-                <Wrench size={15} />
-                Tools
-                <strong>{preflightSummaryLabel(preflight.summaryState, preflightSource)}</strong>
-              </span>
-              <button
-                type="button"
-                data-testid="status-expand"
-                onClick={() => {
-                  setStatusCollapsed(false);
-                  setEmulatorFocused(false);
-                  noteAction("ROM details expanded.");
-                  appendOpenCodeEvent("layout.status.expanded", "ROM details");
-                }}
-              >
-                Show Details
-              </button>
-            </div>
-          ) : null}
-
-          <div className="status-grid">
-            <section className="runtime-panel" aria-label="Runtime status">
-              <SectionTitle icon={<Gamepad2 size={16} />} title="ROM" />
-              <div
-                className={`starter-summary ${starterRom.status}`}
-                data-testid="starter-rom-summary"
-              >
-                {healthIcon(starterRom.status)}
-                <span>{starterLabel(starterRom, starterBusy, projectSummary.name)}</span>
-                <small>{sourceLabel(starterSource, "Native starter ROM")}</small>
-              </div>
-              <div className="rom-metadata">
-                <span>ROM</span>
-                <strong title={projectSummary.romPath}>{shortPath(projectSummary.romPath)}</strong>
-                <span>Frame</span>
-                <strong>{starterRom.frames} frames</strong>
-                <span>Stream</span>
-                <strong>
-                  {starterRom.streamedFrames > 0
-                    ? `${starterRom.streamedFrames} frames`
-                    : "Pending"}
-                </strong>
-                <span>Canvas</span>
-                <strong>
-                  {starterRom.framebufferFrames.length > 0
-                    ? `${starterRom.frameWidth}x${starterRom.frameHeight}`
-                    : "Pending"}
-                </strong>
-                <span>Export</span>
-                <strong title={exportResult?.exportPath ?? projectSummary.exportDirectory}>
-                  {exportResult
-                    ? `${formatBytes(exportResult.bytes)} exported`
-                    : shortPath(projectSummary.exportDirectory)}
-                </strong>
-                <span>Movement</span>
-                <strong title={v1PromptResult?.movementDetail ?? v1PromptSource}>
-                  {v1PromptResult ? "Right input verified" : "Pending"}
-                </strong>
-                <span>Audio</span>
-                <strong>
-                  {v1PromptResult
-                    ? `Non-silent ${v1PromptResult.audioMaxAbs}`
-                    : "Pending"}
-                </strong>
-              </div>
-              <details className="inspector-details">
-                <summary>
-                  <FolderTree size={15} />
-                  Project files
-                  <small>{sourceLabel(projectSource, "Native project")}</small>
-                </summary>
-                <div className="project-summary" data-testid="project-summary">
-                  <strong>{projectSummary.name}</strong>
-                  <span title={projectSummary.projectPath}>
-                    {shortPath(projectSummary.projectPath)}
-                  </span>
-                  <small>{sourceLabel(projectSource, "Native project")}</small>
-                </div>
-                <ul className="compact-file-list" aria-label="Project files">
-                  {projectSummary.files.map((file) => (
-                    <li className={file.state} key={file.path}>
-                      <Code2 size={14} />
-                      <span>
-                        <b>{file.label}</b>
-                        <small title={file.path}>{shortPath(file.path)}</small>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            </section>
-
-            <section className="runtime-panel" aria-label="Tool health">
-              <div className="panel-title-row">
-                <SectionTitle icon={<Wrench size={16} />} title="Tools" />
-                <button
-                  className="refresh-health"
-                  type="button"
-                  aria-label="Refresh tool health"
-                  data-testid="refresh-health"
-                  onClick={refreshPreflight}
-                >
-                  <RefreshCcw size={14} />
-                </button>
-              </div>
-              <div
-                className={`preflight-summary ${preflight.summaryState}`}
-                data-testid="preflight-summary"
-              >
-                {healthIcon(preflight.summaryState)}
-                <span>{preflightSummaryLabel(preflight.summaryState, preflightSource)}</span>
-                <small>{sourceLabel(preflightSource)}</small>
-              </div>
-              <div className="health-list" data-testid="tool-health-list">
-                {preflightWithInteractivePlay.map((tool) => (
-                  <div className={`health-item ${tool.state}`} key={tool.name}>
-                    <span>{tool.name}</span>
-                    <strong>{stateLabel(tool.state)}</strong>
-                    <small>{tool.detail}</small>
-                    {tool.hints && tool.hints.length > 0 ? (
-                      <ul className="health-hints" aria-label={`${tool.name} setup hints`}>
-                        {tool.hints.map((hint) => (
-                          <li key={hint}>{hint}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              <details className="inspector-details">
-                <summary>
-                  <TerminalSquare size={15} />
-                  Proof and events
-                  <small>{openCodeEvents.length > 0 ? `${openCodeEvents.length} recent` : "waiting"}</small>
-                </summary>
-                <ol className="proof-step-list" aria-label="Proof steps">
-                  {runSteps.map((step) => (
-                    <li className={step.state} key={step.label}>
-                      <span className="step-dot" aria-hidden="true">
-                        {step.state === "done" ? (
-                          <CheckCircle2 size={14} />
-                        ) : step.state === "active" ? (
-                          <Activity size={14} />
-                        ) : (
-                          <Circle size={14} />
-                        )}
-                      </span>
-                      <span>
-                        <strong>{step.label}</strong>
-                        <small>{step.detail}</small>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                <div className="event-feed compact" data-testid="opencode-event-feed">
-                  <strong>Events</strong>
-                  {openCodeEvents.length > 0 ? (
-                    openCodeEvents.map((event) => (
-                      <p key={event.id}>
-                        <span>{event.time}</span>
-                        <b>{event.type}</b>
-                        <small>{event.detail}</small>
-                      </p>
-                    ))
-                  ) : (
-                    <p>
-                      <span>{sourceLabel(openCodeSource, "OpenCode bridge")}</span>
-                      <b>{openCode.state === "ready" ? "ready" : "waiting"}</b>
-                      <small>{openCode.detail}</small>
-                    </p>
-                  )}
-                </div>
-              </details>
-            </section>
-          </div>
-        </section>
+        <ChatRail
+          activityNote={actionDetail}
+          busy={openCodeBusy || buildState === "building"}
+          collapsed={conversationCollapsed}
+          draft={draft}
+          messages={messages}
+          messagesRef={messagesRef}
+          needsProviderSetup={
+            modelConnection.state !== "ready" && !agentProviders.includes("openrouter")
+          }
+          sendDisabled={openCodeBusy}
+          onDraftChange={setDraft}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onSubmit={submitMessage}
+          onToggleCollapse={toggleConversationPane}
+        />
+        <PlayerPane
+          canvasRef={playerCanvasRef}
+          controllerBindings={controllerBindingRows}
+          controllerConfigured={controllerMappingReady}
+          controlsOpen={controlsOpen}
+          emulatorFocused={emulatorFocused}
+          gamepadReadiness={gamepadReadiness}
+          keyboardBindings={keyboardBindingRows}
+          keyboardMappings={keyboardMappings}
+          lastInputAction={lastInputAction}
+          playerAudio={playerAudio}
+          playerCanvasActive={playerCanvasActive}
+          playerState={playerState}
+          profileSource={inputProfile.source}
+          romInputFocused={romInputFocused}
+          romLabel={activeRomSource.label}
+          sessionActive={Boolean(playerRuntimeRef.current)}
+          spriteX={spriteX}
+          starterBusy={starterBusy}
+          starterRom={starterRom}
+          stateLabel={playerStateLabel(playerState)}
+          transport={transport}
+          viewportRef={romViewportRef}
+          onCloseControls={closeControlsPanel}
+          onPlay={() => {
+            void playActiveRom();
+          }}
+          onResetPlayer={resetInteractivePlayer}
+          onResetProfile={resetControlsProfile}
+          onScreenBlur={() => setRomInputFocused(false)}
+          onScreenClick={focusRomInput}
+          onScreenFocus={() => setRomInputFocused(true)}
+          onScreenKeyDown={handleRomKeyDown}
+          onScreenKeyUp={handleRomKeyUp}
+          onStop={stopInteractivePlayer}
+          onToggleControls={toggleControlsPanel}
+          onToggleFocus={toggleEmulatorFocus}
+          onToggleMute={toggleInteractivePlayerMute}
+          onTogglePause={toggleInteractivePlayerPause}
+        />
       </section>
+
+      <div className="sr-only" aria-live="polite" data-testid="rom-action-feedback">
+        {actionFeedback.label}. {actionFeedback.detail}
+        {actionFeedback.detail === actionDetail ? "" : ` ${actionDetail}`}
+      </div>
+
+      {toastNotice ? (
+        <div className={`toast ${toastNotice.state}`} role="status" data-testid="action-toast">
+          <div className="toast-body">
+            <strong>{toastNotice.label}</strong>
+            <span>{toastNotice.detail}</span>
+          </div>
+          <button
+            type="button"
+            aria-label="Dismiss notification"
+            onClick={() => setToastNotice(undefined)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+
       {settingsOpen ? (
         <SettingsPanel
           activeModel={activeModel}
@@ -3317,64 +2998,61 @@ function App() {
           comfyUiLora={comfyUiLora}
           connection={modelConnection}
           enhancements={enhancements}
-          interactiveCoreReadiness={interactiveCoreReadiness}
           modelOptions={modelOptions}
           modelProvider={modelProvider}
           modelsSource={modelsSource}
           ollamaEndpoint={ollamaEndpoint}
           ollamaModel={ollamaModel}
+          openCode={openCode}
+          openCodeEvents={openCodeEvents}
+          openCodeSource={openCodeSource}
           openRouterKey={openRouterKey}
+          preflightBusy={preflightSource === "checking"}
+          preflightChecks={preflightWithInteractivePlay}
           showOpenRouterKey={showOpenRouterKey}
           onClose={() => setSettingsOpen(false)}
           onComfyUiCheckpointChange={handleComfyUiCheckpointChange}
           onComfyUiEndpointChange={handleComfyUiEndpointChange}
           onComfyUiLoraChange={handleComfyUiLoraChange}
           onEnhancementChange={handleEnhancementChange}
-          onChooseCore={() => {
-            void chooseInteractiveCore();
-          }}
           onModelChange={handleOpenRouterModelChange}
           onOllamaEndpointChange={handleOllamaEndpointChange}
           onOllamaModelChange={handleOllamaModelChange}
           onOpenRouterKeyChange={handleOpenRouterKeyChange}
           onProviderChange={handleProviderChange}
-          onRefreshModels={refreshOpenRouterModels}
+          onRefreshModels={() => {
+            void refreshOpenRouterModels();
+          }}
+          onRefreshPreflight={() => {
+            void refreshPreflight();
+          }}
           onShowOpenRouterKeyChange={setShowOpenRouterKey}
-          onTestComfyUiConnection={testComfyUiConnection}
-          onTestConnection={testModelConnection}
+          onTestComfyUiConnection={() => {
+            void testComfyUiConnection();
+          }}
+          onTestConnection={() => {
+            void testModelConnection();
+          }}
         />
       ) : null}
+
       {projectMenuOpen ? (
         <ProjectMenu
-          activeModel={activeModel}
-          buildState={buildState}
-          comfyUiCheckpoint={comfyUiCheckpoint}
-          comfyUiConnection={comfyUiConnection}
-          comfyUiLora={comfyUiLora}
-          conversationMode={conversationMode}
-          enhancements={enhancements}
           exportBusy={exportBusy}
           exportResult={exportResult}
-          interactiveCoreBusy={interactiveCoreBusy}
-          interactiveCoreReadiness={interactiveCoreReadiness}
-          interactiveCoreStatus={interactiveCoreStatus}
           importBusy={importBusy}
-          importReadiness={importReadiness}
           importResult={importResult}
-          modelConnection={modelConnection}
-          modelProvider={modelProvider}
-          ollamaEndpoint={ollamaEndpoint}
-          ollamaModel={ollamaModel}
-          openCode={openCode}
-          openRouterKeyPresent={openRouterKey.trim().length > 0}
-          preflight={preflight}
+          interactiveCoreBusy={interactiveCoreBusy}
+          interactiveCoreStatus={interactiveCoreStatus}
           projectActionNotice={projectActionNotice}
           projectSummary={projectSummary}
-          recentProjects={recentProjects}
           saveBusy={saveBusy}
           saveResult={saveResult}
-          starterRom={starterRom}
-          starterSource={starterSource}
+          verifyBusy={starterBusy || buildState === "building"}
+          workspacePath={workspacePath}
+          onChooseCore={() => {
+            void chooseInteractiveCore();
+          }}
           onClose={() => setProjectMenuOpen(false)}
           onExportRom={() => {
             void exportRom();
@@ -3385,20 +3063,17 @@ function App() {
           onImportTestRom={() => {
             void importTestRom();
           }}
-          onChooseCore={() => {
-            void chooseInteractiveCore();
-          }}
           onNewProject={() => {
             startNewProject();
             setProjectMenuOpen(false);
           }}
-          onOpenProject={openProjectSnapshot}
-          onOpenSettings={() => {
-            setProjectMenuOpen(false);
-            setSettingsOpen(true);
-          }}
+          onOpenProject={() => openProjectSnapshot()}
           onSaveProject={() => {
             void saveProject();
+          }}
+          onVerify={() => {
+            runCurrentProject();
+            setProjectMenuOpen(false);
           }}
         />
       ) : null}
@@ -3410,12 +3085,23 @@ function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+// Streamed-CDN core fallback: allowed in dev and in the local desktop app so
+// Play works out of the box. A public release should bundle or require a
+// user-supplied core instead (tracked in the overhaul plan).
 function allowDevCoreCdnFallback() {
+  if (isTauriRuntime()) return true;
   const meta = import.meta as ImportMeta & {
     env?: { DEV?: unknown };
   };
   const dev = meta.env?.DEV;
   return dev === true || String(dev) === "true";
+}
+
+// Tauri invoke rejects with plain strings; keep the real reason.
+function errorDetail(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
 }
 
 function isV1Prompt(text: string) {
@@ -3430,25 +3116,17 @@ function isV1Prompt(text: string) {
 function promptReadyMessage(generatedMusic: boolean, generatedSprite: boolean) {
   if (generatedMusic && generatedSprite) {
     return isTauriRuntime()
-      ? "Built and verified the generated sprite with generated MML music. Right input moved the sprite, audio is non-silent, and the proof preview is loaded on the right."
-      : "Previewed the generated sprite and MML music flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
+      ? "Built the demo with a generated sprite and generated music, checked movement and audio, and loaded it on the right."
+      : "Previewed the generated sprite and music demo. The desktop app builds the ROM and checks movement and audio.";
   }
   if (generatedMusic) {
     return isTauriRuntime()
-      ? "Built and verified the bundled sprite with generated MML music. Right input moved the sprite, audio is non-silent, and the proof preview is loaded on the right."
-      : "Previewed the generated MML music flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
+      ? "Built the demo with generated music, checked movement and audio, and loaded it on the right."
+      : "Previewed the generated music demo. The desktop app builds the ROM and checks movement and audio.";
   }
   return isTauriRuntime()
-    ? "Built and verified the bundled sprite/music ROM. Right input moved the sprite, audio is non-silent, and the proof preview is loaded on the right."
-    : "Previewed the bundled sprite/music ROM flow. The native app command builds the ROM, verifies Right-input movement, and checks non-silent audio.";
-}
-
-function messageMetaLabel(message: Message) {
-  if (message.role === "user") return "You";
-  if (message.source === "opencode") return "OpenCode log";
-  if (message.source === "model") return "OpenRouter";
-  if (message.source === "proof") return "Proof result";
-  return "Drive16";
+    ? "Built the sprite-and-music demo, checked movement and audio, and loaded it on the right."
+    : "Previewed the bundled sprite/music demo. The desktop app builds the ROM and checks movement and audio.";
 }
 
 function getConversationMode(
@@ -3475,7 +3153,7 @@ function getConversationMode(
       return {
         state: "missing",
         label: "OpenRouter key needed",
-        detail: "Paste a session key in Settings; keys are forgotten after reload.",
+        detail: "Paste a session key in Settings; it stays in this app window.",
       };
     }
 
@@ -3518,17 +3196,17 @@ function freeformGateMessage(
   const providerLabel = providerDisplayLabel(provider, activeModel, ollamaModel);
 
   if (provider === "ollama") {
-    return "Ollama live replies are not wired in this slice. Switch to OpenRouter and test the key for freeform replies; ROM-changing prompts still use the verified local build path.";
+    return "Ollama chat replies are not available yet. Switch to OpenRouter and test a key for chat replies; build prompts still run locally.";
   }
 
   if (!openRouterKeyPresent) {
-    return "OpenRouter needs a session key before freeform chat can answer. Paste a BYOK key in Agent Settings and test it; keys stay in memory only and are forgotten after reload. ROM-changing prompts still use the verified local build path.";
+    return "OpenRouter needs a session key before freeform chat can answer. Paste a BYOK key in Agent Settings and test it; the key stays in this app window and is not committed to the project. ROM-changing prompts still use the verified local build path.";
   }
 
   if (connection.state !== "ready") {
-    return `${providerLabel} is ${connectionLabel(
+    return `${providerLabel} is not ready yet (${connectionLabel(
       connection.state,
-    ).toLowerCase()}. Freeform model replies are paused; ROM-changing prompts still use the verified local build path.`;
+    ).toLowerCase()}). Open Settings and click Test, then send your message again.`;
   }
 
   return undefined;
@@ -3544,260 +3222,6 @@ function openRouterReplyFailureMessage(detail: string) {
   return `OpenRouter could not answer: ${detail}.`;
 }
 
-function firstRunReadinessItems({
-  activeModel,
-  buildState,
-  comfyUiCheckpoint,
-  comfyUiConnection,
-  comfyUiLora,
-  conversationMode,
-  enhancements,
-  interactiveCoreReadiness,
-  modelConnection,
-  modelProvider,
-  ollamaModel,
-  openCode,
-  openRouterKeyPresent,
-  preflight,
-  starterRom,
-  starterSource,
-}: {
-  activeModel: string;
-  buildState: BuildState;
-  comfyUiCheckpoint: string;
-  comfyUiConnection: ComfyUiEndpointStatus;
-  comfyUiLora: string;
-  conversationMode: ConversationMode;
-  enhancements: EnhancementSettings;
-  interactiveCoreReadiness: InteractiveCoreReadiness;
-  modelConnection: ModelConnectionReport;
-  modelProvider: ModelProvider;
-  ollamaModel: string;
-  openCode: OpenCodeBridgeStatus;
-  openRouterKeyPresent: boolean;
-  preflight: PreflightReport;
-  starterRom: StarterRomPreview;
-  starterSource: string;
-}): ReadinessHubItem[] {
-  const spriteReadiness = spriteEnhancementReadiness(
-    enhancements.spriteGeneration,
-    comfyUiConnection,
-    comfyUiCheckpoint,
-    comfyUiLora,
-  );
-  const musicReadiness = musicEnhancementReadiness(enhancements.musicGeneration);
-  const romProofState =
-    buildState === "error" || starterRom.status === "missing"
-      ? "missing"
-      : starterSource === "preview"
-        ? "warning"
-        : starterRom.status;
-  const openCodeAndToolsState =
-    openCode.state === "missing" || preflight.summaryState === "missing"
-      ? "missing"
-      : openCode.state === "ready" && preflight.summaryState === "ready"
-        ? "ready"
-        : "warning";
-
-  return [
-    {
-      name: "ROM proof path",
-      state: romProofState,
-      status:
-        buildState === "error"
-          ? "Failing"
-          : starterSource === "preview"
-            ? "Preview proof"
-            : stateLabel(starterRom.status),
-      detail:
-        starterSource === "preview"
-          ? "Browser preview is using simulated frames; native Verify/Capture Proof runs Genteel."
-          : starterRom.detail,
-      nextAction:
-        buildState === "error"
-          ? "Fix the native setup, then click Verify again."
-          : "Use Verify for deterministic proof; Play uses a separate emulator core.",
-    },
-    {
-      name: "Interactive Play core",
-      state: interactiveCoreHealthState(interactiveCoreReadiness),
-      status: interactiveCoreStatusLabel(interactiveCoreReadiness.status),
-      detail: `${interactiveCoreReadiness.source}: ${interactiveCoreReadiness.detail}`,
-      nextAction:
-        interactiveCoreReadiness.status === "available"
-          ? "Play ROM can use the user core; Verify remains independent."
-          : interactiveCoreReadiness.setupAction,
-    },
-    openRouterReadinessItem(
-      modelProvider,
-      activeModel,
-      modelConnection,
-      openRouterKeyPresent,
-      conversationMode,
-    ),
-    ollamaReadinessItem(modelProvider, ollamaModel, modelConnection),
-    {
-      name: "OpenCode and local tools",
-      state: openCodeAndToolsState,
-      status:
-        openCodeAndToolsState === "ready"
-          ? "Ready"
-          : openCodeAndToolsState === "missing"
-            ? "Blocked"
-            : "Limited",
-      detail: `OpenCode is ${stateLabel(openCode.state).toLowerCase()}; ${preflightSummaryLabel(
-        preflight.summaryState,
-      ).toLowerCase()}.`,
-      nextAction:
-        openCodeAndToolsState === "ready"
-          ? "Used for logging, local checks, and proof events."
-          : "Refresh tool health or run the native app for exact local setup checks.",
-    },
-    {
-      name: "ComfyUI sprites",
-      state: enhancementReadinessHealthState(spriteReadiness.state),
-      status: spriteReadiness.label,
-      detail: spriteReadiness.detail,
-      nextAction: spriteReadiness.nextAction,
-    },
-    {
-      name: "MML music",
-      state: enhancementReadinessHealthState(musicReadiness.state),
-      status: musicReadiness.label,
-      detail: musicReadiness.detail,
-      nextAction: musicReadiness.nextAction,
-    },
-    {
-      name: "Release blockers",
-      state: "missing",
-      status: "Not release-ready",
-      detail:
-        "LICENSE needs confirmation; bundle.active is false; CSP is null; public Play core policy is undecided.",
-      nextAction:
-        "Confirm license, public core policy, packaging, signing, and CSP before calling this public v1.",
-    },
-  ];
-}
-
-function openRouterReadinessItem(
-  provider: ModelProvider,
-  activeModel: string,
-  connection: ModelConnectionReport,
-  keyPresent: boolean,
-  conversationMode: ConversationMode,
-): ReadinessHubItem {
-  if (provider !== "openrouter") {
-    return {
-      name: "OpenRouter chat",
-      state: "warning",
-      status: "Not selected",
-      detail: "OpenRouter is the only live freeform reply path currently wired.",
-      nextAction: "Switch to OpenRouter in Agent Settings and test a BYOK key.",
-    };
-  }
-
-  if (connection.state === "ready") {
-    return {
-      name: "OpenRouter chat",
-      state: conversationMode.state,
-      status: "Live",
-      detail: `${shortModelLabel(activeModel)} can answer freeform prompts after key testing.`,
-      nextAction: "CORE sprite/music prompts still use the local ROM proof path.",
-    };
-  }
-
-  if (!keyPresent) {
-    return {
-      name: "OpenRouter chat",
-      state: "missing",
-      status: "Key needed",
-      detail: "No OpenRouter key is stored; keys stay in app memory only.",
-      nextAction: "Paste a BYOK key in Agent Settings and click Test OpenRouter.",
-    };
-  }
-
-  return {
-    name: "OpenRouter chat",
-    state: connection.state === "missing" ? "missing" : "warning",
-    status: connectionLabel(connection.state),
-    detail: connection.detail,
-    nextAction: "Run Test OpenRouter again or choose a model the key can access.",
-  };
-}
-
-function ollamaReadinessItem(
-  provider: ModelProvider,
-  ollamaModel: string,
-  connection: ModelConnectionReport,
-): ReadinessHubItem {
-  if (provider !== "ollama") {
-    return {
-      name: "Ollama",
-      state: "warning",
-      status: "Readiness only",
-      detail: "Ollama local generation is not wired for live chat in this slice.",
-      nextAction: "Use Agent Settings only to check local Ollama readiness for now.",
-    };
-  }
-
-  if (connection.state === "ready") {
-    return {
-      name: "Ollama",
-      state: "warning",
-      status: "Readiness checked",
-      detail: `${shortOllamaLabel(ollamaModel)} is reachable, but live Ollama replies are not wired.`,
-      nextAction: "Switch to OpenRouter for freeform replies, or keep Ollama as a setup check.",
-    };
-  }
-
-  return {
-    name: "Ollama",
-    state: connection.state === "missing" ? "missing" : "warning",
-    status: connectionLabel(connection.state),
-    detail: connection.detail,
-    nextAction: "Start Ollama, install the model, then run Test Ollama.",
-  };
-}
-
-function readinessHubSummary(items: ReadinessHubItem[]): ReadinessHubSummary {
-  const releaseBlocked = items.some((item) => item.name === "Release blockers" && item.state !== "ready");
-  const criticalMissing = items.some(
-    (item) =>
-      item.state === "missing" &&
-      item.name !== "Release blockers" &&
-      item.name !== "ComfyUI sprites" &&
-      item.name !== "MML music",
-  );
-
-  if (criticalMissing) {
-    return {
-      state: "missing",
-      label: "Setup needed",
-      detail: "One or more local first-run paths needs attention before the app feels complete.",
-    };
-  }
-
-  if (releaseBlocked) {
-    return {
-      state: "warning",
-      label: "Local review usable",
-      detail: "Core app paths are visible, but public release decisions are still blocked.",
-    };
-  }
-
-  return {
-    state: "ready",
-    label: "Ready for local review",
-    detail: "Proof, Play setup, providers, and release posture are all accounted for.",
-  };
-}
-
-function enhancementReadinessHealthState(state: EnhancementReadinessState): HealthState {
-  if (state === "ready") return "ready";
-  if (state === "failed") return "missing";
-  return "warning";
-}
-
 function preflightSummaryLabel(state: HealthState, source = "") {
   if (source === "preview" && state === "warning") return "Preview checks limited";
   if (state === "ready") return "All core tools ready";
@@ -3811,18 +3235,23 @@ function stateLabel(state: HealthState) {
   return "Check";
 }
 
-function sourceLabel(source: string, nativeLabel = "Native preflight") {
-  if (source === "tauri") return nativeLabel;
-  if (source === "checking") return "Checking";
-  if (source === "error") return "Command unavailable";
-  return "Preview mode";
-}
-
 function activeRomSourceFor(
   projectSummary: ProjectSummary,
   importResult?: RomImportResult,
   v1PromptResult?: V1PromptResult,
+  agentRomPath?: string,
 ): ActiveRomSource {
+  if (agentRomPath) {
+    return {
+      kind: "generated",
+      label: "Your project",
+      detail: "ROM built by the Drive16 agent",
+      path: agentRomPath,
+      storage: "generated-artifact",
+      canVerify: true,
+    };
+  }
+
   if (importResult) {
     return {
       kind: "imported",
@@ -3855,190 +3284,12 @@ function activeRomSourceFor(
   };
 }
 
-function InputControlsPanel({
-  keyboardBindings,
-  controllerBindings,
-  controllerConfigured,
-  gamepadReadiness,
-  profile,
-  onClose,
-  onReset,
-}: {
-  keyboardBindings: Array<{ id: PlayerInputActionId; label: string; control: string }>;
-  controllerBindings: Array<{ id: PlayerInputActionId; label: string; control: string }>;
-  controllerConfigured: boolean;
-  gamepadReadiness: GamepadReadiness;
-  profile: PlayerInputProfile;
-  onClose: () => void;
-  onReset: () => void;
-}) {
-  const profileLabel = profile.source === "local" ? "Saved locally" : "Default profile";
-  const mappingLabel = controllerConfigured ? "Default mapping" : "Mapping not configured";
-  const controllerDetail =
-    gamepadReadiness.gamepadId && gamepadReadiness.state === "detected"
-      ? `${gamepadReadiness.detail} ${gamepadReadiness.gamepadId}`
-      : gamepadReadiness.detail;
-
-  return (
-    <div
-      className={`controls-panel ${gamepadReadiness.state}`}
-      data-testid="controls-panel"
-    >
-      <div className="controls-panel-head">
-        <span>
-          <Gamepad2 size={15} />
-          <strong>Controls</strong>
-          <small>{profileLabel}</small>
-        </span>
-        <button type="button" data-testid="close-controls" onClick={onClose}>
-          <X size={14} />
-          Close
-        </button>
-      </div>
-      <div className="input-status-grid">
-        <span data-testid="keyboard-readiness">
-          <KeyRound size={15} />
-          <strong>Keyboard ready</strong>
-        </span>
-        <span data-testid="controller-readiness" title={controllerDetail}>
-          <Gamepad2 size={15} />
-          <strong>{gamepadReadiness.label}</strong>
-        </span>
-        <span data-testid="controller-mapping-state">
-          <Wrench size={15} />
-          <strong>{mappingLabel}</strong>
-        </span>
-      </div>
-      <div className="input-binding-grid">
-        <section aria-label="Keyboard bindings">
-          <h4>Keyboard</h4>
-          <div className="input-binding-list">
-            {keyboardBindings.map((binding) => (
-              <span key={`keyboard-${binding.id}`}>
-                <kbd>{binding.control}</kbd>
-                {binding.label}
-              </span>
-            ))}
-          </div>
-        </section>
-        <section aria-label="Controller bindings">
-          <h4>Controller</h4>
-          <div className="input-binding-list controller">
-            {controllerBindings.map((binding) => (
-              <span key={`controller-${binding.id}`}>
-                <small>{binding.control}</small>
-                {binding.label}
-              </span>
-            ))}
-          </div>
-        </section>
-      </div>
-      <div className="controls-panel-actions">
-        <button type="button" data-testid="reset-input-profile" onClick={onReset}>
-          <RefreshCcw size={14} />
-          Reset defaults
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PlayerSessionStrip({
-  proofProvider,
-  readiness,
-  session,
-}: {
-  proofProvider: PlayerProvider;
-  readiness: InteractiveCoreReadiness;
-  session: InteractivePlayerSession;
-}) {
-  const providerState = playerProviderHealthState(session.provider.state);
-  const controllerLabel = compactControllerLabel(session.input.controller);
-  const inputLabel = session.input.focused ? "Keyboard captured" : "Keyboard ready";
-  const audioLabel =
-    session.audio === "audible"
-      ? "Audio on"
-      : session.audio === "muted"
-        ? "Muted"
-        : "Audio gated";
-
-  return (
-    <div
-      className={`player-session-strip ${providerState}`}
-      data-testid="interactive-player-session"
-    >
-      <span className="player-session-primary" title={session.rom.path}>
-        <Gamepad2 size={15} />
-        <strong>{session.rom.label}</strong>
-        <small>
-          {session.loadedRom
-            ? `${formatBytes(session.loadedRom.bytes)} loaded`
-            : shortPath(session.rom.path)}
-        </small>
-      </span>
-      <span title={session.provider.detail}>
-        {connectionIcon(providerHealthToConnection(providerState))}
-        Play
-        <strong>{playerSessionLabel(session.state, session.provider.state)}</strong>
-      </span>
-      <span title={session.input.lastAction?.detail ?? "Keyboard input model is ready"}>
-        <KeyRound size={15} />
-        Input
-        <strong>{session.input.lastAction?.label ?? "Ready"}</strong>
-      </span>
-      <details className="player-session-more">
-        <summary>More</summary>
-        <div>
-          <span title={readiness.verifyDetail || proofProvider.detail}>
-            <ShieldCheck size={15} />
-            Verify
-            <strong>Still available</strong>
-          </span>
-          <span title={session.provider.detail}>
-            <Gamepad2 size={15} />
-            Core
-            <strong>{session.provider.label}</strong>
-          </span>
-          <span title={session.input.controller.detail} data-testid="controller-session-status">
-            <Gamepad2 size={15} />
-            Pad
-            <strong>{controllerLabel}</strong>
-          </span>
-          <span title={inputLabel}>
-            <KeyRound size={15} />
-            Keyboard
-            <strong>{inputLabel.replace("Keyboard ", "")}</strong>
-          </span>
-          <span>
-            <Activity size={15} />
-            Sound
-            <strong>{audioLabel}</strong>
-          </span>
-        </div>
-      </details>
-    </div>
-  );
-}
-
-function compactControllerLabel(readiness: GamepadReadiness) {
-  if (readiness.state === "detected") return "Detected";
-  if (readiness.state === "mapping-missing") return "Mapping needed";
-  return "Unavailable";
-}
-
-function CoreReadinessPill({ readiness }: { readiness: InteractiveCoreReadiness }) {
-  const state = interactiveCoreHealthState(readiness);
-  return (
-    <span
-      className={`core-readiness-pill ${state}`}
-      data-testid="interactive-core-readiness"
-      title={`${readiness.detail} ${readiness.setupAction}`}
-    >
-      {healthIcon(state)}
-      <strong>{readiness.label}</strong>
-      <small>{interactiveCoreStatusLabel(readiness.status)}</small>
-    </span>
-  );
+function playerStateLabel(state: PlayerSessionState) {
+  if (state === "playing") return "Playing";
+  if (state === "paused") return "Paused";
+  if (state === "loading") return "Loading";
+  if (state === "error") return "Error";
+  return "Stopped";
 }
 
 function interactiveCoreHealthCheck(readiness: InteractiveCoreReadiness): HealthCheck {
@@ -4054,74 +3305,6 @@ function interactiveCoreHealthState(readiness: InteractiveCoreReadiness): Health
   if (readiness.status === "available") return "ready";
   if (readiness.status === "missing" || readiness.status === "unsupported") return "missing";
   return "warning";
-}
-
-function playerProviderHealthState(state: PlayerProvider["state"]): HealthState {
-  if (state === "available") return "ready";
-  if (state === "missing" || state === "unsupported" || state === "error") return "missing";
-  return "warning";
-}
-
-function providerHealthToConnection(state: HealthState): ConnectionState {
-  if (state === "ready") return "ready";
-  if (state === "missing") return "missing";
-  return "warning";
-}
-
-function playerSessionLabel(
-  sessionState: PlayerSessionState,
-  providerState: PlayerProvider["state"],
-) {
-  if (providerState === "dev-only") return "Dev-only";
-  if (providerState === "missing" || providerState === "unconfigured") return "Setup needed";
-  if (providerState === "needs-user-action") return "User action";
-  if (providerState === "unsupported") return "Unsupported";
-  if (providerState === "loading") return "Loading";
-  if (providerState === "error") return "Unavailable";
-  if (sessionState === "playing") return "Playing";
-  if (sessionState === "paused") return "Paused";
-  if (sessionState === "loading") return "Loading";
-  if (sessionState === "stopped") return "Stopped";
-  if (sessionState === "error") return "Error";
-  return "Idle";
-}
-
-function interactiveCoreStatusLabel(status: InteractiveCoreReadiness["status"]) {
-  if (status === "available") return "User core";
-  if (status === "dev-only") return "Dev CDN";
-  if (status === "missing") return "Missing";
-  if (status === "needs-user-action") return "User action";
-  return "Unsupported";
-}
-
-function starterLabel(preview: StarterRomPreview, busy: boolean, projectName = "Starter ROM") {
-  if (busy) return `Launching ${projectName}`;
-  if (preview.status === "ready" && preview.framebufferFrames.length > 0) {
-    return "Framebuffer stream loaded";
-  }
-  if (preview.status === "ready") return `${projectName} loaded`;
-  if (preview.generatedAt === "error") return `${projectName} unavailable`;
-  return `${projectName} preview`;
-}
-
-function starterBadge(
-  preview: StarterRomPreview,
-  busy: boolean,
-  transport: TransportState,
-) {
-  if (busy) return "LOADING";
-  if (transport === "paused") return "PAUSED";
-  if (preview.status === "ready" && preview.framebufferFrames.length > 0) {
-    return "RGB565";
-  }
-  if (preview.status === "ready") return "GENTEEL";
-  return "PREVIEW";
-}
-
-function shortPath(path: string) {
-  const parts = path.split("/").filter(Boolean);
-  if (parts.length <= 3) return path;
-  return `${parts[0]}/${parts[1]}/.../${parts[parts.length - 1]}`;
 }
 
 function romImportAccept(readiness?: RomImportReadiness) {
@@ -4440,124 +3623,6 @@ function shortIdentifier(value: string) {
   return `${value.slice(0, 8)}...${value.slice(-4)}`;
 }
 
-function formatBytes(bytes: number) {
-  if (bytes <= 0) return "0 B";
-  if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-function healthIcon(state: HealthState) {
-  if (state === "ready") return <CheckCircle2 size={15} />;
-  if (state === "missing") return <AlertCircle size={15} />;
-  return <Activity size={15} />;
-}
-
-function FramebufferCanvas({
-  fallback,
-  frames,
-  streamEvery,
-  transport,
-}: {
-  fallback: ReactNode;
-  frames: FramebufferFrame[];
-  streamEvery: number;
-  transport: TransportState;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [frameCursor, setFrameCursor] = useState(0);
-  const decodedFrames = useMemo(() => decodeFramebufferFrames(frames), [frames]);
-  const activeFrame =
-    decodedFrames.length > 0 ? decodedFrames[frameCursor % decodedFrames.length] : null;
-
-  useEffect(() => {
-    setFrameCursor(0);
-  }, [decodedFrames.length]);
-
-  useEffect(() => {
-    if (transport !== "running" || decodedFrames.length <= 1) return;
-
-    const intervalMs = Math.max(90, Math.round((streamEvery / 60) * 1000));
-    const timer = window.setInterval(() => {
-      setFrameCursor((value) => (value + 1) % decodedFrames.length);
-    }, intervalMs);
-
-    return () => window.clearInterval(timer);
-  }, [decodedFrames.length, streamEvery, transport]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !activeFrame) return;
-
-    canvas.width = activeFrame.width;
-    canvas.height = activeFrame.height;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-
-    const imageData = context.createImageData(activeFrame.width, activeFrame.height);
-    imageData.data.set(activeFrame.rgba);
-    context.putImageData(imageData, 0, 0);
-  }, [activeFrame]);
-
-  if (!activeFrame) {
-    return <>{fallback}</>;
-  }
-
-  return (
-    <>
-      <canvas
-        ref={canvasRef}
-        aria-label="Genteel framebuffer"
-        className="framebuffer-canvas"
-        data-frame-index={activeFrame.frameIndex}
-        data-testid="framebuffer-canvas"
-      />
-      <span className="frame-index" data-testid="framebuffer-frame-index">
-        Frame {activeFrame.frameIndex}
-      </span>
-    </>
-  );
-}
-
-function decodeFramebufferFrames(frames: FramebufferFrame[]) {
-  return frames.flatMap((frame) => {
-    if (frame.format !== "RGB565") return [];
-    const bytes = base64ToBytes(frame.rgb565Data);
-    const expectedLength = frame.width * frame.height * 2;
-    if (bytes.length !== expectedLength) return [];
-
-    const rgba = new Uint8ClampedArray(frame.width * frame.height * 4);
-    for (let sourceIndex = 0, targetIndex = 0; sourceIndex < bytes.length; sourceIndex += 2) {
-      const value = bytes[sourceIndex] | (bytes[sourceIndex + 1] << 8);
-      const red = (value >> 11) & 0x1f;
-      const green = (value >> 5) & 0x3f;
-      const blue = value & 0x1f;
-      rgba[targetIndex] = (red << 3) | (red >> 2);
-      rgba[targetIndex + 1] = (green << 2) | (green >> 4);
-      rgba[targetIndex + 2] = (blue << 3) | (blue >> 2);
-      rgba[targetIndex + 3] = 255;
-      targetIndex += 4;
-    }
-
-    return [
-      {
-        frameIndex: frame.frameIndex,
-        width: frame.width,
-        height: frame.height,
-        rgba,
-      },
-    ];
-  });
-}
-
-function base64ToBytes(value: string) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
-}
-
 function playerRomFromBytes(
   sourcePath: string,
   sourceName: string,
@@ -4620,27 +3685,6 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
-function shortModelLabel(model: string) {
-  const clean = model.replace(/^~/, "");
-  const pathParts = clean.split("/");
-  const slug = pathParts[pathParts.length - 1] ?? clean;
-  return slug
-    .split("-")
-    .filter(Boolean)
-    .map((part: string) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
-    .join(" ");
-}
-
-function shortOllamaLabel(model: string) {
-  const clean = model.trim();
-  if (!clean) return "Local model";
-  return clean
-    .split(/[-_:/]+/)
-    .filter(Boolean)
-    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
-    .join(" ");
-}
-
 function providerDisplayLabel(
   provider: ModelProvider,
   activeModel: string,
@@ -4648,113 +3692,6 @@ function providerDisplayLabel(
 ) {
   if (provider === "openrouter") return shortModelLabel(activeModel);
   return `Ollama ${shortOllamaLabel(ollamaModel)}`;
-}
-
-function providerTitle(
-  provider: ModelProvider,
-  activeModel: string,
-  ollamaEndpoint: string,
-  ollamaModel: string,
-) {
-  if (provider === "openrouter") return activeModel;
-  return `${ollamaModel || "Ollama model"} at ${ollamaEndpoint || defaultOllamaEndpoint}`;
-}
-
-function connectionIcon(state: ConnectionState) {
-  if (state === "ready") return <CheckCircle2 size={15} />;
-  if (state === "missing") return <AlertCircle size={15} />;
-  if (state === "testing") return <Activity size={15} />;
-  return <Circle size={15} />;
-}
-
-function connectionLabel(state: ConnectionState) {
-  if (state === "ready") return "Connected";
-  if (state === "missing") return "Failed";
-  if (state === "testing") return "Testing";
-  if (state === "warning") return "Check";
-  return "Not tested";
-}
-
-function spriteEnhancementReadiness(
-  enabled: boolean,
-  connection: ComfyUiEndpointStatus,
-  checkpoint: string,
-  lora: string,
-): EnhancementReadiness {
-  if (!enabled) {
-    return {
-      state: "disabled",
-      label: "Disabled",
-      detail: "AI sprites are intentionally off.",
-      nextAction: "Enable to configure ComfyUI.",
-    };
-  }
-
-  if (connection.state === "testing") {
-    return {
-      state: "running",
-      label: "Running",
-      detail: "Checking ComfyUI, checkpoint, LoRA, and workflow readiness.",
-      nextAction: "Wait for the readiness check.",
-    };
-  }
-
-  if (connection.state === "ready") {
-    return {
-      state: "ready",
-      label: "Ready",
-      detail: `${checkpoint || defaultComfyUiCheckpoint} with ${lora || defaultComfyUiLora}`,
-      nextAction: "Enable MML music too for generated sprite plus music prompts.",
-    };
-  }
-
-  if (connection.state === "missing") {
-    return {
-      state: "failed",
-      label: "Failed",
-      detail: connection.detail,
-      nextAction: "Check the endpoint, checkpoint, LoRA, then run Test.",
-    };
-  }
-
-  return {
-    state: "needsSetup",
-    label: "Needs setup",
-    detail: connection.detail === "Not tested" ? "ComfyUI readiness has not been tested." : connection.detail,
-    nextAction: "Run Test after endpoint, checkpoint, and LoRA are set.",
-  };
-}
-
-function musicEnhancementReadiness(enabled: boolean): EnhancementReadiness {
-  if (!enabled) {
-    return {
-      state: "disabled",
-      label: "Disabled",
-      detail: "MML generation is intentionally off.",
-      nextAction: "Enable to use the generated-MML prompt path.",
-    };
-  }
-
-  return {
-    state: "ready",
-    label: "Ready",
-    detail: "ctrmml wrapper and generated-MML prompt path are wired.",
-    nextAction: "Prompt for sprite and music to run the generated-MML proof.",
-  };
-}
-
-function enhancementConnectionState(state: EnhancementReadinessState): ConnectionState {
-  if (state === "ready") return "ready";
-  if (state === "running") return "testing";
-  if (state === "failed") return "missing";
-  return "warning";
-}
-
-function modelsSourceLabel(source: string) {
-  if (source === "ready") return "Models live";
-  if (source === "loading") return "Models loading";
-  if (source === "error") return "Fallback models";
-  return "Fallback models";
 }
 
 async function checkComfyUiEndpointInBrowser(
@@ -4817,1045 +3754,6 @@ function normalizeLocalEndpoint(endpoint: string, defaultPort: string) {
 
   const port = parsed.port || defaultPort;
   return `http://${parsed.hostname}:${port}`;
-}
-
-function SettingsPanel({
-  activeModel,
-  comfyUiCheckpoint,
-  comfyUiConnection,
-  comfyUiEndpoint,
-  comfyUiLora,
-  connection,
-  enhancements,
-  interactiveCoreReadiness,
-  modelOptions,
-  modelProvider,
-  modelsSource,
-  ollamaEndpoint,
-  ollamaModel,
-  openRouterKey,
-  showOpenRouterKey,
-  onClose,
-  onChooseCore,
-  onComfyUiCheckpointChange,
-  onComfyUiEndpointChange,
-  onComfyUiLoraChange,
-  onEnhancementChange,
-  onModelChange,
-  onOllamaEndpointChange,
-  onOllamaModelChange,
-  onOpenRouterKeyChange,
-  onProviderChange,
-  onRefreshModels,
-  onShowOpenRouterKeyChange,
-  onTestComfyUiConnection,
-  onTestConnection,
-}: {
-  activeModel: string;
-  comfyUiCheckpoint: string;
-  comfyUiConnection: ComfyUiEndpointStatus;
-  comfyUiEndpoint: string;
-  comfyUiLora: string;
-  connection: ModelConnectionReport;
-  enhancements: EnhancementSettings;
-  interactiveCoreReadiness: InteractiveCoreReadiness;
-  modelOptions: ModelOption[];
-  modelProvider: ModelProvider;
-  modelsSource: string;
-  ollamaEndpoint: string;
-  ollamaModel: string;
-  openRouterKey: string;
-  showOpenRouterKey: boolean;
-  onClose: () => void;
-  onChooseCore: () => void;
-  onComfyUiCheckpointChange: (value: string) => void;
-  onComfyUiEndpointChange: (value: string) => void;
-  onComfyUiLoraChange: (value: string) => void;
-  onEnhancementChange: (key: keyof EnhancementSettings, enabled: boolean) => void;
-  onModelChange: (value: string) => void;
-  onOllamaEndpointChange: (value: string) => void;
-  onOllamaModelChange: (value: string) => void;
-  onOpenRouterKeyChange: (value: string) => void;
-  onProviderChange: (value: ModelProvider) => void;
-  onRefreshModels: () => void;
-  onShowOpenRouterKeyChange: (value: boolean) => void;
-  onTestComfyUiConnection: () => void;
-  onTestConnection: () => void;
-}) {
-  const testing = connection.state === "testing";
-  const testingComfyUi = comfyUiConnection.state === "testing";
-  const spriteReadiness = spriteEnhancementReadiness(
-    enhancements.spriteGeneration,
-    comfyUiConnection,
-    comfyUiCheckpoint,
-    comfyUiLora,
-  );
-  const musicReadiness = musicEnhancementReadiness(enhancements.musicGeneration);
-
-  return (
-    <div className="settings-backdrop">
-      <section
-        aria-label="Agent settings"
-        aria-modal="true"
-        className="settings-panel"
-        data-testid="settings-panel"
-        role="dialog"
-      >
-        <div className="settings-header">
-          <div>
-            <p className="label">Settings</p>
-            <h2>Agent Settings</h2>
-          </div>
-          <button className="icon-button" type="button" aria-label="Close settings" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="settings-body">
-          <section className="settings-section" aria-label="Model provider">
-            <SectionTitle icon={<Settings size={16} />} title="Provider" />
-            <div className="segmented-control" role="group" aria-label="Model provider">
-              <button
-                className={modelProvider === "openrouter" ? "active" : ""}
-                type="button"
-                onClick={() => onProviderChange("openrouter")}
-              >
-                OpenRouter
-              </button>
-              <button
-                className={modelProvider === "ollama" ? "active" : ""}
-                type="button"
-                onClick={() => onProviderChange("ollama")}
-              >
-                Ollama
-              </button>
-            </div>
-          </section>
-
-          {modelProvider === "openrouter" ? (
-            <section
-              className="settings-section"
-              aria-label="OpenRouter settings"
-              data-testid="openrouter-settings"
-            >
-              <div className="settings-section-title">
-                <SectionTitle icon={<KeyRound size={16} />} title="OpenRouter" />
-                <button
-                  className="refresh-health"
-                  type="button"
-                  aria-label="Refresh OpenRouter models"
-                  onClick={onRefreshModels}
-                  disabled={modelsSource === "loading"}
-                >
-                  <RefreshCcw size={14} />
-                </button>
-              </div>
-
-              <label className="field-row">
-                <span>Model</span>
-                <select
-                  aria-label="OpenRouter model"
-                  value={activeModel}
-                  onChange={(event) => onModelChange(event.target.value)}
-                >
-                  {modelOptions.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field-row">
-                <span>API key</span>
-                <div className="secret-field">
-                  <input
-                    aria-label="OpenRouter API key"
-                    autoComplete="off"
-                    onChange={(event) => onOpenRouterKeyChange(event.target.value)}
-                    spellCheck={false}
-                    type={showOpenRouterKey ? "text" : "password"}
-                    value={openRouterKey}
-                  />
-                  <button
-                    aria-label={showOpenRouterKey ? "Hide OpenRouter key" : "Show OpenRouter key"}
-                    disabled={!openRouterKey}
-                    onClick={() => onShowOpenRouterKeyChange(!showOpenRouterKey)}
-                    type="button"
-                  >
-                    {showOpenRouterKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </label>
-
-              <div
-                className={`connection-summary ${connection.state}`}
-                data-testid="model-connection-status"
-              >
-                {connectionIcon(connection.state)}
-                <span>{connectionLabel(connection.state)}</span>
-                <small>{connection.detail}</small>
-              </div>
-
-              <div className="settings-meta">
-                <span>{modelsSourceLabel(modelsSource)}</span>
-                <strong>{shortModelLabel(activeModel)}</strong>
-              </div>
-            </section>
-          ) : (
-            <section
-              className="settings-section"
-              aria-label="Ollama settings"
-              data-testid="ollama-settings"
-            >
-              <div className="settings-section-title">
-                <SectionTitle icon={<TerminalSquare size={16} />} title="Ollama" />
-              </div>
-
-              <label className="field-row">
-                <span>Endpoint</span>
-                <input
-                  aria-label="Ollama endpoint"
-                  autoComplete="off"
-                  onChange={(event) => onOllamaEndpointChange(event.target.value)}
-                  spellCheck={false}
-                  type="url"
-                  value={ollamaEndpoint}
-                />
-              </label>
-
-              <label className="field-row">
-                <span>Model</span>
-                <input
-                  aria-label="Ollama model"
-                  autoComplete="off"
-                  onChange={(event) => onOllamaModelChange(event.target.value)}
-                  spellCheck={false}
-                  type="text"
-                  value={ollamaModel}
-                />
-              </label>
-
-              <div
-                className={`connection-summary ${connection.state}`}
-                data-testid="model-connection-status"
-              >
-                {connectionIcon(connection.state)}
-                <span>{connectionLabel(connection.state)}</span>
-                <small>{connection.detail}</small>
-              </div>
-
-              <div className="settings-meta">
-                <span>No API key required</span>
-                <strong title={connection.baseUrl ?? ollamaEndpoint}>
-                  {shortOllamaLabel(connection.model ?? ollamaModel)}
-                </strong>
-              </div>
-              {connection.models?.length ? (
-                <div className="provider-model-list" data-testid="ollama-models">
-                  <span>Installed models</span>
-                  <strong title={connection.models.join(", ")}>
-                    {connection.models.slice(0, 3).map(shortOllamaLabel).join(", ")}
-                  </strong>
-                </div>
-              ) : null}
-            </section>
-          )}
-
-          <details className="settings-disclosure">
-            <summary>
-              <Gamepad2 size={16} />
-              <span>
-                <strong>Play Core</strong>
-                <small>{interactiveCoreReadiness.label}</small>
-              </span>
-            </summary>
-            <section className="settings-section settings-section-inner" aria-label="Play core setup">
-              <div
-                className={`connection-summary ${providerHealthToConnection(
-                  interactiveCoreHealthState(interactiveCoreReadiness),
-                )}`}
-                data-testid="settings-play-core-status"
-              >
-                {healthIcon(interactiveCoreHealthState(interactiveCoreReadiness))}
-                <span>{interactiveCoreStatusLabel(interactiveCoreReadiness.status)}</span>
-                <small>{interactiveCoreReadiness.detail}</small>
-              </div>
-              <div className="settings-meta">
-                <span>{interactiveCoreReadiness.source}</span>
-                <strong>{interactiveCoreReadiness.setupAction}</strong>
-              </div>
-              <button className="settings-inline-action" type="button" onClick={onChooseCore}>
-                <Upload size={15} />
-                Choose Core
-              </button>
-            </section>
-          </details>
-
-          <details className="settings-disclosure">
-            <summary>
-              <Wrench size={16} />
-              <span>
-                <strong>Enhancements</strong>
-                <small>
-                  {enhancements.spriteGeneration || enhancements.musicGeneration
-                    ? "Optional generation paths enabled"
-                    : "Optional generators are off"}
-                </small>
-              </span>
-            </summary>
-            <section className="settings-section settings-section-inner" aria-label="Enhancement toggles">
-            <SectionTitle icon={<Wrench size={16} />} title="Enhancements" />
-            <div className="enhancement-list">
-              <label className="enhancement-toggle" data-testid="sprite-enhancement-toggle">
-                <input
-                  aria-label="AI sprites enhancement"
-                  checked={enhancements.spriteGeneration}
-                  onChange={(event) =>
-                    onEnhancementChange("spriteGeneration", event.target.checked)
-                  }
-                  data-testid="sprite-enhancement-input"
-                  type="checkbox"
-                />
-                <span className="toggle-switch" aria-hidden="true" />
-                <span className="toggle-copy">
-                  <strong>AI sprites</strong>
-                  <small>ComfyUI generator</small>
-                </span>
-                <span className={`toggle-status ${spriteReadiness.state}`}>
-                  {spriteReadiness.label}
-                </span>
-              </label>
-
-              <div
-                className={`enhancement-readiness ${spriteReadiness.state}`}
-                data-testid="sprite-readiness"
-              >
-                {connectionIcon(enhancementConnectionState(spriteReadiness.state))}
-                <span>
-                  <strong>{spriteReadiness.label}</strong>
-                  <small>{spriteReadiness.detail}</small>
-                  <em>{spriteReadiness.nextAction}</em>
-                </span>
-              </div>
-
-              {enhancements.spriteGeneration ? (
-                <div className="comfyui-config" data-testid="comfyui-config">
-                  <div className="enhancement-models" data-testid="comfyui-model-readiness">
-                    <span>Checkpoint</span>
-                    <strong title={comfyUiCheckpoint || defaultComfyUiCheckpoint}>
-                      {comfyUiCheckpoint || defaultComfyUiCheckpoint}
-                    </strong>
-                    <span>LoRA</span>
-                    <strong title={comfyUiLora || defaultComfyUiLora}>
-                      {comfyUiLora || defaultComfyUiLora}
-                    </strong>
-                  </div>
-
-                  <label className="field-row">
-                    <span>ComfyUI endpoint</span>
-                    <div className="endpoint-field">
-                      <input
-                        aria-label="ComfyUI endpoint"
-                        autoComplete="off"
-                        data-testid="comfyui-endpoint-input"
-                        onChange={(event) => onComfyUiEndpointChange(event.target.value)}
-                        spellCheck={false}
-                        type="url"
-                        value={comfyUiEndpoint}
-                      />
-                      <button
-                        aria-label="Test ComfyUI"
-                        data-testid="test-comfyui"
-                        disabled={testingComfyUi}
-                        onClick={onTestComfyUiConnection}
-                        type="button"
-                      >
-                        <ShieldCheck size={15} />
-                        {testingComfyUi ? "Checking" : "Test"}
-                      </button>
-                    </div>
-                  </label>
-
-                  <label className="field-row">
-                    <span>SDXL checkpoint</span>
-                    <input
-                      aria-label="ComfyUI checkpoint"
-                      autoComplete="off"
-                      data-testid="comfyui-checkpoint-input"
-                      onChange={(event) => onComfyUiCheckpointChange(event.target.value)}
-                      spellCheck={false}
-                      type="text"
-                      value={comfyUiCheckpoint}
-                    />
-                  </label>
-
-                  <label className="field-row">
-                    <span>Pixel art LoRA</span>
-                    <input
-                      aria-label="ComfyUI LoRA"
-                      autoComplete="off"
-                      data-testid="comfyui-lora-input"
-                      onChange={(event) => onComfyUiLoraChange(event.target.value)}
-                      spellCheck={false}
-                      type="text"
-                      value={comfyUiLora}
-                    />
-                  </label>
-
-                  <div
-                    className={`connection-summary ${comfyUiConnection.state}`}
-                    data-testid="comfyui-connection-status"
-                  >
-                    {connectionIcon(comfyUiConnection.state)}
-                    <span>{connectionLabel(comfyUiConnection.state)}</span>
-                    <small>{comfyUiConnection.detail}</small>
-                  </div>
-
-                  {comfyUiConnection.checks.length ? (
-                    <div className="readiness-list" data-testid="comfyui-readiness-checks">
-                      {comfyUiConnection.checks.map((check) => (
-                        <div className={`connection-summary ${check.state}`} key={check.name}>
-                          {connectionIcon(check.state)}
-                          <span>{check.name}</span>
-                          <small>
-                            {check.detail}
-                            {check.hints?.length ? (
-                              <span className="readiness-hints">
-                                {check.hints.slice(0, 3).map((hint) => (
-                                  <span key={hint}>{hint}</span>
-                                ))}
-                              </span>
-                            ) : null}
-                          </small>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="settings-meta">
-                    <span>{comfyUiConnection.version ?? "Version pending"}</span>
-                    <strong>{`${comfyUiConnection.devices} device${
-                      comfyUiConnection.devices === 1 ? "" : "s"
-                    }`}</strong>
-                  </div>
-                </div>
-              ) : null}
-
-              <label className="enhancement-toggle" data-testid="music-enhancement-toggle">
-                <input
-                  aria-label="MML music enhancement"
-                  checked={enhancements.musicGeneration}
-                  onChange={(event) =>
-                    onEnhancementChange("musicGeneration", event.target.checked)
-                  }
-                  data-testid="music-enhancement-input"
-                  type="checkbox"
-                />
-                <span className="toggle-switch" aria-hidden="true" />
-                <span className="toggle-copy">
-                  <strong>MML music</strong>
-                  <small>ctrmml compiler</small>
-                </span>
-                <span className={`toggle-status ${musicReadiness.state}`}>
-                  {musicReadiness.label}
-                </span>
-              </label>
-
-              <div
-                className={`enhancement-readiness ${musicReadiness.state}`}
-                data-testid="music-readiness"
-              >
-                {connectionIcon(enhancementConnectionState(musicReadiness.state))}
-                <span>
-                  <strong>{musicReadiness.label}</strong>
-                  <small>{musicReadiness.detail}</small>
-                  <em>{musicReadiness.nextAction}</em>
-                </span>
-              </div>
-            </div>
-            <div className="settings-meta">
-              <span>CORE path</span>
-              <strong>Bundled assets remain default</strong>
-            </div>
-            </section>
-          </details>
-
-          <details className="settings-disclosure">
-            <summary>
-              <ShieldCheck size={16} />
-              <span>
-                <strong>Release Readiness</strong>
-                <small>Public v1 decisions still pending</small>
-              </span>
-            </summary>
-            <section className="settings-section settings-section-inner" aria-label="Release readiness">
-              <div className="connection-summary missing">
-                <AlertCircle size={15} />
-                <span>Not release-ready</span>
-                <small>License, public Play core policy, packaging, signing, and CSP need decisions.</small>
-              </div>
-              <div className="settings-meta">
-                <span>Local review</span>
-                <strong>Usable; release decisions pending</strong>
-              </div>
-            </section>
-          </details>
-        </div>
-
-        <div className="settings-footer">
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
-          <button
-            className="primary-action"
-            type="button"
-            onClick={onTestConnection}
-            disabled={testing}
-          >
-            <ShieldCheck size={16} />
-            {testing
-              ? "Testing"
-              : modelProvider === "openrouter"
-                ? "Test OpenRouter"
-                : "Test Ollama"}
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function TopBar({
-  actionDetail,
-  buildLabel,
-  buildState,
-  exportBusy,
-  menuOpen,
-  onExportRom,
-  onOpenReadiness,
-  onRunProject,
-  onSaveProject,
-  onToggleMenu,
-  runBusy,
-  saveBusy,
-}: {
-  actionDetail: string;
-  buildLabel: string;
-  buildState: BuildState;
-  exportBusy: boolean;
-  menuOpen: boolean;
-  onExportRom: () => void;
-  onOpenReadiness: () => void;
-  onRunProject: () => void;
-  onSaveProject: () => void;
-  onToggleMenu: () => void;
-  runBusy: boolean;
-  saveBusy: boolean;
-}) {
-  return (
-    <header className="top-bar">
-      <div className="brand-cluster">
-        <button
-          className="menu-trigger"
-          type="button"
-          aria-label={menuOpen ? "Close project menu" : "Open project menu"}
-          aria-expanded={menuOpen}
-          data-testid="project-menu-toggle"
-          onClick={onToggleMenu}
-        >
-          <Menu size={18} />
-        </button>
-        <div className="brand">
-          <img className="brand-mark" src={drive16Mark} alt="" aria-hidden="true" />
-          <div>
-            <strong>Drive16</strong>
-            <span>Phase 8 readiness hub</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="top-center">
-        <div className="run-status" data-testid="run-status">
-          <span className={`status-pill ${buildState}`}>
-            <Square size={10} />
-            {buildLabel}
-          </span>
-          <small title={actionDetail}>{actionDetail}</small>
-        </div>
-      </div>
-
-      <nav className="top-actions" aria-label="Project actions">
-        <button type="button" data-testid="readiness-hub-toggle" onClick={onOpenReadiness}>
-          <Wrench size={16} />
-          Setup
-        </button>
-        <button
-          type="button"
-          data-testid="verify-rom"
-          onClick={onRunProject}
-          disabled={runBusy}
-        >
-          <ShieldCheck size={16} />
-          {runBusy ? "Verifying" : "Verify"}
-        </button>
-        <button
-          type="button"
-          data-testid="save-project"
-          onClick={onSaveProject}
-          disabled={saveBusy}
-        >
-          <Save size={16} />
-          {saveBusy ? "Saving" : "Save"}
-        </button>
-        <button
-          type="button"
-          data-testid="export-rom"
-          onClick={onExportRom}
-          disabled={exportBusy}
-        >
-          <Download size={16} />
-          {exportBusy ? "Exporting" : "Export"}
-        </button>
-      </nav>
-    </header>
-  );
-}
-
-function ProjectMenu({
-  activeModel,
-  buildState,
-  comfyUiCheckpoint,
-  comfyUiConnection,
-  comfyUiLora,
-  conversationMode,
-  enhancements,
-  exportBusy,
-  exportResult,
-  interactiveCoreBusy,
-  interactiveCoreReadiness,
-  interactiveCoreStatus,
-  importBusy,
-  importReadiness,
-  importResult,
-  modelConnection,
-  modelProvider,
-  ollamaEndpoint,
-  ollamaModel,
-  openCode,
-  openRouterKeyPresent,
-  preflight,
-  projectActionNotice,
-  projectSummary,
-  recentProjects,
-  saveBusy,
-  saveResult,
-  starterRom,
-  starterSource,
-  onClose,
-  onExportRom,
-  onChooseCore,
-  onImportRom,
-  onImportTestRom,
-  onNewProject,
-  onOpenProject,
-  onOpenSettings,
-  onSaveProject,
-}: {
-  activeModel: string;
-  buildState: BuildState;
-  comfyUiCheckpoint: string;
-  comfyUiConnection: ComfyUiEndpointStatus;
-  comfyUiLora: string;
-  conversationMode: ConversationMode;
-  enhancements: EnhancementSettings;
-  exportBusy: boolean;
-  exportResult?: RomExportResult;
-  interactiveCoreBusy: boolean;
-  interactiveCoreReadiness: InteractiveCoreReadiness;
-  interactiveCoreStatus: InteractiveCoreStatusResult;
-  importBusy: boolean;
-  importReadiness?: RomImportReadiness;
-  importResult?: RomImportResult;
-  modelConnection: ModelConnectionReport;
-  modelProvider: ModelProvider;
-  ollamaEndpoint: string;
-  ollamaModel: string;
-  openCode: OpenCodeBridgeStatus;
-  openRouterKeyPresent: boolean;
-  preflight: PreflightReport;
-  projectActionNotice: ProjectActionNotice;
-  projectSummary: ProjectSummary;
-  recentProjects: ProjectSnapshot[];
-  saveBusy: boolean;
-  saveResult?: ProjectSaveResult;
-  starterRom: StarterRomPreview;
-  starterSource: string;
-  onClose: () => void;
-  onExportRom: () => void;
-  onChooseCore: () => void;
-  onImportRom: () => void;
-  onImportTestRom: () => void;
-  onNewProject: () => void;
-  onOpenProject: (snapshot?: ProjectSnapshot) => void;
-  onOpenSettings: () => void;
-  onSaveProject: () => void;
-}) {
-  const attentionChecks = preflight.checks.filter((check) => check.state !== "ready");
-  const readinessItems = firstRunReadinessItems({
-    activeModel,
-    buildState,
-    comfyUiCheckpoint,
-    comfyUiConnection,
-    comfyUiLora,
-    conversationMode,
-    enhancements,
-    interactiveCoreReadiness,
-    modelConnection,
-    modelProvider,
-    ollamaModel,
-    openCode,
-    openRouterKeyPresent,
-    preflight,
-    starterRom,
-    starterSource,
-  });
-  const readiness = readinessHubSummary(readinessItems);
-
-  return (
-    <div className="project-menu-backdrop" onClick={onClose}>
-      <aside
-        className="project-menu"
-        aria-label="Project menu"
-        data-testid="project-menu"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="project-menu-header">
-          <div>
-            <p className="label">Project Menu</p>
-            <h2>{projectSummary.name}</h2>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Close project menu"
-            onClick={onClose}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="project-menu-body">
-          <section
-            className="menu-section readiness-hub"
-            aria-label="Readiness and first-run setup"
-            data-testid="readiness-hub"
-          >
-            <SectionTitle icon={<ShieldCheck size={16} />} title="Readiness" />
-            <div
-              className={`readiness-hub-summary ${readiness.state}`}
-              data-testid="readiness-hub-summary"
-            >
-              {healthIcon(readiness.state)}
-              <span>
-                <strong>{readiness.label}</strong>
-                <small>{readiness.detail}</small>
-              </span>
-            </div>
-            <details className="menu-disclosure">
-              <summary>Show readiness details</summary>
-              <div className="readiness-hub-list">
-                {readinessItems.map((item) => (
-                  <article className={`readiness-hub-item ${item.state}`} key={item.name}>
-                    {healthIcon(item.state)}
-                    <span>
-                      <strong>{item.name}</strong>
-                      <b>{item.status}</b>
-                      <small>{item.detail}</small>
-                      <em>{item.nextAction}</em>
-                    </span>
-                  </article>
-                ))}
-              </div>
-            </details>
-          </section>
-
-          <section className="menu-section menu-current" aria-label="Current project">
-            <SectionTitle icon={<FolderOpen size={16} />} title="Current Project" />
-            <div className="menu-meta-grid">
-              <span>Project</span>
-              <strong title={projectSummary.projectPath}>{shortPath(projectSummary.projectPath)}</strong>
-              <span>ROM</span>
-              <strong title={projectSummary.romPath}>
-                {shortPath(projectSummary.romPath)}
-              </strong>
-              <span>Saved</span>
-              <strong title={saveResult?.snapshotPath ?? "Not saved yet"}>
-                {saveResult ? shortPath(saveResult.snapshotPath) : "Not saved yet"}
-              </strong>
-              <span>Export</span>
-              <strong title={exportResult?.exportPath ?? projectSummary.exportDirectory}>
-                {exportResult
-                  ? shortPath(exportResult.exportPath)
-                  : shortPath(projectSummary.exportDirectory)}
-              </strong>
-              <span>Import</span>
-              <strong
-                title={
-                  importResult?.importPath ?? importReadiness?.importDirectory ?? "No imported ROM"
-                }
-              >
-                {importResult
-                  ? shortPath(importResult.importPath)
-                  : importReadiness
-                    ? shortPath(importReadiness.importDirectory)
-                    : "Not imported yet"}
-              </strong>
-              <span>Play core</span>
-              <strong
-                title={
-                  interactiveCoreStatus.jsPath ??
-                  interactiveCoreStatus.importDirectory ??
-                  interactiveCoreStatus.detail
-                }
-              >
-                {interactiveCoreStatus.status === "available" && interactiveCoreStatus.jsPath
-                  ? shortPath(interactiveCoreStatus.jsPath)
-                  : "Not set up"}
-              </strong>
-            </div>
-          </section>
-
-          <section className="menu-section menu-actions" aria-label="Project actions">
-            <SectionTitle icon={<Save size={16} />} title="Actions" />
-            <div
-              className={`menu-action-status ${projectActionNotice.state}`}
-              data-testid="menu-action-status"
-            >
-              {healthIcon(projectActionNotice.state)}
-              <span>
-                <strong>{projectActionNotice.label}</strong>
-                <small>{projectActionNotice.detail}</small>
-              </span>
-            </div>
-            <div className="menu-action-list">
-              <button type="button" data-testid="menu-new-project" onClick={onNewProject}>
-                <Plus size={16} />
-                <span>
-                  <strong>New Project</strong>
-                  <small>Reset to the blank starter template</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                data-testid="menu-save-project"
-                onClick={onSaveProject}
-                disabled={saveBusy}
-              >
-                <Save size={16} />
-                <span>
-                  <strong>{saveBusy ? "Saving Project" : "Save Project"}</strong>
-                  <small>Snapshot the current project under artifacts</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                data-testid="menu-open-project"
-                onClick={() => onOpenProject()}
-              >
-                <FolderInput size={16} />
-                <span>
-                  <strong>Open Project</strong>
-                  <small>
-                    {recentProjects.length > 0
-                      ? "Select the latest saved snapshot"
-                      : "Save a snapshot first"}
-                  </small>
-                </span>
-              </button>
-              <button
-                type="button"
-                data-testid="menu-import-rom"
-                onClick={onImportRom}
-                disabled={importBusy}
-              >
-                <Upload size={16} />
-                <span>
-                  <strong>{importBusy ? "Importing ROM" : "Import ROM"}</strong>
-                  <small>
-                    {importResult
-                      ? `Active: ${importResult.sourceName}`
-                      : importReadiness
-                        ? importReadiness.acceptedExtensions.join(", ")
-                        : ".bin, .gen, .md, .smd"}
-                  </small>
-                </span>
-              </button>
-              <button
-                type="button"
-                data-testid="menu-import-test-rom"
-                onClick={onImportTestRom}
-                disabled={importBusy}
-              >
-                <Upload size={16} />
-                <span>
-                  <strong>Import Test ROM</strong>
-                  <small>Use the repo-generated starter ROM</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                data-testid="menu-choose-core"
-                onClick={onChooseCore}
-                disabled={interactiveCoreBusy}
-              >
-                <Gamepad2 size={16} />
-                <span>
-                  <strong>
-                    {interactiveCoreBusy
-                      ? "Setting Up Play"
-                      : interactiveCoreStatus.status === "available"
-                        ? "Replace Play Core"
-                        : "Set Up Play"}
-                  </strong>
-                  <small>
-                    {interactiveCoreStatus.status === "available"
-                      ? "User core is installed"
-                      : interactiveCoreStatus.acceptedExtensions.join(", ")}
-                  </small>
-                </span>
-              </button>
-              <button
-                type="button"
-                data-testid="menu-export-rom"
-                onClick={onExportRom}
-                disabled={exportBusy}
-              >
-                <Download size={16} />
-                <span>
-                  <strong>{exportBusy ? "Exporting ROM" : "Export ROM"}</strong>
-                  <small>Copy the current ROM build for sharing</small>
-                </span>
-              </button>
-            </div>
-          </section>
-
-          <section className="menu-section menu-projects" aria-label="Recent projects">
-            <SectionTitle icon={<FolderTree size={16} />} title="Projects" />
-            <button className="project-choice active" type="button" onClick={onClose}>
-              <strong>Starter Project</strong>
-              <small>{shortPath(projectSummary.projectPath)}</small>
-            </button>
-            {recentProjects.length > 0 ? (
-              recentProjects.map((project) => (
-                <button
-                  className="project-choice"
-                  type="button"
-                  data-testid="menu-recent-project"
-                  key={project.projectPath}
-                  onClick={() => onOpenProject(project)}
-                >
-                  <strong>{project.name}</strong>
-                  <small title={project.projectPath}>{shortPath(project.projectPath)}</small>
-                </button>
-              ))
-            ) : (
-              <div className="project-empty" data-testid="menu-empty-projects">
-                <strong>No saved snapshots</strong>
-                <small>Save Project will add one here</small>
-              </div>
-            )}
-          </section>
-
-          <section className="menu-section menu-agent" aria-label="Agent setup">
-            <SectionTitle icon={<KeyRound size={16} />} title="Agent" />
-            <div className="menu-meta-grid">
-              <span>Inference</span>
-              <strong title={providerTitle(modelProvider, activeModel, ollamaEndpoint, ollamaModel)}>
-                {providerDisplayLabel(modelProvider, activeModel, ollamaModel)}
-              </strong>
-              <span>Setup</span>
-              <strong>{preflightSummaryLabel(preflight.summaryState)}</strong>
-            </div>
-            <button
-              className="menu-secondary-action"
-              type="button"
-              data-testid="menu-agent-settings"
-              onClick={onOpenSettings}
-            >
-              <Settings size={16} />
-              Agent Settings
-            </button>
-          </section>
-
-          <section className="menu-section menu-attention" aria-label="Needs attention">
-            <SectionTitle icon={<AlertCircle size={16} />} title="Needs Attention" />
-            <div className="attention-list">
-              {attentionChecks.length > 0 ? (
-                attentionChecks.map((check) => (
-                  <div className={`attention-item ${check.state}`} key={check.name}>
-                    {healthIcon(check.state)}
-                    <span>
-                      <strong>{check.name}</strong>
-                      <small>{check.detail}</small>
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="attention-item ready">
-                  <CheckCircle2 size={15} />
-                  <span>
-                    <strong>No tool blockers</strong>
-                    <small>All tracked checks are ready</small>
-                  </span>
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function SectionTitle({
-  icon,
-  title,
-}: {
-  icon: ReactNode;
-  title: string;
-}) {
-  return (
-    <div className="section-title">
-      {icon}
-      <h3>{title}</h3>
-    </div>
-  );
-}
-
-function IconControl({
-  children,
-  disabled,
-  label,
-  onClick,
-}: {
-  children: ReactNode;
-  disabled?: boolean;
-  label: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      className="icon-button"
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {children}
-    </button>
-  );
 }
 
 export default App;

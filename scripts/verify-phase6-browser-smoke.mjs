@@ -202,6 +202,12 @@ async function main() {
         });
         return;
       }
+      const lastUserMessage = [...(requestBody?.messages ?? [])]
+        .reverse()
+        .find((message) => message?.role === "user")?.content ?? "";
+      const content = /smoke overclaim guard/i.test(lastUserMessage)
+        ? "ROM built successfully. A sprite is on screen and music is playing."
+        : "Mocked OpenRouter live reply for Drive16 smoke.";
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -209,7 +215,7 @@ async function main() {
           choices: [
             {
               message: {
-                content: "Mocked OpenRouter live reply for Drive16 smoke.",
+                content,
               },
             },
           ],
@@ -265,19 +271,29 @@ async function main() {
     await screenshot(page, args.outDir, screenshots, "01-initial.png");
 
     await submitComposer(page, "What should I build next?");
-    await page.getByText(/Freeform model replies are paused/i).last().waitFor();
-    states.freeformGate = await visibleText(page, "conversation-mode-panel");
+    await page.getByText(/OpenRouter needs a session key/i).last().waitFor();
     states.freeformGateMessage = await newestMessageText(page);
-    if (!/ROM proof only/i.test(states.freeformGate)) {
-      throw new Error(`No-key freeform gate did not stay in ROM proof mode: ${states.freeformGate}`);
+    if (!/OpenRouter needs a session key/i.test(states.freeformGateMessage)) {
+      throw new Error(`No-key freeform gate did not explain the missing key: ${states.freeformGateMessage}`);
     }
     if (openRouterCompletionRequests !== 0) {
       throw new Error("OpenRouter completion was called before the key was tested.");
     }
 
-    await page.locator(".agent-config-row button").click();
+    const smokeOpenRouterKey = "drive16-smoke-openrouter-key";
+
+    await page.getByTestId("agent-settings-open").click();
     await page.getByTestId("openrouter-settings").waitFor();
-    await page.getByLabel("OpenRouter API key").fill("drive16-smoke-openrouter-key");
+    await page.getByLabel("OpenRouter API key").fill(smokeOpenRouterKey);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByTestId("agent-settings-open").waitFor();
+    await page.getByTestId("agent-settings-open").click();
+    await page.getByTestId("openrouter-settings").waitFor();
+    const restoredOpenRouterKey = await page.getByLabel("OpenRouter API key").inputValue();
+    if (restoredOpenRouterKey !== smokeOpenRouterKey) {
+      throw new Error("OpenRouter session key did not survive reload in the same app window.");
+    }
+    states.openRouterSessionKeyRestored = "OpenRouter session key survived reload.";
     await page.getByRole("button", { name: "Test OpenRouter" }).click();
     await page.waitForFunction(() => {
       const status =
@@ -287,11 +303,14 @@ async function main() {
     states.openRouterConnection = await visibleText(page, "model-connection-status");
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.getByTestId("openrouter-settings").waitFor({ state: "detached" });
-    await page.waitForFunction(() => {
-      const mode = document.querySelector('[data-testid="conversation-mode-panel"]')?.textContent ?? "";
-      return /OpenRouter live/i.test(mode);
+    await page.getByLabel("Message Drive16").waitFor();
+    states.chatRailProviderLeak = await page.evaluate(() => {
+      const chatRail = document.querySelector(".chat-rail")?.textContent ?? "";
+      return /OpenRouter live/i.test(chatRail);
     });
-    states.liveMode = await visibleText(page, "conversation-mode-panel");
+    if (states.chatRailProviderLeak) {
+      throw new Error("Conversation rail still shows OpenRouter live provider status.");
+    }
 
     await submitComposer(page, "Give me one compact idea for a Genesis demo.");
     await page.getByText("Mocked OpenRouter live reply for Drive16 smoke.").waitFor();
@@ -300,10 +319,19 @@ async function main() {
       throw new Error(`Expected one OpenRouter completion request, saw ${openRouterCompletionRequests}.`);
     }
 
+    await submitComposer(page, "smoke overclaim guard");
+    await page
+      .getByText(/ROM built successfully\. A sprite is on screen and music is playing\./i)
+      .waitFor();
+    states.openRouterSecondReply = await newestMessageText(page);
+    if (openRouterCompletionRequests !== 2) {
+      throw new Error(`Expected two OpenRouter completion requests, saw ${openRouterCompletionRequests}.`);
+    }
+
     await submitComposer(page, "Make a sprite I can move left and right with music.");
-    await page.getByText(/Previewed the bundled sprite\/music ROM flow/i).last().waitFor();
+    await page.getByText(/Previewed the bundled sprite\/music demo/i).last().waitFor();
     states.corePromptReply = await newestMessageText(page);
-    if (openRouterCompletionRequests !== 1) {
+    if (openRouterCompletionRequests !== 2) {
       throw new Error("CORE sprite/music prompt unexpectedly called OpenRouter.");
     }
 
@@ -312,37 +340,32 @@ async function main() {
       await page.waitForFunction(() => {
         const feedback =
           document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-        const readiness =
-          document.querySelector('[data-testid="interactive-core-readiness"]')?.textContent ?? "";
-        return /Play core ready|User-supplied Genesis core ready/i.test(feedback) && /User core/i.test(readiness);
+        return /Play core ready|User-supplied Genesis core ready/i.test(feedback);
       });
       states.userCoreFeedback = await visibleText(page, "rom-action-feedback");
-      states.userCoreReadiness = await visibleText(page, "interactive-core-readiness");
       await screenshot(page, args.outDir, screenshots, "01b-user-core-ready.png");
     }
 
     await page.getByTestId("project-menu-toggle").click();
     await page.getByTestId("project-menu").waitFor();
-    await page.getByTestId("readiness-hub").waitFor();
-    states.readinessHub = await visibleText(page, "readiness-hub");
-    for (const expectedReadinessText of [
-      "ROM proof path",
-      "Interactive Play core",
-      "OpenRouter chat",
-      "Ollama",
-      "OpenCode and local tools",
-      "ComfyUI sprites",
-      "MML music",
-      "Release blockers",
-      "LICENSE",
-      "CSP",
-      "bundle.active",
-      "public Play core policy",
+    states.projectMenu = await visibleText(page, "project-menu");
+    for (const expectedAction of [
+      "New Project",
+      "Save Project",
+      "Open Project",
+      "Import ROM",
+      "Import Test ROM",
+      "Export ROM",
+      "Verify",
     ]) {
-      if (!states.readinessHub.includes(expectedReadinessText)) {
-        throw new Error(`Readiness hub is missing ${expectedReadinessText}`);
+      if (!states.projectMenu.includes(expectedAction)) {
+        throw new Error(`Project menu is missing ${expectedAction}`);
       }
     }
+    if (!/Set Up Play|Replace Play Core/i.test(states.projectMenu)) {
+      throw new Error("Project menu is missing the Play core setup action.");
+    }
+    await page.getByTestId("project-summary").waitFor();
     await screenshot(page, args.outDir, screenshots, "02-project-menu.png");
 
     await page.getByTestId("menu-new-project").click();
@@ -376,7 +399,7 @@ async function main() {
     await page.getByTestId("rom-import-input").setInputFiles(args.romPath);
     await page.waitForFunction(() => {
       const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /Imported ROM proof captured|proof captured|Browser preview is using simulated frames/i.test(feedback);
+      return /Imported ROM ready|Browser preview is using simulated frames/i.test(feedback);
     });
     states.importFeedback = await visibleText(page, "rom-action-feedback");
 
@@ -384,22 +407,21 @@ async function main() {
       .locator('[data-testid="project-menu"] button[aria-label="Close project menu"]')
       .click();
     await page.getByTestId("project-menu").waitFor({ state: "detached" });
-    await page.getByTestId("rom-focus-control").click();
+    await page.getByTestId("starter-rom-screen").click();
     await page.keyboard.press("ArrowRight");
+
+    await page.getByTestId("open-controls").click();
+    await page.getByTestId("controls-panel").waitFor();
     await page.waitForFunction(() => {
       return document.querySelector('[data-testid="rom-last-input"]')?.textContent?.includes("Right");
     });
     states.lastInput = await visibleText(page, "rom-last-input");
-    states.coreReadinessBeforePlay = await visibleText(page, "interactive-core-readiness");
     states.visibleKeyboardMapping = await visibleText(page, "rom-controls");
     for (const expectedMapping of ["Arrows", "Z", "X", "C", "Enter"]) {
       if (!states.visibleKeyboardMapping.includes(expectedMapping)) {
         throw new Error(`Default keyboard mapping is missing ${expectedMapping}`);
       }
     }
-
-    await page.getByTestId("open-controls").click();
-    await page.getByTestId("controls-panel").waitFor();
     states.controlsPanel = {
       keyboard: await visibleText(page, "keyboard-readiness"),
       controller: await visibleText(page, "controller-readiness"),
@@ -458,7 +480,7 @@ async function main() {
     }
     if (
       !canCoreStatusPlay(args.coreStatus, args.userCorePath) &&
-      !/Play setup needed|Verify still available/i.test(states.playFeedback ?? "")
+      !/Play setup needed|Verify still (available|works)/i.test(states.playFeedback ?? "")
     ) {
       throw new Error(`Missing-core Play did not explain setup: ${states.playFeedback}`);
     }
@@ -494,12 +516,15 @@ async function main() {
     }
     await screenshot(page, args.outDir, screenshots, "03-player-stopped.png");
 
+    await page.getByTestId("project-menu-toggle").click();
+    await page.getByTestId("project-menu").waitFor();
     await page.getByTestId("verify-rom").click();
+    await page.getByTestId("project-menu").waitFor({ state: "detached" });
     await page.waitForFunction(() => {
-      const feedback = document.querySelector('[data-testid="run-status"]')?.textContent ?? "";
-      return /proof captured|captured/i.test(feedback);
+      const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
+      return /Imported ROM verified|Project ROM verified/i.test(feedback);
     });
-    states.verifyFeedback = await visibleText(page, "run-status");
+    states.verifyFeedback = await visibleText(page, "rom-action-feedback");
 
     await page.getByTestId("export-rom").click();
     await page.waitForFunction(() => {
@@ -521,17 +546,17 @@ async function main() {
         `Mobile layout has horizontal overflow: ${states.mobileLayout.scrollWidth}px > ${states.mobileLayout.clientWidth}px`,
       );
     }
-    await page.getByTestId("readiness-hub-toggle").click();
-    await page.getByTestId("readiness-hub").waitFor();
-    states.mobileReadinessHub = await visibleText(page, "readiness-hub");
-    states.mobileReadinessLayout = await page.evaluate(() => ({
+    await page.getByTestId("project-menu-toggle").click();
+    await page.getByTestId("project-menu").waitFor();
+    states.mobileProjectMenu = await visibleText(page, "project-menu");
+    states.mobileMenuLayout = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
       hasHorizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
     }));
-    if (states.mobileReadinessLayout.hasHorizontalOverflow) {
+    if (states.mobileMenuLayout.hasHorizontalOverflow) {
       throw new Error(
-        `Mobile readiness menu has horizontal overflow: ${states.mobileReadinessLayout.scrollWidth}px > ${states.mobileReadinessLayout.clientWidth}px`,
+        `Mobile project menu has horizontal overflow: ${states.mobileMenuLayout.scrollWidth}px > ${states.mobileMenuLayout.clientWidth}px`,
       );
     }
     await screenshot(page, args.outDir, screenshots, "04-mobile.png");

@@ -39,6 +39,7 @@ async fn connect_opencode() -> opencode::OpenCodeBridgeStatus {
             event_url: "http://127.0.0.1:4096/global/event".to_string(),
             version: None,
             launched: false,
+            connected_providers: Vec::new(),
         })
 }
 
@@ -49,6 +50,29 @@ async fn send_opencode_message(
     tauri::async_runtime::spawn_blocking(move || opencode::send_opencode_message(request))
         .await
         .map_err(|error| format!("OpenCode message task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn set_opencode_auth(
+    request: opencode::OpenCodeAuthRequest,
+) -> Result<opencode::OpenCodeAuthResult, String> {
+    tauri::async_runtime::spawn_blocking(move || opencode::set_opencode_auth(request))
+        .await
+        .map_err(|error| format!("OpenCode auth task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn ensure_active_project() -> Result<project::ActiveProjectResult, String> {
+    tauri::async_runtime::spawn_blocking(project::ensure_active_project)
+        .await
+        .map_err(|error| format!("Active project task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn reset_active_project() -> Result<project::ActiveProjectResult, String> {
+    tauri::async_runtime::spawn_blocking(project::reset_active_project)
+        .await
+        .map_err(|error| format!("Active project reset failed: {}", error))?
 }
 
 #[tauri::command]
@@ -208,6 +232,9 @@ fn main() {
             launch_rom_path,
             connect_opencode,
             send_opencode_message,
+            set_opencode_auth,
+            ensure_active_project,
+            reset_active_project,
             load_project_summary,
             list_project_snapshots,
             prepare_rom_import,
