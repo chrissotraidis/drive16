@@ -352,7 +352,7 @@ async function main() {
     for (const expectedAction of [
       "New Project",
       "Save Project",
-      "Open Project",
+      "Open Last Save",
       "Import ROM",
       "Import Test ROM",
       "Export ROM",

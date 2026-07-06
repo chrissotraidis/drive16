@@ -32,13 +32,7 @@ pub fn run_preflight() -> PreflightReport {
             opencode_fallbacks(),
             "Install or configure OpenCode",
         ),
-        command_check(
-            "Docker",
-            "docker",
-            &["--version"],
-            Vec::new(),
-            "Docker is required for SGDK builds",
-        ),
+        docker_daemon_check(),
         file_check(
             "SGDK build",
             repo_root.join("scripts/build-sgdk.sh"),
@@ -77,6 +71,39 @@ pub fn run_preflight() -> PreflightReport {
         generated_at: unix_timestamp(),
         summary_state: summary_state.to_string(),
         checks,
+    }
+}
+
+// `docker --version` succeeds with the daemon down, so probe the daemon
+// itself and say exactly what to do when it is not running.
+fn docker_daemon_check() -> HealthCheck {
+    let fallbacks = vec![
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/opt/homebrew/bin"),
+    ];
+    let Some(docker) = find_command("docker", &fallbacks) else {
+        return HealthCheck {
+            name: "Docker".to_string(),
+            state: "missing".to_string(),
+            detail: "Install Docker Desktop — builds need it".to_string(),
+        };
+    };
+
+    match Command::new(&docker)
+        .args(["info", "--format", "server {{.ServerVersion}}"])
+        .output()
+    {
+        Ok(output) if output.status.success() => HealthCheck {
+            name: "Docker".to_string(),
+            state: "ready".to_string(),
+            detail: first_output_line(&output.stdout, &output.stderr)
+                .unwrap_or_else(|| "Docker daemon running".to_string()),
+        },
+        _ => HealthCheck {
+            name: "Docker".to_string(),
+            state: "missing".to_string(),
+            detail: "Docker Desktop is not running — start it, then refresh".to_string(),
+        },
     }
 }
 

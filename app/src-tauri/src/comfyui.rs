@@ -86,14 +86,18 @@ fn check_endpoint_for_repo(
     let stats = match probe_system_stats(&endpoint) {
         Ok(stats) => stats,
         Err(error) => {
+            let friendly = format!(
+                "ComfyUI is not running at {}. Start it with scripts/launch-phase4-comfyui-api.sh, then Test again. ({})",
+                endpoint.base_url, error
+            );
             let checks = phase4_readiness_checks(
                 &repo_root,
                 Err(&error),
                 checkpoint_override,
                 lora_override,
-                readiness_check("API", "missing", &error),
+                readiness_check("API", "missing", &friendly),
             );
-            return status("missing", &error, &endpoint, None, 0, checks);
+            return status("missing", &friendly, &endpoint, None, 0, checks);
         }
     };
     let version = extract_version(&stats);

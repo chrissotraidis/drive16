@@ -85,7 +85,7 @@ export function ProjectMenu({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="project-menu-header">
-          <h2>{projectSummary.name}</h2>
+          <h2>Project</h2>
           <button
             className="icon-button"
             type="button"
@@ -109,26 +109,38 @@ export function ProjectMenu({
           </div>
 
           <div className="menu-action-list">
-            <button type="button" data-testid="menu-new-project" onClick={onNewProject}>
+            <button
+              type="button"
+              data-testid="menu-new-project"
+              title="Reset the workspace to the blank starter template"
+              onClick={onNewProject}
+            >
               <Plus size={16} />
               New Project
             </button>
             <button
               type="button"
               data-testid="menu-save-project"
+              title="Copy the current project into a timestamped snapshot"
               onClick={onSaveProject}
               disabled={saveBusy}
             >
               <Save size={16} />
               {saveBusy ? "Saving Project" : "Save Project"}
             </button>
-            <button type="button" data-testid="menu-open-project" onClick={onOpenProject}>
+            <button
+              type="button"
+              data-testid="menu-open-project"
+              title="Load the most recent saved snapshot"
+              onClick={onOpenProject}
+            >
               <FolderInput size={16} />
-              Open Project
+              Open Last Save
             </button>
             <button
               type="button"
               data-testid="menu-import-rom"
+              title="Play a Genesis ROM file from your computer (.bin, .gen, .md, .smd)"
               onClick={onImportRom}
               disabled={importBusy}
             >
@@ -138,6 +150,7 @@ export function ProjectMenu({
             <button
               type="button"
               data-testid="menu-import-test-rom"
+              title="Load the built-in test ROM"
               onClick={onImportTestRom}
               disabled={importBusy}
             >
@@ -147,6 +160,7 @@ export function ProjectMenu({
             <button
               type="button"
               data-testid="menu-choose-core"
+              title="Optional: choose your own Genesis emulator core file (.zip or .js + .wasm) instead of the streamed one"
               onClick={onChooseCore}
               disabled={interactiveCoreBusy}
             >
@@ -160,6 +174,7 @@ export function ProjectMenu({
             <button
               type="button"
               data-testid="menu-export-rom"
+              title="Copy the current ROM to artifacts/phase3/exports so you can share it"
               onClick={onExportRom}
               disabled={exportBusy}
             >
@@ -169,6 +184,7 @@ export function ProjectMenu({
             <button
               type="button"
               data-testid="verify-rom"
+              title="Rebuild the project and check it in the emulator (needs Docker running)"
               onClick={onVerify}
               disabled={verifyBusy}
             >

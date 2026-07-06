@@ -182,8 +182,6 @@ export function PlayerPane({
                   )
                 }
                 frames={starterRom.framebufferFrames}
-                streamEvery={starterRom.streamEvery}
-                transport={transport}
               />
             )}
           </div>
@@ -383,34 +381,16 @@ function InputControlsPanel({
 function FramebufferCanvas({
   fallback,
   frames,
-  streamEvery,
-  transport,
 }: {
   fallback: ReactNode;
   frames: FramebufferFrame[];
-  streamEvery: number;
-  transport: TransportState;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [frameCursor, setFrameCursor] = useState(0);
   const decodedFrames = useMemo(() => decodeFramebufferFrames(frames), [frames]);
+  // Show the settled screen, not a replay: the captured stream starts with
+  // boot-black frames and looping them reads as a broken, flashing display.
   const activeFrame =
-    decodedFrames.length > 0 ? decodedFrames[frameCursor % decodedFrames.length] : null;
-
-  useEffect(() => {
-    setFrameCursor(0);
-  }, [decodedFrames.length]);
-
-  useEffect(() => {
-    if (transport !== "running" || decodedFrames.length <= 1) return;
-
-    const intervalMs = Math.max(90, Math.round((streamEvery / 60) * 1000));
-    const timer = window.setInterval(() => {
-      setFrameCursor((value) => (value + 1) % decodedFrames.length);
-    }, intervalMs);
-
-    return () => window.clearInterval(timer);
-  }, [decodedFrames.length, streamEvery, transport]);
+    decodedFrames.length > 0 ? decodedFrames[decodedFrames.length - 1] : null;
 
   useEffect(() => {
     const canvas = canvasRef.current;

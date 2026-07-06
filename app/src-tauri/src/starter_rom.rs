@@ -272,6 +272,31 @@ fn find_genteel_bin(paths: &StarterPaths) -> Result<PathBuf, String> {
     }
 }
 
+// GUI apps on macOS get a minimal PATH without /usr/local/bin or Homebrew,
+// which hides docker, node, and cargo from every child process. Extend it
+// for everything we spawn.
+pub(crate) fn extended_path_env() -> String {
+    let current = env::var("PATH").unwrap_or_default();
+    let mut path = current.clone();
+    let mut extras: Vec<String> = vec![
+        "/usr/local/bin".to_string(),
+        "/opt/homebrew/bin".to_string(),
+    ];
+    if let Some(home) = env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        extras.push(home.join(".cargo/bin").to_string_lossy().into_owned());
+        extras.push(home.join(".opencode/bin").to_string_lossy().into_owned());
+        extras.push(home.join("Library/pnpm").to_string_lossy().into_owned());
+    }
+    for extra in extras {
+        if !current.split(':').any(|part| part == extra) {
+            path.push(':');
+            path.push_str(&extra);
+        }
+    }
+    path
+}
+
 // Toolchain shell-outs (Docker builds, emulator runs) must never hang the
 // app: spawn with piped output, poll, and kill past the deadline. Output is
 // drained on threads so a chatty build cannot deadlock the pipe buffer.
@@ -281,6 +306,7 @@ pub(crate) fn run_command_with_timeout(
     timeout: Duration,
 ) -> Result<String, String> {
     command
+        .env("PATH", extended_path_env())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

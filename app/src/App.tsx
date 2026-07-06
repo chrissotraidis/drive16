@@ -393,6 +393,42 @@ const fallbackModelOptions: ModelOption[] = [
   },
 ];
 
+// Non-secret settings persist across app restarts. The API key is NOT here:
+// it lives in OpenCode's local auth store.
+const persistedSettingsStorageKey = "drive16.settings.v1";
+
+type PersistedSettings = {
+  modelProvider?: ModelProvider;
+  activeModel?: string;
+  ollamaEndpoint?: string;
+  ollamaModel?: string;
+  enhancements?: EnhancementSettings;
+  comfyUiEndpoint?: string;
+  comfyUiCheckpoint?: string;
+  comfyUiLora?: string;
+};
+
+function loadPersistedSettings(): PersistedSettings {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(persistedSettingsStorageKey);
+    if (!raw) return {};
+    return JSON.parse(raw) as PersistedSettings;
+  } catch {
+    return {};
+  }
+}
+
+function savePersistedSettings(settings: PersistedSettings) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(persistedSettingsStorageKey, JSON.stringify(settings));
+  } catch {
+    // Storage can be unavailable in locked-down webviews; settings just
+    // won't persist.
+  }
+}
+
 function loadOpenRouterSessionKey() {
   if (typeof window === "undefined") return "";
 
@@ -669,21 +705,34 @@ function App() {
   const [actionDetail, setActionDetail] = useState(
     "Starter project loaded. Describe what you want to build.",
   );
-  const [modelProvider, setModelProvider] = useState<ModelProvider>("openrouter");
-  const [activeModel, setActiveModel] = useState(fallbackModelOptions[0].id);
+  const [persisted] = useState(loadPersistedSettings);
+  const [modelProvider, setModelProvider] = useState<ModelProvider>(
+    persisted.modelProvider ?? "openrouter",
+  );
+  const [activeModel, setActiveModel] = useState(
+    persisted.activeModel ?? fallbackModelOptions[0].id,
+  );
   const [modelOptions, setModelOptions] = useState<ModelOption[]>(fallbackModelOptions);
   const [modelsSource, setModelsSource] = useState("fallback");
   const [openRouterKey, setOpenRouterKey] = useState(() => loadOpenRouterSessionKey());
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
-  const [ollamaEndpoint, setOllamaEndpoint] = useState(defaultOllamaEndpoint);
-  const [ollamaModel, setOllamaModel] = useState(defaultOllamaModel);
-  const [enhancements, setEnhancements] = useState<EnhancementSettings>({
-    spriteGeneration: false,
-    musicGeneration: false,
-  });
-  const [comfyUiEndpoint, setComfyUiEndpoint] = useState(defaultComfyUiEndpoint);
-  const [comfyUiCheckpoint, setComfyUiCheckpoint] = useState(defaultComfyUiCheckpoint);
-  const [comfyUiLora, setComfyUiLora] = useState(defaultComfyUiLora);
+  const [ollamaEndpoint, setOllamaEndpoint] = useState(
+    persisted.ollamaEndpoint ?? defaultOllamaEndpoint,
+  );
+  const [ollamaModel, setOllamaModel] = useState(persisted.ollamaModel ?? defaultOllamaModel);
+  const [enhancements, setEnhancements] = useState<EnhancementSettings>(
+    persisted.enhancements ?? {
+      spriteGeneration: false,
+      musicGeneration: false,
+    },
+  );
+  const [comfyUiEndpoint, setComfyUiEndpoint] = useState(
+    persisted.comfyUiEndpoint ?? defaultComfyUiEndpoint,
+  );
+  const [comfyUiCheckpoint, setComfyUiCheckpoint] = useState(
+    persisted.comfyUiCheckpoint ?? defaultComfyUiCheckpoint,
+  );
+  const [comfyUiLora, setComfyUiLora] = useState(persisted.comfyUiLora ?? defaultComfyUiLora);
   const [comfyUiConnection, setComfyUiConnection] = useState<ComfyUiEndpointStatus>({
     generatedAt: "0",
     state: "idle",
@@ -736,6 +785,37 @@ function App() {
     void testComfyUiConnection();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsOpen, enhancements.spriteGeneration]);
+
+  // Preflight is a snapshot; re-run it when Settings opens so rows like
+  // Docker reflect reality, not app-launch time.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    void refreshPreflight();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen]);
+
+  // Keep non-secret settings across restarts.
+  useEffect(() => {
+    savePersistedSettings({
+      modelProvider,
+      activeModel,
+      ollamaEndpoint,
+      ollamaModel,
+      enhancements,
+      comfyUiEndpoint,
+      comfyUiCheckpoint,
+      comfyUiLora,
+    });
+  }, [
+    modelProvider,
+    activeModel,
+    ollamaEndpoint,
+    ollamaModel,
+    enhancements,
+    comfyUiEndpoint,
+    comfyUiCheckpoint,
+    comfyUiLora,
+  ]);
 
   useEffect(() => {
     if (openCode.state !== "ready" || !openCode.eventUrl) return;

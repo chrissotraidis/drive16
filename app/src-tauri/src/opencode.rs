@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     env,
-    io::{Read, Write},
-    net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
@@ -148,7 +146,7 @@ pub fn send_opencode_message(request: OpenCodeSendRequest) -> Result<OpenCodeSen
     let timeout = if no_reply {
         Duration::from_secs(5)
     } else {
-        Duration::from_secs(30 * 60)
+        Duration::from_secs(10 * 60)
     };
     let response = http_request_with_timeout("POST", &path, Some(&body), timeout)?;
     require_success(response.status, &response.body, "post message")?;
@@ -349,6 +347,7 @@ fn start_opencode() -> Result<(), String> {
     }
 
     let child = Command::new(command_path)
+        .env("PATH", crate::starter_rom::extended_path_env())
         .args([
             "serve",
             "--hostname",
@@ -407,97 +406,45 @@ fn http_request(method: &str, path: &str, body: Option<&Value>) -> Result<HttpRe
     http_request_with_timeout(method, path, body, Duration::from_secs(5))
 }
 
+// A real HTTP client: the previous hand-rolled TcpStream reader never
+// received the body of long-running responses (the server keeps the
+// connection alive), which made every real agent reply hang the app.
 fn http_request_with_timeout(
     method: &str,
     path: &str,
     body: Option<&Value>,
     read_timeout: Duration,
 ) -> Result<HttpResponse, String> {
-    let address = SocketAddr::from(([127, 0, 0, 1], PORT));
-    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))
-        .map_err(|error| format!("Could not connect to {}: {}", BASE_URL, error))?;
-    stream
-        .set_read_timeout(Some(read_timeout))
-        .map_err(|error| format!("Could not set OpenCode read timeout: {}", error))?;
+    let url = format!("{}{}", BASE_URL, path);
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(2))
+        .timeout(read_timeout)
+        .build();
+    let request = agent
+        .request(method, &url)
+        .set("Accept", "application/json");
 
-    let body_text = body.map(Value::to_string).unwrap_or_default();
-    let mut request = format!(
-        "{} {} HTTP/1.1\r\nHost: {}:{}\r\nAccept: application/json\r\nConnection: close\r\n",
-        method, path, HOST, PORT
-    );
-
-    if body.is_some() {
-        request.push_str("Content-Type: application/json\r\n");
-        request.push_str(&format!(
-            "Content-Length: {}\r\n",
-            body_text.as_bytes().len()
-        ));
-    }
-
-    request.push_str("\r\n");
-    request.push_str(&body_text);
-
-    stream
-        .write_all(request.as_bytes())
-        .map_err(|error| format!("Could not write OpenCode request: {}", error))?;
-
-    let mut raw = String::new();
-    stream
-        .read_to_string(&mut raw)
-        .map_err(|error| format!("Could not read OpenCode response: {}", error))?;
-
-    parse_http_response(&raw)
-}
-
-fn parse_http_response(raw: &str) -> Result<HttpResponse, String> {
-    let (headers, body) = raw
-        .split_once("\r\n\r\n")
-        .ok_or_else(|| "OpenCode returned a malformed HTTP response".to_string())?;
-    let status = headers
-        .lines()
-        .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .and_then(|value| value.parse::<u16>().ok())
-        .ok_or_else(|| "OpenCode response did not include an HTTP status".to_string())?;
-
-    let chunked = headers
-        .lines()
-        .any(|line| line.to_ascii_lowercase().replace(' ', "") == "transfer-encoding:chunked");
-    let body = if chunked {
-        decode_chunked_body(body)?
-    } else {
-        body.to_string()
+    let result = match body {
+        Some(value) => request
+            .set("Content-Type", "application/json")
+            .send_string(&value.to_string()),
+        None => request.call(),
     };
 
-    Ok(HttpResponse { status, body })
-}
-
-fn decode_chunked_body(raw: &str) -> Result<String, String> {
-    let mut decoded: Vec<u8> = Vec::new();
-    let mut rest = raw.as_bytes();
-    loop {
-        let line_end = find_crlf(rest)
-            .ok_or_else(|| "OpenCode chunked response was truncated".to_string())?;
-        let size_line = std::str::from_utf8(&rest[..line_end]).unwrap_or("");
-        let size = usize::from_str_radix(size_line.trim(), 16)
-            .map_err(|_| "OpenCode chunked response had an invalid chunk size".to_string())?;
-        rest = &rest[line_end + 2..];
-        if size == 0 {
-            return Ok(String::from_utf8_lossy(&decoded).into_owned());
+    match result {
+        Ok(response) => {
+            let status = response.status();
+            let body = response
+                .into_string()
+                .map_err(|error| format!("Could not read OpenCode response: {}", error))?;
+            Ok(HttpResponse { status, body })
         }
-        if rest.len() < size {
-            return Err("OpenCode chunked response ended mid-chunk".to_string());
+        Err(ureq::Error::Status(status, response)) => {
+            let body = response.into_string().unwrap_or_default();
+            Ok(HttpResponse { status, body })
         }
-        decoded.extend_from_slice(&rest[..size]);
-        rest = &rest[size..];
-        if rest.starts_with(b"\r\n") {
-            rest = &rest[2..];
-        }
+        Err(error) => Err(format!("Could not reach {}: {}", BASE_URL, error)),
     }
-}
-
-fn find_crlf(bytes: &[u8]) -> Option<usize> {
-    bytes.windows(2).position(|pair| pair == b"\r\n")
 }
 
 fn require_success(status: u16, body: &str, label: &str) -> Result<(), String> {
@@ -596,14 +543,22 @@ mod tests {
         assert_eq!(report.version.as_deref(), Some("1.14.33"));
     }
 
+    // Requires a running `opencode serve` on 4096. Run explicitly with:
+    // cargo test live_agent_reply_roundtrip -- --ignored
     #[test]
-    fn parse_http_response_extracts_status_and_body() {
-        let response = parse_http_response(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"healthy\":true}",
-        )
-        .expect("response should parse");
+    #[ignore]
+    fn live_agent_reply_roundtrip() {
+        let result = send_opencode_message(OpenCodeSendRequest {
+            session_id: None,
+            text: "Reply with the single word PONG. Do not use any tools.".to_string(),
+            provider_id: Some("opencode".to_string()),
+            model_id: Some("big-pickle".to_string()),
+            no_reply: Some(false),
+        })
+        .expect("agent reply should complete");
 
-        assert_eq!(response.status, 200);
-        assert_eq!(response.body, "{\"healthy\":true}");
+        assert_eq!(result.finish.as_deref(), Some("stop"));
+        let reply = result.reply_text.expect("reply text should be present");
+        assert!(reply.to_uppercase().contains("PONG"), "reply was: {}", reply);
     }
 }
