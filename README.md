@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/drive16-readme-banner.png" alt="Drive16 banner: build Sega Genesis / Mega Drive games by talking" width="100%">
+</p>
+
 # Drive16
 
 **Build Sega Genesis / Mega Drive games by talking.**
