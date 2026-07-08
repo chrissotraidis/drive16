@@ -39,6 +39,7 @@ pub struct OpenCodeSendRequest {
     pub provider_id: Option<String>,
     pub model_id: Option<String>,
     pub no_reply: Option<bool>,
+    pub background: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -120,6 +121,7 @@ pub fn send_opencode_message(request: OpenCodeSendRequest) -> Result<OpenCodeSen
     let message_id = format!("msg_drive16_{}", stamp);
     let part_id = format!("prt_drive16_{}", stamp);
     let no_reply = request.no_reply.unwrap_or(false);
+    let background = request.background.unwrap_or(false);
     let mut body = json!({
         "messageID": message_id,
         "parts": [
@@ -141,6 +143,39 @@ pub fn send_opencode_message(request: OpenCodeSendRequest) -> Result<OpenCodeSen
     }
 
     let path = format!("/session/{}/message", session_id);
+    if background {
+        let background_path = path.clone();
+        let background_body = body.clone();
+        thread::spawn(move || {
+            let timeout = Duration::from_secs(20 * 60);
+            match http_request_with_timeout(
+                "POST",
+                &background_path,
+                Some(&background_body),
+                timeout,
+            )
+            .and_then(|response| {
+                require_success(response.status, &response.body, "post background message")?;
+                Ok(())
+            }) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("Drive16 OpenCode background message failed: {}", error);
+                }
+            }
+        });
+
+        return Ok(OpenCodeSendResult {
+            session_id,
+            message_id,
+            part_id,
+            state: "ready".to_string(),
+            detail: "OpenCode agent request started in the background".to_string(),
+            reply_text: None,
+            finish: None,
+        });
+    }
+
     // A real agent run holds the connection open while it plans, edits, and
     // builds; give it a long window instead of the default request timeout.
     let timeout = if no_reply {
@@ -257,13 +292,16 @@ fn connected_providers() -> Vec<String> {
         .ok()
         .and_then(|response| serde_json::from_str::<Value>(&response.body).ok())
         .and_then(|value| {
-            value.get("connected").and_then(Value::as_array).map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
+            value
+                .get("connected")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_string)
+                        .collect()
+                })
         })
         .unwrap_or_default()
 }
@@ -554,11 +592,16 @@ mod tests {
             provider_id: Some("opencode".to_string()),
             model_id: Some("big-pickle".to_string()),
             no_reply: Some(false),
+            background: Some(false),
         })
         .expect("agent reply should complete");
 
         assert_eq!(result.finish.as_deref(), Some("stop"));
         let reply = result.reply_text.expect("reply text should be present");
-        assert!(reply.to_uppercase().contains("PONG"), "reply was: {}", reply);
+        assert!(
+            reply.to_uppercase().contains("PONG"),
+            "reply was: {}",
+            reply
+        );
     }
 }

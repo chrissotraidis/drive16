@@ -11,6 +11,9 @@ Everything the agent builds for you lives in one ordinary folder:
 ```text
 artifacts/phase3/active-project/
 ├── Makefile          # delegates to the SGDK toolchain
+├── GAME.md           # living game notes: concept, controls, assets, issues
+├── ASSETS.md         # role-by-role asset manifest and proof status
+├── PLAYTEST.md       # living evidence log: checks run, results, next test
 ├── src/
 │   └── main.c        # the game code the agent writes and edits
 ├── res/              # ALL game assets live here
@@ -34,6 +37,14 @@ data; GCC (m68k-elf) compiles `src/*.c`; the linker produces `out/rom.bin`.
 So "the ROM" is always just a compilation of that folder — there is no
 hidden state.
 
+`GAME.md`, `ASSETS.md`, and `PLAYTEST.md` are part of the active project
+contract. Agents should read them before editing a continued game and update
+them after each build turn. `GAME.md` answers what the game is, which controls
+it uses, what has been attempted, and what is currently broken. `ASSETS.md`
+maps each sprite, tile, music, or primitive drawing to its game role, source,
+path, and proof status. `PLAYTEST.md` records build/run/input/screenshot/audio
+evidence and the next checks required before calling a result done.
+
 ## How assets get into the project
 
 Generated assets are staged in scratch space first, then copied into the
@@ -46,6 +57,10 @@ project's `res/` folder and referenced from `resources.res`:
   generates, downscales, quantizes, and validates a Genesis-legal PNG under
   `artifacts/phase4/live-comfyui-sprite/<id>/`; the agent copies it to
   `res/<name>.png` plus a `SPRITE <name> "..." 4 4 NONE 0` line.
+  Each generated PNG should be treated as one role-specific sprite. If a game
+  needs multiple semantic roles, generate, validate, and record each role
+  separately; use primitives for simple geometry unless the user asks for
+  styled generated art.
 - Bundled pack: `assets/core/player.png` and `assets/core/loop.vgm` can be
   referenced directly, no copying needed.
 

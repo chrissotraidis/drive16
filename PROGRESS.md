@@ -1,9 +1,179 @@
 # Drive16 Progress
 
-Current phase: Overhaul (see `docs/overhaul-plan.md`)
+Current phase: Builder reliability and playability gate in progress.
 
-Exit criterion: any reasonable chat prompt builds a playable, audible ROM in
-the right pane, in a UI a stranger can use.
+Immediate criterion: settings survive refresh, the real native app can complete
+consecutive build/edit chat turns, and MML/ComfyUI can be exercised through the
+same chat path with clear status. The current gate also requires visible chat
+logging, per-project memory notes, honest asset disclosure, and playable
+evidence before a build is called done. Release hardening is paused until this
+gate is credible.
+
+## Next robustness goals (2026-07-08)
+
+Goal 1 - Make project state trustworthy.
+
+- New Project must reset chat, build log, active ROM, player preview/playback,
+  project title, pending agent session state, and evidence state together.
+- The project header/dropdown must always reflect the active project workspace,
+  never an old `Starter Project` summary after a refresh or reset.
+- Play/Verify must refuse missing-ROM projects plainly instead of falling back
+  to an older template ROM.
+
+Goal 2 - Make settings persistent and honest.
+
+- OpenRouter key, accepted-key marker, AI sprites toggle, MML music toggle,
+  ComfyUI endpoint, checkpoint, and LoRA must survive refresh in the app window.
+- Settings labels must distinguish `ready`, `enabled`, `failed`, and `not
+  tested`; a toggle being on is not proof that ComfyUI or MML worked.
+- ComfyUI failures should preserve the concrete endpoint/model error so the
+  next action is obvious.
+
+Goal 3 - Make the agent loop usable turn by turn.
+
+- Each user build/edit prompt should create a clean OpenCode run while keeping
+  continuity through the active project files.
+- Broad prompts should get either a few clarifying questions or a visible
+  default plan before long-running build work begins.
+- Stale OpenCode events from an older session must not update the visible chat,
+  player evidence, or current project status.
+- Timeouts and provider/tool failures should produce actionable chat feedback,
+  not an endless working state.
+
+Goal 4 - Make live logging useful instead of noisy.
+
+- The visible build log should show meaningful events: accepted request,
+  planning, file edits, asset generation, music generation, build, emulator run,
+  screenshot, input check, audio check, retry, failure, and finish.
+- Heartbeat should be shown as a pinned live status, with raw heartbeat events
+  available only in the raw log.
+- The visible log should stay scrolled to the newest event during active work.
+
+Goal 5 - Add per-project memory for resumed work.
+
+- Every active project should carry `GAME.md`, `ASSETS.md`, and `PLAYTEST.md`.
+- The agent must read these files before continuing a project and update them
+  after material changes.
+- These files should record the game's concept, controls, assets used, known
+  bugs, playtest evidence, and next checks so future turns do not start from
+  scratch.
+
+Goal 6 - Gate "done" on playability evidence.
+
+- The app and builder prompt should not call a generated game done merely
+  because a ROM compiled.
+- A done claim requires evidence for visible screen, non-broken initial state,
+  input response, basic game rules, restart/start behavior where relevant,
+  style/asset intent, and audio status.
+- The player surface should show an aggregate playability gate such as `no ROM`,
+  `incomplete`, `failed`, or `verified` based on screen/input/audio evidence.
+
+Goal 7 - Prove the asset and music paths through chat.
+
+- When AI sprites are enabled, the agent should use ComfyUI only if readiness
+  passes, normalize/crop/palette-check the PNG, wire it into SGDK resources, and
+  disclose exactly what asset was used.
+- When MML music is enabled, the agent should generate/compile/wire a VGM and
+  capture audio evidence after loading the ROM.
+- If either enhancement is unavailable, the chat should say it used primitive
+  tiles or no generated music instead of implying the feature ran.
+
+Goal 8 - Fix the player feedback loop.
+
+- Sound on/off must actually toggle player audio and reflect the current state.
+- Player status messages must match what is on screen; it should not say blank
+  when the frame is visibly rendering.
+- Play, pause, reset, stop, and imported/generated ROM transitions need focused
+  smoke coverage so old ROM state does not leak into new projects.
+
+## Reliability status (2026-07-07)
+
+Recent user testing contradicted the optimistic July 5 wording:
+
+- OpenRouter key and enhancement settings appear to be lost on refresh.
+- AI sprites and MML music toggles do not behave as reliable working features.
+- ComfyUI fails from Settings and is not usable from the agent flow.
+- MML music can show `Ready` without proving music generation works through
+  chat.
+- The agent path may handle one prompt, but turn-by-turn build/edit chat stalls
+  or fails.
+- Logging is not strong enough to identify where the agent loop blocks.
+
+Follow-up from the Snake proof-case review:
+
+- The generated Snake project built but originally overclaimed completion: it
+  used only primitive C tiles, did not use ComfyUI or MML, and the first
+  screenshot evidence showed score/state and visual defects.
+- The first recovery slice now adds project memory templates (`GAME.md` and
+  `PLAYTEST.md`), visible chat build-log plumbing, a player audio-volume fix,
+  and stricter builder-agent rules for broad prompts, asset disclosure, and
+  playability gates.
+- The next recovery slice passes app enhancement settings into the builder
+  prompt, shows a visible default plan or clarifying questions before long
+  desktop agent runs, and normalizes OpenCode tool events into specific chat
+  log categories for files, build, ROM run, input, screenshot, audio, sprites,
+  and music.
+- The chat log now also labels failed-build recovery as fixing, retrying, and
+  fixed, so a compiler failure no longer looks like a silent stall.
+- Browser smoke now covers the broad-prompt question gate: `Build a game.`
+  asks three quick design questions and does not call OpenRouter.
+- The active Snake project was repaired into a basic playable primitive-tile
+  proof with score 0, visible snake/food/border, directional input, wall
+  collision, and restart evidence. It is not proof that generated sprites or
+  music work in that game.
+- Follow-up generated-assets Snake proof now wires ComfyUI and MML into that
+  same active project: `res/snake_head.png` is referenced as
+  `snake_head_sprite`, `res/snake_theme.vgm` is referenced as `snake_theme`,
+  the ROM builds, screenshot/input evidence is saved under
+  `artifacts/phase9/generated-snake-proof/`, movement diff passes, and emulator
+  audio is non-silent (`maxAbsSample=10922`). The sprite is visibly rough, so
+  this is pipeline/playability proof rather than final art direction.
+- A live OpenCode run against the active Snake project now leaves readable
+  evidence for the builder loop: it read `GAME.md`/`PLAYTEST.md`, built the
+  ROM, sent movement/state input, ran the emulator, captured a screenshot, and
+  updated `PLAYTEST.md`. `scripts/verify-agent-contract.mjs` now checks that
+  real OpenCode events normalize into visible chat-log categories.
+- Browser preview recheck after reload confirmed the chat build log is visible,
+  the OpenRouter key field stayed populated for the session, AI sprites and MML
+  toggles stayed enabled, and there were no console warnings/errors. This is
+  UI persistence/logging evidence, not a native ComfyUI/MML generation proof.
+
+The native chat loop, MML music path, and ComfyUI sprite path were reproduced
+live in the current session on July 7.
+
+Current recovery evidence from this pass:
+
+- Browser smoke now verifies refresh persistence for the OpenRouter session
+  key, AI sprites toggle, MML music toggle, and ComfyUI endpoint/checkpoint/LoRA
+  fields.
+- MML direct tooling works: `validate-mml-music-mcp.py` produced a valid VGM,
+  and `validate-phase4-generated-music-prompt.sh` passed the generated-MML ROM
+  proof.
+- ComfyUI initially failed because no API process was listening on
+  `127.0.0.1:8188`. The local model files and Pixydust node were already
+  present. After launching `scripts/launch-phase4-comfyui-api.sh`,
+  `check-phase4-comfyui-readiness.py`, `run-comfyui-sprite-workflow.py`, and
+  `validate-phase4-generated-assets-prompt.sh` all passed.
+- OpenCode same-session turns repeat the first instruction in a minimal
+  OpenRouter session smoke. The app now starts a fresh OpenCode session per
+  build turn and keeps continuity through the active project workspace. A fresh
+  session-per-turn smoke answered `APPLE` then `BANANA` correctly.
+- Direct OpenCode app-payload build loop passes with the fresh-session
+  approach: one turn changed the active project title to `TURN ONE` and rebuilt
+  `out/rom.bin`; a second fresh-session turn changed it to `TURN TWO` and
+  rebuilt again.
+- Native UI chat click-through now passes: one turn changed the active project
+  title to `NATIVE ONE` and rebuilt `out/rom.bin`; the next turn changed it to
+  `NATIVE TWO`, rebuilt again, and the player loaded the updated ROM.
+- Native chat MML path now passes for wiring/build: the agent generated
+  `res/upbeat_loop.vgm`, added `upbeat_loop` to `res/resources.res` and
+  `res/resources.h`, changed `src/main.c` to `XGM_startPlay(upbeat_loop)`, and
+  rebuilt `out/rom.bin`. Direct generated-MML proof remains the non-silent audio
+  evidence; native speaker playback was not separately audited in this pass.
+- Native chat ComfyUI path now passes while the local API is running: the agent
+  generated `res/spaceship.png` as a 32x32 indexed PNG, added
+  `spaceship_sprite`, replaced the ball sprite usage with that resource, rebuilt
+  `out/rom.bin`, and the player loaded the rebuilt ROM.
 
 ## Overhaul status (2026-07-05)
 
@@ -11,21 +181,23 @@ the right pane, in a UI a stranger can use.
   SGDK build / emulator / RAG / music / ComfyUI MCP tools; builder skill at
   `agent/skills/drive16-app-builder.md`; active project workspace at
   `artifacts/phase3/active-project`; agent-built ROM auto-loads into the
-  player. Verified end-to-end ("make the background red" and "add an upbeat
-  song" both produced rebuilt ROMs; the song is original 4-channel FM MML
-  and non-silent in Genteel).
-- [x] Track B - player audio: Web Audio wired into the Nostalgist player
-  with a mute/unmute control; no more silent Play.
+  player. Current truth: fresh-session native UI turns can edit and rebuild the
+  same active project repeatedly.
+- [~] Track B - player audio: Web Audio resume/mute is wired in the Nostalgist
+  player. Current truth: generated MML proof passes directly, and chat-through-
+  agent music now generates, wires, and rebuilds a ROM. Native speaker playback
+  still needs a separate audible pass.
 - [x] Track C - UI rebuild: two-pane shell (chat left, game right), six
   components under `app/src/components/`, App.tsx 6,014 -> ~3,600 lines,
   styles.css rewritten at half size, dev-process jargon removed from
   user-facing copy. Browser smoke updated and passing.
 - [x] Track E (partial) - hardening: timeouts + kill on Docker/Genteel
   shell-outs; ROM (16 MB) and core (96 MB) import size caps.
-- [x] Track D - generation via chat: the agent composed an original
-  4-channel FM song (non-silent in Genteel) and generated a validated
-  32x32/16-color sprite through local ComfyUI, wired both into a built ROM
-  from single chat prompts. `--prompt` added to the sprite pipeline script.
+- [x] Track D - generation via chat: music and sprite recipes are present in
+  the builder skill and local tooling. Current truth: direct MML and direct
+  ComfyUI sprite generation pass when the ComfyUI API is running; native chat
+  generated a VGM music asset and a 32x32 ComfyUI sprite asset, wired each into
+  resources, rebuilt the ROM, and reloaded the player.
 - [x] In-app trust pass (from live user testing): OpenCode auth activates
   via automatic server restart; saved keys are detected on launch (no
   re-pasting); action results show as visible toasts; real error strings
@@ -64,7 +236,9 @@ Older phase history follows below.
 - [x] UI repair Slice 5 recorded in `docs/phase8-ui-repair-slice5.md`.
 - [x] UI repair Slice 6 recorded in `docs/phase8-ui-repair-slice6.md`.
 - [x] UI repair Slice 7 recorded in `docs/phase8-ui-repair-slice7.md`.
-- [x] Next-agent handoff recorded in `docs/phase8-next-agent-handoff.md`.
+- [x] Phase 8 next-agent handoff recorded in
+  `docs/phase8-next-agent-handoff.md`; it is now historical and superseded by
+  the 2026-07-05 overhaul state.
 - [ ] Human decision: confirm the project license before adding a `LICENSE`
   file.
 
@@ -219,24 +393,16 @@ Older phase history follows below.
 
 ## Current Task
 
-Phase 8 UI repair Slice 6 keeps feature work paused and completes the native
-visible-button trust pass. Save, Export, Open Project after Save, Agent
-Settings, provider switching, Controls, Reset defaults, Show/Hide Details, and
-Hide/Show conversation are verified in the rebuilt desktop app. The remaining
-gaps are now specific file-ingestion and release-policy work: valid user ROM
-selection, valid user Play-core setup, import/core limits, license, public core
-policy, signing, notarization, and CSP.
-
-Follow-up key-retention fix: OpenRouter session keys now survive browser/native
-webview refreshes in the current app window through session storage, while
-remaining outside source, docs, localStorage, and committed project state.
-
-Follow-up chat cleanup: the bulky `OpenRouter live` status strip was removed
-from the conversation rail. Provider details now live in Agent Settings, while
-the composer stays labeled `Message`.
+The active reliability gate has passed for the basic builder loop. Settings
+persistence, native turn-by-turn agent chat, MML music generation, ComfyUI
+sprite generation, and logging have current evidence. Track E release hardening
+is now the next major workstream.
 
 Evidence is recorded in:
 
+- `docs/overhaul-plan.md`
+- `WORKLOG.md` iterations 112-114
+- `docs/project-structure.md`
 - `docs/phase8-ui-repair-slice1.md`
 - `docs/phase8-ui-repair-slice2.md`
 - `docs/phase8-ui-repair-slice3.md`
@@ -264,22 +430,15 @@ Evidence is recorded in:
 
 ## Next Up
 
-Product V1 closure is complete for the local review scope. The selected first
-post-v1 core-distribution work now has both the explicit policy and a
-user-supplied core setup flow. Input profile persistence and basic controller
-detection/mapping are now complete.
+Start with release hardening, keeping the reliability checks as regression
+smoke:
 
-Phase 8 Slice 2 is verified, but feature work is paused for a UI/IA repair
-track. Slices 1 through 7 of that repair are implemented. Browser interaction
-checks now pass for chat identity, OpenRouter overclaim guarding, player
-feedback, compact default details, provider details in Settings, Setup,
-Settings, and normal desktop scaling. Native checks now confirm the rebuilt
-`.app` opens the current Phase 8 UI, file-picker open/cancel paths give
-feedback, and the visible Save, Open, Export, Settings, Controls, details, and
-layout controls work. Next, finish the narrow local-file trust slice with real
-valid ROM/core files and import/core guardrails before returning to the phase
-roadmap.
-For handoff, start with `docs/phase8-next-agent-handoff.md`.
+1. Move repo-locked runtime paths to app-data storage and bundled resources.
+2. Re-enable and verify Tauri bundling for an installable macOS app.
+3. Add a real CSP without breaking local Play/core loading.
+4. Confirm the license and public interactive-core policy.
+5. Keep the new logging around OpenCode auth, session creation, prompt finish,
+   tool activity, ROM detection, and failure duration.
 
 ## Completed Phase 6 Work
 

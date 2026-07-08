@@ -1,5 +1,40 @@
 # Drive16 Decisions
 
+## 2026-07-05 - Overhaul supersedes the Phase 8 UI-repair track
+
+Context:
+
+Phase 8 made the existing feature set more legible, but it did not solve the
+central product gap: desktop chat still needed to be the real builder, the
+player needed sound, and the shell needed to feel like a game-building app
+rather than a phase/evidence dashboard.
+
+Decision:
+
+Move the active product track to the July 5 overhaul. Desktop chat routes
+through the OpenCode build agent, using the Drive16 builder skill and MCP tool
+set in `opencode.json`. The rebuilt shell keeps conversation on the left and
+the playable ROM on the right. Nostalgist handles interactive Play, Genteel
+remains the deterministic proof/capture path, and local music/sprite generation
+is exposed through the builder workflow rather than through separate phase
+surfaces.
+
+Consequence:
+
+Phase 8 docs are historical context, not the current resume point. A later
+reliability report showed the July 5 implementation was too optimistic: settings
+could be lost on refresh, turn-by-turn chat was not dependable, MML/ComfyUI were
+not proven through the app, and logging was too thin to find the first blocker.
+That reliability gate was addressed on July 7. Ollama remains readiness-only
+until a later slice wires and verifies it as a build-agent provider.
+
+Update from the July 7 reliability pass: the native app now has current evidence
+for the basic builder loop. Fresh-session OpenCode turns completed `NATIVE ONE`
+then `NATIVE TWO`, native chat generated and wired MML music into a rebuilt ROM,
+and native chat generated and wired a ComfyUI sprite into a rebuilt ROM. The next
+product work is release hardening plus broader prompt bakeoff, not another
+generic reliability-planning pass.
+
 ## 2026-07-02 - Default shell shows work first, diagnostics on demand
 
 Context:
@@ -302,15 +337,15 @@ Decision:
 
 Use explicit readiness labels for enhancement toggles. AI sprites can report
 Disabled, Needs setup, Running, Ready, or Failed based on ComfyUI readiness.
-MML music reports Disabled when intentionally off and Ready when enabled because
-the ctrmml wrapper and generated-MML prompt path are wired. Each readiness row
-includes a next action.
+MML music reports Disabled when intentionally off and Enabled when switched on,
+because chat-through-agent music runs through the same build loop rather than a
+separate Settings-only health check. Each readiness row includes a next action.
 
 Consequence:
 
 The settings modal no longer treats disabled features as broken. ComfyUI setup
-problems show a concrete next step, while MML music remains honest about its
-current proof boundary.
+problems show a concrete next step, while MML music remains honest that actual
+generation is proven through chat/build smoke rather than the toggle itself.
 
 ## 2026-06-30 - ROM-first layout collapses panels without losing status
 

@@ -3,10 +3,12 @@ import {
   KeyRound,
   Maximize2,
   Minimize2,
+  Monitor,
   Pause,
   Play,
   RefreshCcw,
   Settings,
+  ShieldCheck,
   Square,
   Volume2,
   Wrench,
@@ -23,6 +25,16 @@ import type {
 import { base64ToBytes } from "./ui";
 
 type TransportState = "running" | "paused";
+type PlayerScreenEvidence =
+  | "none"
+  | "checking"
+  | "captured"
+  | "visible"
+  | "unverified"
+  | "inconclusive";
+type PlayerInputEvidence = "none" | "testing" | "tested" | "failed";
+type PlayerAudioEvidence = "none" | "checking" | "captured" | "silent" | "failed";
+type EvidenceState = "ready" | "warning" | "missing";
 
 type FramebufferFrame = {
   frameIndex: number;
@@ -36,6 +48,7 @@ type ScreenSource = {
   screenshotDataUrl: string;
   framebufferFrames: FramebufferFrame[];
   streamEvery: number;
+  audioMaxAbs?: number;
 };
 
 type BindingRow = { id: PlayerInputActionId; label: string; control: string };
@@ -51,9 +64,15 @@ export function PlayerPane({
   keyboardBindings,
   keyboardMappings,
   lastInputAction,
+  playerInputEvidence,
   playerAudio,
+  playerAudioEvidence,
+  playerVolume,
   playerCanvasActive,
+  playerScreenEvidence,
   playerState,
+  playDisabled,
+  romUnavailable,
   profileSource,
   romInputFocused,
   romLabel,
@@ -78,6 +97,7 @@ export function PlayerPane({
   onToggleFocus,
   onToggleMute,
   onTogglePause,
+  onVolumeChange,
 }: {
   canvasRef: MutableRefObject<HTMLCanvasElement | null>;
   controllerBindings: BindingRow[];
@@ -88,9 +108,15 @@ export function PlayerPane({
   keyboardBindings: BindingRow[];
   keyboardMappings: MappingRow[];
   lastInputAction: string;
+  playerInputEvidence: PlayerInputEvidence;
   playerAudio: PlayerAudioState;
+  playerAudioEvidence: PlayerAudioEvidence;
+  playerVolume: number;
   playerCanvasActive: boolean;
+  playerScreenEvidence: PlayerScreenEvidence;
   playerState: PlayerSessionState;
+  playDisabled: boolean;
+  romUnavailable: boolean;
   profileSource: string;
   romInputFocused: boolean;
   romLabel: string;
@@ -115,15 +141,29 @@ export function PlayerPane({
   onToggleFocus: () => void;
   onToggleMute: () => void;
   onTogglePause: () => void;
+  onVolumeChange: (value: number) => void;
 }) {
   const interactive = playerCanvasActive || playerState === "loading";
   const screenMode = interactive
     ? "interactive"
-    : starterRom.framebufferFrames.length > 0
+    : romUnavailable
+      ? "fallback"
+      : starterRom.framebufferFrames.length > 0
       ? "framebuffer"
       : starterRom.screenshotDataUrl
         ? "captured"
         : "fallback";
+  const gateState = playabilityGateState({
+    lastInputAction,
+    playerAudio,
+    playerAudioEvidence,
+    playerVolume,
+    playerInputEvidence,
+    playerScreenEvidence,
+    proofMaxAbs: starterRom.audioMaxAbs,
+    romUnavailable,
+    sessionActive,
+  });
 
   return (
     <section className="player-pane" aria-label="Game player">
@@ -169,19 +209,23 @@ export function PlayerPane({
                       <span className="screen-status">
                         {starterBusy
                           ? "LOADING"
-                          : transport === "running"
+                          : romUnavailable
+                            ? "NO ROM"
+                            : transport === "running"
                             ? "PREVIEW"
                             : "PAUSED"}
                       </span>
-                      <span
-                        className="sprite-cursor"
-                        style={{ left: `${spriteX}%` }}
-                        aria-hidden="true"
-                      />
+                      {romUnavailable ? null : (
+                        <span
+                          className="sprite-cursor"
+                          style={{ left: `${spriteX}%` }}
+                          aria-hidden="true"
+                        />
+                      )}
                     </>
                   )
                 }
-                frames={starterRom.framebufferFrames}
+                frames={romUnavailable ? [] : starterRom.framebufferFrames}
               />
             )}
           </div>
@@ -194,10 +238,18 @@ export function PlayerPane({
           className="control-primary"
           data-testid="play-active-rom"
           onClick={onPlay}
-          disabled={playerState === "loading" || playerState === "playing"}
+          disabled={playDisabled || playerState === "loading" || playerState === "playing"}
         >
           <Play size={15} />
-          {playerState === "loading" ? "Preparing" : "Play ROM"}
+          {playerState === "loading"
+            ? "Preparing"
+            : playerState === "playing"
+              ? "Playing"
+              : romUnavailable
+                ? "No ROM"
+                : playDisabled
+                ? "Waiting"
+                : "Play ROM"}
         </button>
         {sessionActive ? (
           <>
@@ -216,22 +268,39 @@ export function PlayerPane({
           </>
         ) : null}
         <span className="control-spacer" aria-hidden="true" />
-        <button
-          type="button"
-          className={`player-audio-toggle ${playerAudio}`}
-          data-testid="player-audio-toggle"
-          title={
-            playerAudio === "unavailable"
-              ? "Click to enable sound"
-              : playerAudio === "muted"
-                ? "Unmute"
-                : "Mute"
-          }
-          onClick={onToggleMute}
+        <div
+          className={`player-volume-control ${playerAudio} ${
+            playerVolume === 0 ? "zero" : "raised"
+          } ${sessionActive ? "active" : "inactive"}`}
+          data-testid="player-volume-control"
         >
-          <Volume2 size={15} />
-          {playerAudio === "audible" ? "Sound on" : playerAudio === "muted" ? "Muted" : "Sound off"}
-        </button>
+          <button
+            type="button"
+            className={`player-audio-toggle ${playerAudio}`}
+            data-testid="player-audio-toggle"
+            title={playerAudioTitle(playerAudio, sessionActive, playerVolume)}
+            onClick={onToggleMute}
+            disabled={playerAudio === "unavailable" && !sessionActive}
+          >
+            <Volume2 size={15} />
+            {playerAudioLabel(playerAudio, playerVolume, sessionActive)}
+          </button>
+          <label className="player-volume-slider">
+            <span>Volume</span>
+            <input
+              aria-label="Player volume"
+              data-testid="player-volume-slider"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={playerVolume}
+              disabled={!sessionActive}
+              onChange={(event) => onVolumeChange(Number(event.currentTarget.value))}
+            />
+            <strong>{playerVolume}%</strong>
+          </label>
+        </div>
         <button
           type="button"
           data-testid="open-controls"
@@ -260,6 +329,53 @@ export function PlayerPane({
         <span>{stateLabel}</span>
       </p>
 
+      <div className="playtest-evidence" data-testid="playtest-evidence">
+        <EvidencePill
+          icon={<ShieldCheck size={14} />}
+          label={playabilityGateLabel(gateState, romUnavailable)}
+          state={gateState}
+        />
+        <EvidencePill
+          icon={<Monitor size={14} />}
+          label={screenEvidenceLabel(playerScreenEvidence, romUnavailable)}
+          state={screenEvidenceState(playerScreenEvidence, romUnavailable)}
+        />
+        <EvidencePill
+          icon={<KeyRound size={14} />}
+          label={inputEvidenceLabel(
+            lastInputAction,
+            playerInputEvidence,
+            romUnavailable,
+            sessionActive,
+          )}
+          state={inputEvidenceState(
+            lastInputAction,
+            playerInputEvidence,
+            romUnavailable,
+            sessionActive,
+          )}
+        />
+        <EvidencePill
+          icon={<Volume2 size={14} />}
+          label={audioEvidenceLabel(
+            playerAudio,
+            playerAudioEvidence,
+            romUnavailable,
+            starterRom.audioMaxAbs,
+            playerVolume,
+            sessionActive,
+          )}
+          state={audioEvidenceState(
+            playerAudio,
+            playerAudioEvidence,
+            romUnavailable,
+            starterRom.audioMaxAbs,
+            playerVolume,
+            sessionActive,
+          )}
+        />
+      </div>
+
       {controlsOpen ? (
         <InputControlsPanel
           controllerBindings={controllerBindings}
@@ -275,6 +391,182 @@ export function PlayerPane({
       ) : null}
     </section>
   );
+}
+
+function playerAudioLabel(
+  state: PlayerAudioState,
+  volume: number,
+  sessionActive: boolean,
+) {
+  if (sessionActive) return volume === 0 ? "Muted" : `Volume ${volume}%`;
+  if (state === "audible") return "Sound on";
+  if (state === "muted") return "Muted";
+  if (state === "needs-gesture") return "Enable sound";
+  return "Audio unavailable";
+}
+
+function playerAudioTitle(
+  state: PlayerAudioState,
+  sessionActive: boolean,
+  volume: number,
+) {
+  if (state === "audible") return "Mute";
+  if (state === "muted" || volume === 0) return "Volume starts at 0%. Use the slider to raise sound.";
+  if (state === "needs-gesture") return "Enable player audio";
+  if (!sessionActive) return "Start a ROM before changing audio";
+  return "Try to enable audio for this player session";
+}
+
+function EvidencePill({
+  icon,
+  label,
+  state,
+}: {
+  icon: ReactNode;
+  label: string;
+  state: EvidenceState;
+}) {
+  return (
+    <span className={`evidence-pill ${state}`}>
+      {icon}
+      <strong>{label}</strong>
+    </span>
+  );
+}
+
+function screenEvidenceLabel(evidence: PlayerScreenEvidence, romUnavailable: boolean) {
+  if (romUnavailable) return "Screen: no ROM";
+  if (evidence === "checking") return "Screen: checking";
+  if (evidence === "captured") return "Screen: frame captured";
+  if (evidence === "visible") return "Screen: visible";
+  if (evidence === "inconclusive") return "Screen: inconclusive";
+  return "Screen: unverified";
+}
+
+function screenEvidenceState(
+  evidence: PlayerScreenEvidence,
+  romUnavailable: boolean,
+): EvidenceState {
+  if (romUnavailable) return "missing";
+  if (evidence === "visible") return "ready";
+  return "warning";
+}
+
+function inputEvidenceLabel(
+  lastInputAction: string,
+  playerInputEvidence: PlayerInputEvidence,
+  romUnavailable: boolean,
+  sessionActive: boolean,
+) {
+  if (romUnavailable) return "Input: no ROM";
+  if (playerInputEvidence === "testing") return "Input: testing";
+  if (playerInputEvidence === "tested") return "Input: tested";
+  if (playerInputEvidence === "failed") return "Input: failed";
+  if (!sessionActive || lastInputAction === "No local input yet") return "Input: untested";
+  return "Input: seen";
+}
+
+function inputEvidenceState(
+  lastInputAction: string,
+  playerInputEvidence: PlayerInputEvidence,
+  romUnavailable: boolean,
+  sessionActive: boolean,
+): EvidenceState {
+  if (romUnavailable) return "missing";
+  if (playerInputEvidence === "tested") return "ready";
+  if (playerInputEvidence === "failed") return "missing";
+  if (sessionActive && lastInputAction !== "No local input yet") return "ready";
+  return "warning";
+}
+
+function audioEvidenceLabel(
+  state: PlayerAudioState,
+  evidence: PlayerAudioEvidence,
+  romUnavailable: boolean,
+  proofMaxAbs?: number,
+  playerVolume = 0,
+  sessionActive = false,
+) {
+  if (romUnavailable) return "Audio: no ROM";
+  if (sessionActive && playerVolume === 0) return "Audio: muted";
+  if (evidence === "checking") return "Audio: checking";
+  if (evidence === "captured") return "Audio: captured";
+  if (evidence === "silent") return "Audio: silent";
+  if (evidence === "failed") return "Audio: failed";
+  if (state === "audible") return "Audio: audible";
+  if (state === "muted") return "Audio: muted";
+  if (state === "needs-gesture") return "Audio: enable sound";
+  if (typeof proofMaxAbs === "number") {
+    return proofMaxAbs > 0 ? "Audio: captured" : "Audio: silent";
+  }
+  return "Audio: unverified";
+}
+
+function audioEvidenceState(
+  state: PlayerAudioState,
+  evidence: PlayerAudioEvidence,
+  romUnavailable: boolean,
+  proofMaxAbs?: number,
+  playerVolume = 0,
+  sessionActive = false,
+): EvidenceState {
+  if (romUnavailable) return "missing";
+  if (sessionActive && playerVolume === 0) return "warning";
+  if (evidence === "captured") return "ready";
+  if (evidence === "failed" || evidence === "silent") return "missing";
+  if (evidence === "checking") return "warning";
+  if (state === "audible") return "ready";
+  if (state === "needs-gesture") return "warning";
+  if (typeof proofMaxAbs === "number" && proofMaxAbs > 0) return "ready";
+  return "warning";
+}
+
+function playabilityGateState({
+  lastInputAction,
+  playerAudio,
+  playerAudioEvidence,
+  playerVolume,
+  playerInputEvidence,
+  playerScreenEvidence,
+  proofMaxAbs,
+  romUnavailable,
+  sessionActive,
+}: {
+  lastInputAction: string;
+  playerAudio: PlayerAudioState;
+  playerAudioEvidence: PlayerAudioEvidence;
+  playerVolume: number;
+  playerInputEvidence: PlayerInputEvidence;
+  playerScreenEvidence: PlayerScreenEvidence;
+  proofMaxAbs?: number;
+  romUnavailable: boolean;
+  sessionActive: boolean;
+}): EvidenceState {
+  if (romUnavailable) return "missing";
+
+  const states = [
+    screenEvidenceState(playerScreenEvidence, romUnavailable),
+    inputEvidenceState(lastInputAction, playerInputEvidence, romUnavailable, sessionActive),
+    audioEvidenceState(
+      playerAudio,
+      playerAudioEvidence,
+      romUnavailable,
+      proofMaxAbs,
+      playerVolume,
+      sessionActive,
+    ),
+  ];
+
+  if (states.includes("missing")) return "missing";
+  if (states.every((state) => state === "ready")) return "ready";
+  return "warning";
+}
+
+function playabilityGateLabel(state: EvidenceState, romUnavailable: boolean) {
+  if (romUnavailable) return "Gate: no ROM";
+  if (state === "ready") return "Gate: verified";
+  if (state === "missing") return "Gate: failed";
+  return "Gate: incomplete";
 }
 
 function InputControlsPanel({

@@ -25,9 +25,14 @@ export type NostalgistPlayerRuntime = {
   rom: LoadedPlayerRom;
   startedAt: string;
   muted: boolean;
+  volume: number;
+  volumeSteps: number;
 };
 
 type NostalgistLaunchOptions = Parameters<typeof Nostalgist.launch>[0];
+
+export const defaultPlayerVolume = 0;
+const retroarchVolumeCommandSteps = 80;
 
 const inputButtonMap: Record<PlayerInputActionId, string> = {
   "dpad.left": "left",
@@ -82,8 +87,10 @@ export async function launchNostalgistMegadrivePlayer({
     element: canvas,
     retroarchConfig: {
       audio_enable: true,
-      audio_mute_enable: false,
-      audio_volume: 0,
+      audio_mute_enable: true,
+      audio_mixer_mute_enable: true,
+      audio_volume: -80,
+      audio_mixer_volume: -80,
     },
     rom: {
       fileContent,
@@ -97,7 +104,9 @@ export async function launchNostalgistMegadrivePlayer({
     coreSource: core ? "user" : "dev-cdn",
     rom,
     startedAt: new Date().toISOString(),
-    muted: false,
+    muted: true,
+    volume: defaultPlayerVolume,
+    volumeSteps: 0,
   };
 }
 
@@ -119,9 +128,11 @@ function findAudioContext(runtime: NostalgistPlayerRuntime): AudioContext | unde
 
 export function nostalgistAudioState(runtime: NostalgistPlayerRuntime): PlayerAudioState {
   const ctx = findAudioContext(runtime);
-  if (!ctx || ctx.state !== "running") {
+  if (!ctx) {
     return "unavailable";
   }
+  if (ctx.state === "suspended") return "needs-gesture";
+  if (ctx.state !== "running") return "unavailable";
   return runtime.muted ? "muted" : "audible";
 }
 
@@ -142,10 +153,62 @@ export async function resumeNostalgistAudio(
   return nostalgistAudioState(runtime);
 }
 
-export function toggleNostalgistMute(runtime: NostalgistPlayerRuntime): PlayerAudioState {
-  runtime.instance.sendCommand("MUTE");
-  runtime.muted = !runtime.muted;
+export function clampPlayerVolume(volume: number) {
+  if (!Number.isFinite(volume)) return defaultPlayerVolume;
+  return Math.max(0, Math.min(100, Math.round(volume)));
+}
+
+export async function setNostalgistVolume(
+  runtime: NostalgistPlayerRuntime,
+  volume: number,
+): Promise<PlayerAudioState> {
+  const nextVolume = clampPlayerVolume(volume);
+
+  if (nextVolume === 0) {
+    if (!runtime.muted) {
+      runtime.instance.sendCommand("MUTE");
+    }
+    sendRepeatedCommand(runtime, "VOLUME_DOWN", retroarchVolumeCommandSteps);
+    runtime.muted = true;
+    runtime.volume = 0;
+    runtime.volumeSteps = 0;
+    return nostalgistAudioState(runtime);
+  }
+
+  const ctx = findAudioContext(runtime);
+  if (ctx?.state === "suspended") {
+    try {
+      await ctx.resume();
+    } catch {
+      // The user can retry from the volume control after another gesture.
+    }
+  }
+
+  const nextSteps = Math.round((nextVolume / 100) * retroarchVolumeCommandSteps);
+  const stepDelta = nextSteps - runtime.volumeSteps;
+  if (stepDelta > 0) {
+    sendRepeatedCommand(runtime, "VOLUME_UP", stepDelta);
+  } else if (stepDelta < 0) {
+    sendRepeatedCommand(runtime, "VOLUME_DOWN", Math.abs(stepDelta));
+  }
+
+  runtime.volume = nextVolume;
+  runtime.volumeSteps = nextSteps;
+  if (runtime.muted) {
+    runtime.instance.sendCommand("MUTE");
+    runtime.muted = false;
+  }
   return nostalgistAudioState(runtime);
+}
+
+function sendRepeatedCommand(
+  runtime: NostalgistPlayerRuntime,
+  command: "VOLUME_DOWN" | "VOLUME_UP",
+  count: number,
+) {
+  for (let index = 0; index < count; index += 1) {
+    runtime.instance.sendCommand(command);
+  }
 }
 
 export function pauseNostalgistPlayer(runtime: NostalgistPlayerRuntime) {

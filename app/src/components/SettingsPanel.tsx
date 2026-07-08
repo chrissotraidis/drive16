@@ -578,7 +578,7 @@ function musicEnhancementReadiness(enabled: boolean): EnhancementReadiness {
 
   return {
     state: "ready",
-    label: "Ready",
-    detail: "Generated MML music is used when you ask for music.",
+    label: "Enabled",
+    detail: "Local MML music is enabled for chat builds.",
   };
 }

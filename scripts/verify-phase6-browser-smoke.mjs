@@ -16,7 +16,7 @@ function parseArgs(argv) {
       process.env.DRIVE16_VERIFY_ROM ??
       path.join(rootDir, "examples", "app-starter-blank", "out", "rom.bin"),
     timeoutMs: 45000,
-    coreStatus: process.env.DRIVE16_VERIFY_CORE_STATUS ?? "dev-only",
+    coreStatus: process.env.DRIVE16_VERIFY_CORE_STATUS ?? "missing",
     userCorePath: process.env.DRIVE16_VERIFY_USER_CORE
       ? path.resolve(process.env.DRIVE16_VERIFY_USER_CORE)
       : undefined,
@@ -69,7 +69,7 @@ Options:
   --timeout-ms <ms>    Interaction timeout. Default: 45000.
   --core-status <mode> Interactive core status override for verification.
                        One of: available, dev-only, missing, needs-user-action, unsupported.
-                       Default: dev-only.
+                       Default: missing.
   --user-core <path>   Optional local .zip or .js/.wasm file path for Set Up Play.
                        When present, the smoke imports it and does not use a status override.
 `);
@@ -158,9 +158,11 @@ async function main() {
   const { browser, launchLabel } = await launchBrowser(chromium);
   const errors = [];
   const warnings = [];
+  const expectedComfyUiProbeErrors = [];
   const screenshots = [];
   const states = {};
   let openRouterCompletionRequests = 0;
+  const smokeOpenRouterModel = "openrouter/auto";
 
   try {
     const context = await browser.newContext({
@@ -187,10 +189,22 @@ async function main() {
         }),
       });
     });
+    await context.route("https://openrouter.ai/api/v1/models", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [
+            { id: "deepseek/deepseek-chat-v3.1", name: "DeepSeek V3.1" },
+            { id: smokeOpenRouterModel, name: "OpenRouter Auto" },
+            { id: "~openai/gpt-latest", name: "GPT Latest" },
+          ],
+        }),
+      });
+    });
     await context.route("https://openrouter.ai/api/v1/chat/completions", async (route) => {
       openRouterCompletionRequests += 1;
       const requestBody = route.request().postDataJSON();
-      if (requestBody?.model !== "deepseek/deepseek-chat-v3.1") {
+      if (requestBody?.model !== smokeOpenRouterModel) {
         await route.fulfill({
           status: 400,
           contentType: "application/json",
@@ -232,6 +246,15 @@ async function main() {
     page.on("console", (message) => {
       const entry = `${message.type()}: ${message.text()}`;
       if (message.type() === "error") {
+        const location = message.location();
+        if (
+          /Failed to load resource/i.test(message.text()) &&
+          typeof location.url === "string" &&
+          location.url.endsWith("/system_stats")
+        ) {
+          expectedComfyUiProbeErrors.push(`${entry} (${location.url})`);
+          return;
+        }
         errors.push(entry);
       } else if (message.type() === "warning" || message.type() === "warn") {
         warnings.push(entry);
@@ -268,12 +291,16 @@ async function main() {
       throw new Error("Rendered page did not contain meaningful Drive16 content.");
     }
 
+    states.initialTruthSurface = await playerTruthSurface(page);
+    assertNoRomTruthSurface(states.initialTruthSurface, "Initial app load");
+    assertRealTimestamps(states.initialTruthSurface, "Initial app load");
+
     await screenshot(page, args.outDir, screenshots, "01-initial.png");
 
     await submitComposer(page, "What should I build next?");
-    await page.getByText(/OpenRouter needs a session key/i).last().waitFor();
+    await waitForNewestMessage(page, /OpenRouter needs an API key/i);
     states.freeformGateMessage = await newestMessageText(page);
-    if (!/OpenRouter needs a session key/i.test(states.freeformGateMessage)) {
+    if (!/OpenRouter needs an API key/i.test(states.freeformGateMessage)) {
       throw new Error(`No-key freeform gate did not explain the missing key: ${states.freeformGateMessage}`);
     }
     if (openRouterCompletionRequests !== 0) {
@@ -291,9 +318,68 @@ async function main() {
     await page.getByTestId("openrouter-settings").waitFor();
     const restoredOpenRouterKey = await page.getByLabel("OpenRouter API key").inputValue();
     if (restoredOpenRouterKey !== smokeOpenRouterKey) {
-      throw new Error("OpenRouter session key did not survive reload in the same app window.");
+      throw new Error("OpenRouter API key did not survive reload in the same app window.");
     }
-    states.openRouterSessionKeyRestored = "OpenRouter session key survived reload.";
+    await page.waitForFunction((modelId) => {
+      const modelSelect = document.querySelector('select[aria-label="OpenRouter model"]');
+      return Array.from(modelSelect?.querySelectorAll("option") ?? []).some(
+        (option) => option.value === modelId,
+      );
+    }, smokeOpenRouterModel);
+    await page.locator('select[aria-label="OpenRouter model"]').selectOption(smokeOpenRouterModel);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByTestId("agent-settings-open").waitFor();
+    await page.getByTestId("agent-settings-open").click();
+    await page.getByTestId("openrouter-settings").waitFor();
+    await page.waitForFunction((modelId) => {
+      const modelSelect = document.querySelector('select[aria-label="OpenRouter model"]');
+      return Array.from(modelSelect?.querySelectorAll("option") ?? []).some(
+        (option) => option.value === modelId,
+      );
+    }, smokeOpenRouterModel);
+    const restoredOpenRouterModel = await page.locator('select[aria-label="OpenRouter model"]').inputValue();
+    if (restoredOpenRouterModel !== smokeOpenRouterModel) {
+      throw new Error(
+        `OpenRouter model did not survive reload. Expected ${smokeOpenRouterModel}, saw ${restoredOpenRouterModel}.`,
+      );
+    }
+    states.openRouterApiKeyRestored = "OpenRouter API key survived reload.";
+    states.openRouterModelRestored = restoredOpenRouterModel;
+
+    const smokeComfyUiEndpoint = new URL(args.url).origin;
+    await page.getByTestId("sprite-enhancement-input").check({ force: true });
+    await page.getByTestId("comfyui-config").waitFor();
+    await page.getByLabel("ComfyUI endpoint").fill(smokeComfyUiEndpoint);
+    await page.getByLabel("ComfyUI checkpoint").fill("drive16-smoke-checkpoint.safetensors");
+    await page.getByLabel("ComfyUI LoRA").fill("drive16-smoke-lora.safetensors");
+    await page.getByTestId("music-enhancement-input").check({ force: true });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByTestId("agent-settings-open").waitFor();
+    await page.getByTestId("agent-settings-open").click();
+    await page.getByTestId("openrouter-settings").waitFor();
+    const restoredSpriteToggle = await page.getByTestId("sprite-enhancement-input").isChecked();
+    const restoredMusicToggle = await page.getByTestId("music-enhancement-input").isChecked();
+    const restoredComfyEndpoint = await page.getByLabel("ComfyUI endpoint").inputValue();
+    const restoredComfyCheckpoint = await page.getByLabel("ComfyUI checkpoint").inputValue();
+    const restoredComfyLora = await page.getByLabel("ComfyUI LoRA").inputValue();
+    if (!restoredSpriteToggle || !restoredMusicToggle) {
+      throw new Error("Enhancement toggles did not survive reload.");
+    }
+    if (
+      restoredComfyEndpoint !== smokeComfyUiEndpoint ||
+      restoredComfyCheckpoint !== "drive16-smoke-checkpoint.safetensors" ||
+      restoredComfyLora !== "drive16-smoke-lora.safetensors"
+    ) {
+      throw new Error("ComfyUI settings did not survive reload.");
+    }
+    states.settingsPersistence = {
+      spriteGeneration: restoredSpriteToggle,
+      musicGeneration: restoredMusicToggle,
+      comfyUiEndpoint: restoredComfyEndpoint,
+      comfyUiCheckpoint: restoredComfyCheckpoint,
+      comfyUiLora: restoredComfyLora,
+    };
+
     await page.getByRole("button", { name: "Test OpenRouter" }).click();
     await page.waitForFunction(() => {
       const status =
@@ -301,6 +387,16 @@ async function main() {
       return /Connected|OpenRouter key accepted/i.test(status);
     });
     states.openRouterConnection = await visibleText(page, "model-connection-status");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByTestId("agent-settings-open").waitFor();
+    await page.getByTestId("agent-settings-open").click();
+    await page.getByTestId("openrouter-settings").waitFor();
+    states.openRouterConnectionAfterReload = await visibleText(page, "model-connection-status");
+    if (!/Connected|OpenRouter key accepted/i.test(states.openRouterConnectionAfterReload)) {
+      throw new Error(
+        `OpenRouter accepted connection state did not survive reload: ${states.openRouterConnectionAfterReload}`,
+      );
+    }
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.getByTestId("openrouter-settings").waitFor({ state: "detached" });
     await page.getByLabel("Message Drive16").waitFor();
@@ -312,24 +408,49 @@ async function main() {
       throw new Error("Conversation rail still shows OpenRouter live provider status.");
     }
 
+    await submitComposer(page, "Build a game.");
+    await waitForNewestMessage(page, /Before I build, give me a little direction:/i);
+    states.broadPromptQuestions = await newestMessageText(page);
+    for (const expectedQuestion of [
+      "What genre or reference should it follow?",
+      "What should the player control?",
+      "primitive tiles first, or try generated sprites/music?",
+    ]) {
+      if (!states.broadPromptQuestions.includes(expectedQuestion)) {
+        throw new Error(
+          `Broad prompt did not ask the expected question "${expectedQuestion}": ${states.broadPromptQuestions}`,
+        );
+      }
+    }
+    if (openRouterCompletionRequests !== 0) {
+      throw new Error("Broad build prompt asked for clarification but still called OpenRouter.");
+    }
+
     await submitComposer(page, "Give me one compact idea for a Genesis demo.");
-    await page.getByText("Mocked OpenRouter live reply for Drive16 smoke.").waitFor();
+    await waitForNewestMessage(page, /Mocked OpenRouter live reply for Drive16 smoke\./i);
     states.openRouterReply = await newestMessageText(page);
     if (openRouterCompletionRequests !== 1) {
       throw new Error(`Expected one OpenRouter completion request, saw ${openRouterCompletionRequests}.`);
     }
 
     await submitComposer(page, "smoke overclaim guard");
-    await page
-      .getByText(/ROM built successfully\. A sprite is on screen and music is playing\./i)
-      .waitFor();
+    await waitForNewestMessage(
+      page,
+      /I can.t treat that as verified because this was a freeform model reply/i,
+    );
     states.openRouterSecondReply = await newestMessageText(page);
+    if (/^ROM built successfully/i.test(states.openRouterSecondReply)) {
+      throw new Error(`Freeform model overclaim was not guarded: ${states.openRouterSecondReply}`);
+    }
     if (openRouterCompletionRequests !== 2) {
       throw new Error(`Expected two OpenRouter completion requests, saw ${openRouterCompletionRequests}.`);
     }
 
     await submitComposer(page, "Make a sprite I can move left and right with music.");
-    await page.getByText(/Previewed the bundled sprite\/music demo/i).last().waitFor();
+    await waitForNewestMessage(
+      page,
+      /Previewed the (?:bundled sprite\/music|generated sprite and music|generated music) demo/i,
+    );
     states.corePromptReply = await newestMessageText(page);
     if (openRouterCompletionRequests !== 2) {
       throw new Error("CORE sprite/music prompt unexpectedly called OpenRouter.");
@@ -376,6 +497,19 @@ async function main() {
       return /New starter project|blank starter|starter project/i.test(feedback);
     });
     states.newProjectFeedback = await visibleText(page, "rom-action-feedback");
+    states.newProjectTruthSurface = await playerTruthSurface(page);
+    assertNoRomTruthSurface(states.newProjectTruthSurface, "New Project");
+    assertRealTimestamps(states.newProjectTruthSurface, "New Project");
+    if (states.newProjectTruthSurface.messages.length !== 1) {
+      throw new Error(
+        `New Project should reset chat to one starter message, saw ${states.newProjectTruthSurface.messages.length}: ${JSON.stringify(states.newProjectTruthSurface.messages)}`,
+      );
+    }
+    if (!/project\.new|Blank starter template loaded/i.test(states.newProjectTruthSurface.rawLogText)) {
+      throw new Error(
+        `New Project raw log did not show the reset event: ${states.newProjectTruthSurface.rawLogText}`,
+      );
+    }
 
     await page.getByTestId("save-project").click();
     await page.waitForFunction(() => {
@@ -399,9 +533,36 @@ async function main() {
     await page.getByTestId("rom-import-input").setInputFiles(args.romPath);
     await page.waitForFunction(() => {
       const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /Imported ROM ready|Browser preview is using simulated frames/i.test(feedback);
+      return /Imported ROM preview captured|Browser preview is using simulated frames/i.test(feedback);
     });
     states.importFeedback = await visibleText(page, "rom-action-feedback");
+    states.importTruthSurface = await playerTruthSurface(page);
+    assertStoppedVolumeControl(states.importTruthSurface, "Imported ROM");
+    if (!/Needs Check|Checking/i.test(states.importTruthSurface.runStatus)) {
+      throw new Error(
+        `Imported ROM should not show top-level Ready before playability evidence passes: ${states.importTruthSurface.runStatus}`,
+      );
+    }
+    if (!/Play ROM|Waiting|Preparing|Playing/i.test(states.importTruthSurface.playButtonText)) {
+      throw new Error(
+        `Imported ROM did not leave the player in a ROM-capable state: ${states.importTruthSurface.playButtonText}`,
+      );
+    }
+    if (!states.importTruthSurface.evidenceText.includes("Gate: incomplete")) {
+      throw new Error(
+        `Imported ROM should show an incomplete playability gate until input/audio pass: ${states.importTruthSurface.evidenceText}`,
+      );
+    }
+    if (!states.importTruthSurface.evidenceText.includes("Screen: frame captured")) {
+      throw new Error(
+        `Imported ROM should show captured-frame evidence before player checks: ${states.importTruthSurface.evidenceText}`,
+      );
+    }
+    if (!states.importTruthSurface.evidenceText.includes("Audio: unverified")) {
+      throw new Error(
+        `Imported browser ROM should not claim audio proof without a native dump: ${states.importTruthSurface.evidenceText}`,
+      );
+    }
 
     await page
       .locator('[data-testid="project-menu"] button[aria-label="Close project menu"]')
@@ -486,6 +647,21 @@ async function main() {
     }
 
     if (canCoreStatusPlay(args.coreStatus, args.userCorePath)) {
+      states.activePlayerTruthSurface = await playerTruthSurface(page);
+      if (states.activePlayerTruthSurface.volumeSliderValue !== "0") {
+        throw new Error(
+          `Interactive Play should start with app volume at 0%, saw ${states.activePlayerTruthSurface.volumeSliderValue}%.`,
+        );
+      }
+      if (states.activePlayerTruthSurface.volumeSliderDisabled !== false) {
+        throw new Error("Interactive Play volume slider should be enabled for deliberate user opt-in.");
+      }
+      if (!/Muted|Volume 0%/i.test(states.activePlayerTruthSurface.audioButtonText)) {
+        throw new Error(
+          `Interactive Play should show muted audio at startup, saw ${states.activePlayerTruthSurface.audioButtonText}.`,
+        );
+      }
+
       await page.getByTestId("pause-player").click();
       await page.waitForFunction(() => {
         const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
@@ -522,7 +698,7 @@ async function main() {
     await page.getByTestId("project-menu").waitFor({ state: "detached" });
     await page.waitForFunction(() => {
       const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /Imported ROM verified|Project ROM verified/i.test(feedback);
+      return /Imported ROM preview captured|Active project ROM preview captured/i.test(feedback);
     });
     states.verifyFeedback = await visibleText(page, "rom-action-feedback");
 
@@ -532,6 +708,31 @@ async function main() {
       return /export/i.test(feedback);
     });
     states.exportFeedback = await visibleText(page, "rom-action-feedback");
+
+    await page.getByTestId("project-menu-toggle").click();
+    await page.getByTestId("project-menu").waitFor();
+    await page.getByTestId("menu-new-project").click();
+    await page.getByTestId("project-menu").waitFor({ state: "detached" });
+    await page.waitForFunction(() => {
+      const feedback =
+        document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
+      return /New starter project|blank starter|starter project/i.test(feedback);
+    });
+    states.newProjectAfterRomFeedback = await visibleText(page, "rom-action-feedback");
+    states.newProjectAfterRomTruthSurface = await playerTruthSurface(page);
+    assertNoRomTruthSurface(states.newProjectAfterRomTruthSurface, "New Project after ROM import");
+    assertRealTimestamps(states.newProjectAfterRomTruthSurface, "New Project after ROM import");
+    if (states.newProjectAfterRomTruthSurface.messages.length !== 1) {
+      throw new Error(
+        `New Project after ROM import should reset chat to one starter message, saw ${states.newProjectAfterRomTruthSurface.messages.length}: ${JSON.stringify(states.newProjectAfterRomTruthSurface.messages)}`,
+      );
+    }
+    if (!/project\.new|Blank starter template loaded/i.test(states.newProjectAfterRomTruthSurface.rawLogText)) {
+      throw new Error(
+        `New Project after ROM import raw log did not show the reset event: ${states.newProjectAfterRomTruthSurface.rawLogText}`,
+      );
+    }
+    await screenshot(page, args.outDir, screenshots, "03b-new-project-after-rom.png");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -572,6 +773,7 @@ async function main() {
       screenshots,
       states,
       warnings,
+      expectedComfyUiProbeErrors,
       errors,
     };
     await writeFile(
@@ -617,6 +819,133 @@ async function newestMessageText(page) {
     .last()
     .textContent()
     .then((text) => text?.replace(/\s+/g, " ").trim() ?? "");
+}
+
+async function waitForNewestMessage(page, pattern) {
+  await page.waitForFunction((source) => {
+    const pattern = new RegExp(source, "i");
+    const messages = Array.from(document.querySelectorAll(".messages .message"));
+    const newest = messages[messages.length - 1]?.textContent ?? "";
+    return pattern.test(newest);
+  }, pattern.source);
+}
+
+async function playerTruthSurface(page) {
+  return page.evaluate(() => {
+    const playButton = document.querySelector('[data-testid="play-active-rom"]');
+    const audioButton = document.querySelector('[data-testid="player-audio-toggle"]');
+    const volumeSlider = document.querySelector('[data-testid="player-volume-slider"]');
+    const rawLog = document.querySelector('[data-testid="chat-raw-log"]');
+    return {
+      projectName: document.querySelector('[data-testid="project-menu-toggle"]')?.textContent?.trim() ?? "",
+      runStatus:
+        document.querySelector('[data-testid="run-status"]')?.textContent?.replace(/\s+/g, " ").trim() ??
+        "",
+      screenText:
+        document.querySelector('[data-testid="starter-rom-screen"]')?.textContent?.replace(/\s+/g, " ").trim() ??
+        "",
+      playButtonText: playButton?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      playDisabled: playButton instanceof HTMLButtonElement ? playButton.disabled : undefined,
+      audioButtonText: audioButton?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      audioDisabled: audioButton instanceof HTMLButtonElement ? audioButton.disabled : undefined,
+      volumeSliderValue: volumeSlider instanceof HTMLInputElement ? volumeSlider.value : undefined,
+      volumeSliderDisabled: volumeSlider instanceof HTMLInputElement ? volumeSlider.disabled : undefined,
+      evidenceText:
+        document.querySelector('[data-testid="playtest-evidence"]')?.textContent?.replace(/\s+/g, " ").trim() ??
+        "",
+      evidencePills: Array.from(document.querySelectorAll(".evidence-pill")).map((node) => ({
+        text: node.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        className: node.className,
+      })),
+      visibleLogText:
+        document.querySelector(".chat-build-log-items")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      rawLogText: rawLog?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      rawLogOpen: rawLog instanceof HTMLDetailsElement ? rawLog.open : undefined,
+      messages: Array.from(document.querySelectorAll(".messages .message")).map(
+        (node) => node.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      ),
+      messageTimes: Array.from(document.querySelectorAll(".message-meta time")).map(
+        (node) => node.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      ),
+      buildLogTimes: Array.from(document.querySelectorAll(".chat-build-log-items time")).map(
+        (node) => node.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      ),
+      heartbeatText:
+        document.querySelector('[data-testid="opencode-heartbeat-status"]')?.textContent?.replace(/\s+/g, " ").trim() ??
+        "",
+    };
+  });
+}
+
+function assertNoRomTruthSurface(surface, label) {
+  if (surface.projectName !== "Untitled Project") {
+    throw new Error(`${label} should show Untitled Project, saw ${surface.projectName}`);
+  }
+  if (surface.runStatus !== "Ready") {
+    throw new Error(`${label} top-level status should be Ready for an idle no-ROM app, saw ${surface.runStatus}`);
+  }
+  if (!/NO ROM/i.test(surface.screenText)) {
+    throw new Error(`${label} screen should show NO ROM, saw ${surface.screenText}`);
+  }
+  if (surface.playButtonText !== "No ROM" || surface.playDisabled !== true) {
+    throw new Error(
+      `${label} Play button should be disabled as No ROM, saw ${JSON.stringify({
+        text: surface.playButtonText,
+        disabled: surface.playDisabled,
+      })}`,
+    );
+  }
+  if (surface.audioButtonText !== "Audio unavailable" || surface.audioDisabled !== true) {
+    throw new Error(
+      `${label} audio button should be disabled as unavailable, saw ${JSON.stringify({
+        text: surface.audioButtonText,
+        disabled: surface.audioDisabled,
+      })}`,
+    );
+  }
+  assertStoppedVolumeControl(surface, label);
+  for (const expected of ["Gate: no ROM", "Screen: no ROM", "Input: no ROM", "Audio: no ROM"]) {
+    if (!surface.evidenceText.includes(expected)) {
+      throw new Error(`${label} evidence row is missing "${expected}": ${surface.evidenceText}`);
+    }
+  }
+  if (!surface.rawLogText.includes("Raw log")) {
+    throw new Error(`${label} should expose the raw log disclosure.`);
+  }
+  if (surface.rawLogOpen !== false) {
+    throw new Error(`${label} raw log should be closed by default.`);
+  }
+}
+
+function assertStoppedVolumeControl(surface, label) {
+  if (surface.volumeSliderValue !== "0" || surface.volumeSliderDisabled !== true) {
+    throw new Error(
+      `${label} should keep the app volume slider at disabled 0%, saw ${JSON.stringify({
+        value: surface.volumeSliderValue,
+        disabled: surface.volumeSliderDisabled,
+      })}`,
+    );
+  }
+}
+
+function assertRealTimestamps(surface, label) {
+  for (const [kind, values] of [
+    ["message", surface.messageTimes],
+    ["build log", surface.buildLogTimes],
+  ]) {
+    for (const value of values ?? []) {
+      if (/^now$/i.test(value)) {
+        throw new Error(`${label} ${kind} timestamp regressed to "Now".`);
+      }
+      if (value && !/\d{1,2}:\d{2}/.test(value)) {
+        throw new Error(`${label} ${kind} timestamp is not a real clock time: ${value}`);
+      }
+    }
+  }
+
+  if (/now/i.test(surface.heartbeatText ?? "")) {
+    throw new Error(`${label} heartbeat status should show a real clock time, not "Now".`);
+  }
 }
 
 main().catch(async (error) => {

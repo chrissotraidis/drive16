@@ -4,7 +4,13 @@ This folder stores higher-level product and architecture reviews that sit above
 the phase evidence docs. Treat these as decision support, not as automatically
 approved implementation plans.
 
-## Current Packet
+Current status note (2026-07-07): this packet is historical Phase 8 review
+context. The July 5 overhaul superseded the Phase 8 resume path, and the July 7
+reliability pass verified the native two-turn builder loop plus chat MML and
+ComfyUI sprite generation. Start current work from `PROGRESS.md`,
+`docs/overhaul-plan.md`, and `docs/post-v1-backlog.md`.
+
+## Historical Packet
 
 - `2026-07-02-drive16-current-issues-report.md`: Codex-generated issues report
   prepared from the Fable 5 audit template.
@@ -13,7 +19,7 @@ approved implementation plans.
 - `2026-07-02-fable5-product-audit.md`: Fable 5 product audit returned from
   that prompt.
 
-## Current Reading
+## Historical Reading
 
 The Fable audit agrees with the existing Product V1 evidence that the local
 review scope holds: proof, imported/generated ROM Play foundation, Save/Open,
@@ -29,18 +35,21 @@ starting Phase 8:
 
 - Freeform chat was gated/no-reply in `app/src/App.tsx` and
   `app/src-tauri/src/opencode.rs` before Phase 8.
-- The dev CDN interactive-core fallback is gated by `import.meta.env.DEV`.
+- At the time of the review, the dev CDN interactive-core fallback was gated by
+  `import.meta.env.DEV`. The July 5 native Play fix later allowed it in the
+  local desktop app too; this remains a local/development convenience, not a
+  public release policy.
 - `app/src-tauri/tauri.conf.json` still has `bundle.active: false` and
   `csp: null`.
 - `app/src-tauri/Cargo.toml` declares `license = "MIT"`, while no `LICENSE`
   file exists yet.
 
-Phase 8 Slice 1 now implements OpenRouter-only freeform replies while keeping
-CORE ROM proof local and Ollama generation out of scope. Phase 8 Slice 2 adds
-the compact readiness / first-run hub that the audit recommended as the
-follow-on consolidation pass.
+Phase 8 Slice 1 implemented OpenRouter-only freeform replies while keeping CORE
+ROM proof local and Ollama generation out of scope. Phase 8 Slice 2 added the
+compact readiness / first-run hub that the audit recommended as the follow-on
+consolidation pass. Both are now historical context for the overhaul.
 
-## Remaining Decisions
+## Decisions That Still Matter
 
 These still need human review before implementation:
 

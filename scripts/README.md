@@ -88,6 +88,14 @@ Toolchain and validation scripts live here.
   confirms RAG retrieves the bundled asset symbols.
 - `validate-phase2-agent-loop.py`: prepares and optionally runs the OpenCode
   Phase 2 bundled-asset validation gate.
+- `verify-agent-contract.mjs`: checks the desktop builder prompt context,
+  failed-build repair labeling, and OpenCode event categorization used by the
+  chat build log.
+- `verify-project-memory.mjs`: audits an active project's `GAME.md`,
+  `ASSETS.md`, and `PLAYTEST.md` for contradiction-prone claims such as a
+  passing playability gate without audio evidence or unexplained reused assets
+  across unrelated roles. Use `--require-pass` after a run that claims the game
+  is complete.
 - `validate-sprite-movement.py`: compares neutral and scripted-input PNG
   screenshots to prove a sprite-like movement signal.
 - `verify-phase6-loop.sh`: runs the repeatable Phase 6 verification loop:
@@ -96,6 +104,8 @@ Toolchain and validation scripts live here.
 - `verify-phase6-browser-smoke.mjs`: Playwright smoke used by the Phase 6/7
   loop to run New Project, Save, Open, import the test ROM, verify the input
   Controls panel/default profile/no-controller state, Play/Pause/Resume/Reset/
-  Stop, Verify, Export, and check the mobile layout. It accepts
-  `--core-status` to verify Play-unavailable behavior and `--user-core <path>`
-  to import a local core ZIP or pair before Play.
+  Stop, Verify, Export, and check the mobile layout. It also guards the
+  no-ROM truth surface, playtest evidence row, raw build log disclosure, and
+  settings persistence. It defaults to the stable missing-core path, accepts
+  `--core-status` to verify other Play readiness modes, and accepts
+  `--user-core <path>` to import a local core ZIP or pair before Play.

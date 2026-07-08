@@ -1,13 +1,59 @@
 # Drive16 Overhaul Plan
 
 Date: 2026-07-05
-Status: proposed, pending owner approval
+Status: builder reliability/playability gate reopened after Snake testing;
+release hardening is next only after that gate is credible
 
-This plan comes from a full four-track audit (agent pipeline, UI, native
+This plan came from a full four-track audit (agent pipeline, UI, native
 backend/emulator, asset-generation pipelines). It replaces the Phase 8
 "UI repair slice" treadmill with a product-level plan aimed at the original
 vision: a Lovable/Bolt-style conversational Genesis game builder anyone can
 use.
+
+## Current implementation status
+
+Updated 2026-07-07 after reliability recovery testing and the Snake proof-case
+review:
+
+- The July 7 native evidence proved important plumbing, but user testing of a
+  generated Snake ROM showed the product can still build a ROM while hiding
+  progress, skipping meaningful playability gates, and overclaiming completion.
+  The active gate is now visible chat logging, per-project game/playtest notes,
+  sound-toggle correctness, explicit asset disclosure, and playable evidence.
+  Release hardening should not resume until this is stable.
+
+- Track A is wired in the desktop app: `app/src/App.tsx` routes Tauri chat
+  through the OpenCode agent, `opencode.rs` sends real `noReply: false`
+  requests, and `opencode.json` loads the Drive16 builder skill plus SGDK,
+  emulator, RAG, ComfyUI, and MML MCP tools. Minimal OpenRouter smokes showed
+  same-session OpenCode turns can repeat the first instruction, so the app now
+  starts a fresh OpenCode session for each build turn while preserving state in
+  the active project workspace. Native UI turns now edit and rebuild the same
+  active project repeatedly; the verified pass changed `NATIVE ONE` to
+  `NATIVE TWO` and reloaded the player from the rebuilt ROM.
+- Track B is partially wired: `app/src/player/nostalgist.ts` resumes the
+  RetroArch Web Audio context and exposes mute state. Direct generated-MML
+  tooling passes; chat-through-agent music now generated `upbeat_loop.vgm`,
+  wired it through SGDK resources, changed `main.c`, rebuilt the ROM, and
+  reloaded the player. Native speaker playback still needs a separate audible
+  pass.
+- Track C is implemented as a rebuilt two-pane shell with extracted React
+  components under `app/src/components/`; `App.tsx` is smaller but still owns
+  most app state.
+- Track D is now proven in the native product loop while local services are
+  running: the agent has music and sprite-generation recipes, and the supporting
+  scripts remain local/optional.
+  ComfyUI failed when the API process was not running; with
+  `scripts/launch-phase4-comfyui-api.sh` running, readiness, direct sprite
+  generation, the generated-assets proof, and native chat sprite generation all
+  pass.
+- Track E is only partial: Docker/Genteel timeouts and ROM/core import size
+  caps exist, but app-data paths, real bundling, `LICENSE`, CSP, and public
+  interactive-core policy are still open.
+
+The audit below describes the pre-overhaul app. Do not read statements such as
+"the shipped app does not have an agent", "audio gated", or "image generation
+is unreachable" as current code truth.
 
 ## Audit: the five root causes
 
@@ -91,7 +137,7 @@ readiness-check theater.
 - The 21 typed Tauri commands (project save/open/export, ROM import,
   interactive core import, endpoint checks).
 - Interactive play via Nostalgist with user-supplied core, keyboard +
-  gamepad input profiles (minus audio).
+  gamepad input profiles, now with the Web Audio resume/mute path.
 - ComfyUI workflow contract + sprite validator.
 
 ## The plan
@@ -187,7 +233,9 @@ App.tsx retired.
    wiring are engine-agnostic.
 
 Exit: from chat, a generated, palette-legal sprite and a generated MML track
-end up in a built ROM without touching a terminal.
+end up in a built ROM without touching a terminal. This was verified on July 7
+with `upbeat_loop.vgm` and a 32x32 `spaceship_sprite`; keep it as a regression
+smoke while improving asset review UI and ComfyUI lifecycle help.
 
 ### Track E — Robustness and shippability
 
@@ -205,7 +253,7 @@ end up in a built ROM without touching a terminal.
 Exit: a .dmg a stranger can install and reach "playing a game I described"
 with only Docker + an OpenRouter key.
 
-## Sequencing
+## Original sequencing
 
 - Week 1: Track B (audio, ~1 day) + Track A start (agent wiring).
 - Weeks 1–3: Track A to exit; Track C rebuild in parallel (different layer,
@@ -216,14 +264,13 @@ with only Docker + an OpenRouter key.
 Tracks A and C are parallelizable. D depends on A. E is last but its small
 items (timeouts, size caps) can ride along anytime.
 
-## Open decisions for the owner
+## Remaining decisions for the owner
 
-1. OpenCode as the agent spine (finish the wiring) vs. bespoke in-app loop.
-   Recommendation: finish OpenCode first — the bridge, config, and MCP
-   servers already exist; fall back to bespoke only if it fights back.
-2. UI rebuild in-place (new components replacing App.tsx section by section)
-   vs. clean-slate `app/src/shell/` cutover. Recommendation: clean-slate
-   cutover behind the same `main.tsx`, delete App.tsx at the end.
-3. Confirm MIT license so LICENSE can land.
-4. ComfyUI stays vs. alternative local image engine (defer until Track D
-   friction is measured).
+1. Confirm MIT license so `LICENSE` can land.
+2. Decide public interactive-core policy for release distribution.
+3. Decide the CSP posture for the Tauri app while preserving local Play/core
+   loading.
+4. Decide whether Ollama should become a real build-agent path after
+   OpenRouter is stable.
+5. Decide whether ComfyUI stays as the long-term sprite engine after more
+   local-user setup evidence.

@@ -15,9 +15,12 @@ prompt.
   `app/src/agent/openrouter.ts`.
 - Set `deepseek/deepseek-chat-v3.1` as the default cheap tested OpenRouter
   model for the first live-reply slice.
-- Kept OpenRouter API keys in React state only. The live reply path reuses the
-  existing BYOK browser-fetch pattern and does not write keys to localStorage,
-  docs, logs, screenshots, or artifacts.
+- OpenRouter API keys now use dedicated local app storage so refreshes do not
+  drop the key. A successful Test OpenRouter stores a local accepted-key marker
+  for that saved key so the Settings status can reopen as connected after
+  refresh; editing or clearing the key clears that accepted state. The key is
+  still never written to project files, docs, logs, screenshots, or artifacts,
+  and testing syncs it into OpenCode auth for the local build agent.
 - Updated the freeform submit path:
   - CORE sprite/music prompts still route to the local proof path.
   - OpenRouter-tested freeform prompts now produce real non-streaming model
@@ -29,6 +32,7 @@ prompt.
   OpenRouter key is tested.
 - Extended the browser smoke to prove:
   - no-key freeform prompts still gate truthfully;
+  - the API key, chosen model, and accepted connection state survive refresh;
   - a mocked OpenRouter reply renders as an agent reply;
   - the CORE sprite/music prompt does not call OpenRouter.
 

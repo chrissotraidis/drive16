@@ -12,8 +12,8 @@ file-picker completion remains open.
 - Reworked the player session strip so the first row shows only the current ROM,
   Play readiness, and input readiness. Verify/core/controller/audio details now
   live behind a `More` disclosure.
-- Tightened OpenRouter missing-key copy so it explains the in-memory session key
-  rule without producing a cramped wall of text.
+- Tightened OpenRouter missing-key copy so it explains the local API-key rule
+  without producing a cramped wall of text.
 - Fixed normal-window wrapping for the composer session row and compact status
   row.
 

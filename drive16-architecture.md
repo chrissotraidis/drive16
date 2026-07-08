@@ -2,8 +2,8 @@
 project: Drive16
 type: architecture and phased build plan
 created: 2026-06-29
-updated: 2026-06-29
-status: draft v2
+updated: 2026-07-07
+status: historical architecture baseline; superseded in places by the July 5 overhaul
 ---
 
 # Drive16: Architecture and Phased Build Plan
@@ -17,6 +17,14 @@ not the core itself. Open source. Model-agnostic. Every component swappable.
 This document is the implementation reference. It names specific projects, versions,
 licenses, and interfaces, and it sequences the build into phases an AI code agent can
 execute step by step.
+
+> Current status note (2026-07-07): this file is the original architecture
+> baseline, not the current handoff. The July 5 overhaul changed several
+> implementation details while preserving the high-level product shape, and the
+> July 7 reliability pass verified the two-turn native UI builder loop plus
+> chat-through-agent music and ComfyUI sprite generation. Active continuation
+> work should start from `PROGRESS.md`,
+> `docs/overhaul-plan.md`, and `docs/post-v1-backlog.md`.
 
 ---
 
@@ -508,7 +516,8 @@ Goal: add the deferred generators now that the core is proven.
 - Gate both behind settings toggles so the CORE experience never depends on them.
 
 Exit: from a prompt, the agent can optionally generate a palette-legal sprite and a short
-MML track in place of bundled assets, and still builds a working ROM.
+MML track in place of bundled assets, and still builds a working ROM. This path has current
+native evidence when ComfyUI is already running locally.
 
 ### Phase 5: Hardening and the local path
 

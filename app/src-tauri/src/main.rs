@@ -76,6 +76,20 @@ async fn reset_active_project() -> Result<project::ActiveProjectResult, String> 
 }
 
 #[tauri::command]
+async fn audit_active_project_memory() -> project::ProjectMemoryAuditResult {
+    tauri::async_runtime::spawn_blocking(project::audit_active_project_memory)
+        .await
+        .unwrap_or_else(|error| project::ProjectMemoryAuditResult {
+            generated_at: "0".to_string(),
+            status: "warning".to_string(),
+            detail: format!("Project memory audit task failed: {}", error),
+            project_path: "artifacts/phase3/active-project".to_string(),
+            gate: "unknown".to_string(),
+            files: Vec::new(),
+        })
+}
+
+#[tauri::command]
 fn load_project_summary() -> project::ProjectSummary {
     project::load_project_summary()
 }
@@ -235,6 +249,7 @@ fn main() {
             set_opencode_auth,
             ensure_active_project,
             reset_active_project,
+            audit_active_project_memory,
             load_project_summary,
             list_project_snapshots,
             prepare_rom_import,

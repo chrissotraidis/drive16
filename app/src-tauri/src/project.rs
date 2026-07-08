@@ -13,6 +13,7 @@ const ACTIVE_PROJECT_DIRECTORY: &str = "artifacts/phase3/active-project";
 const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
 const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
 const ROM_IMPORT_DIRECTORY: &str = "artifacts/phase5/imports";
+const PROJECT_MEMORY_FILES: [&str; 3] = ["GAME.md", "ASSETS.md", "PLAYTEST.md"];
 const ROM_IMPORT_EXTENSIONS: [&str; 4] = [".bin", ".gen", ".md", ".smd"];
 const INTERACTIVE_CORE_DIRECTORY: &str = "artifacts/phase7/interactive-core";
 const INTERACTIVE_CORE_NAME: &str = "genesis_plus_gx";
@@ -78,6 +79,25 @@ pub struct ActiveProjectResult {
     pub rom_path: String,
     pub rom_exists: bool,
     pub created: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectMemoryAuditResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub project_path: String,
+    pub gate: String,
+    pub files: Vec<ProjectMemoryFileStatus>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectMemoryFileStatus {
+    pub name: String,
+    pub status: String,
+    pub detail: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -243,6 +263,10 @@ pub fn reset_active_project() -> Result<ActiveProjectResult, String> {
     ensure_active_project_for_repo(root)
 }
 
+pub fn audit_active_project_memory() -> ProjectMemoryAuditResult {
+    audit_project_memory_for_repo(repo_root())
+}
+
 // The agent needs a mutable SGDK workspace; the starter template stays
 // pristine and the active project lives under ignored artifacts.
 fn ensure_active_project_for_repo(repo_root: PathBuf) -> Result<ActiveProjectResult, String> {
@@ -260,23 +284,130 @@ fn ensure_active_project_for_repo(repo_root: PathBuf) -> Result<ActiveProjectRes
             ));
         }
         copy_project_tree(&starter, &active)?;
+        remove_project_build_output(&active)?;
         true
     };
+    ensure_project_memory_files(&starter, &active)?;
 
     let rom_path = active.join("out").join("rom.bin");
+    let rom_file_exists = rom_path.is_file();
+    let rom_current = current_project_rom_exists(&active, &rom_path);
     Ok(ActiveProjectResult {
         generated_at: unix_timestamp(),
-        status: "ready".to_string(),
-        detail: if created {
+        status: if rom_file_exists && !rom_current {
+            "stale".to_string()
+        } else {
+            "ready".to_string()
+        },
+        detail: if rom_file_exists && !rom_current {
+            "Source changed after the last ROM build".to_string()
+        } else if created {
             "Active project created from the starter template".to_string()
         } else {
             "Active project is ready".to_string()
         },
         project_path: repo_relative(&repo_root, &active),
         rom_path: repo_relative(&repo_root, &rom_path),
-        rom_exists: rom_path.is_file(),
+        rom_exists: rom_current,
         created,
     })
+}
+
+fn audit_project_memory_for_repo(repo_root: PathBuf) -> ProjectMemoryAuditResult {
+    let active = repo_root.join(ACTIVE_PROJECT_DIRECTORY);
+    let mut files = Vec::new();
+    let mut missing = false;
+    let mut warnings = Vec::new();
+    let mut playtest_text = String::new();
+
+    for file_name in PROJECT_MEMORY_FILES {
+        let file_path = active.join(file_name);
+        match fs::read_to_string(&file_path) {
+            Ok(text) => {
+                if file_name == "PLAYTEST.md" {
+                    playtest_text = text.clone();
+                }
+                let detail = match file_name {
+                    "ASSETS.md" if !looks_like_asset_role_ledger(&text) => {
+                        warnings.push("ASSETS.md is missing a role ledger table".to_string());
+                        "Role ledger table missing".to_string()
+                    }
+                    "PLAYTEST.md" if playability_gate_status(&text) == "unknown" => {
+                        warnings
+                            .push("PLAYTEST.md is missing Playability gate: PASS/FAIL".to_string());
+                        "Gate verdict missing".to_string()
+                    }
+                    _ => "Present".to_string(),
+                };
+                files.push(ProjectMemoryFileStatus {
+                    name: file_name.to_string(),
+                    status: if detail == "Present" {
+                        "ready".to_string()
+                    } else {
+                        "warning".to_string()
+                    },
+                    detail,
+                });
+            }
+            Err(error) => {
+                missing = true;
+                files.push(ProjectMemoryFileStatus {
+                    name: file_name.to_string(),
+                    status: "missing".to_string(),
+                    detail: format!("Could not read {}: {}", file_name, error),
+                });
+            }
+        }
+    }
+
+    let gate = playability_gate_status(&playtest_text);
+    let status = if missing {
+        "missing"
+    } else if gate == "pass" && warnings.is_empty() {
+        "ready"
+    } else {
+        "warning"
+    };
+    let detail = if missing {
+        "Project memory files are missing".to_string()
+    } else if !warnings.is_empty() {
+        warnings.join("; ")
+    } else if gate == "pass" {
+        "Project memory reports Playability gate: PASS".to_string()
+    } else if gate == "fail" {
+        "Project memory reports Playability gate: FAIL".to_string()
+    } else {
+        "PLAYTEST.md is missing Playability gate: PASS/FAIL".to_string()
+    };
+
+    ProjectMemoryAuditResult {
+        generated_at: unix_timestamp(),
+        status: status.to_string(),
+        detail,
+        project_path: repo_relative(&repo_root, &active),
+        gate,
+        files,
+    }
+}
+
+fn looks_like_asset_role_ledger(text: &str) -> bool {
+    text.contains("| Role | Source | Symbol / File | Status | Notes |")
+}
+
+fn playability_gate_status(text: &str) -> String {
+    let mut gate = "unknown";
+    for line in text.lines() {
+        let lower = line.trim().to_ascii_lowercase();
+        if !lower.starts_with("playability gate:") {
+            continue;
+        }
+        if lower.contains("pass") {
+            gate = "pass";
+        } else if lower.contains("fail") {
+            gate = "fail";
+        }
+    }
+    gate.to_string()
 }
 
 pub fn prepare_rom_import() -> Result<RomImportReadiness, String> {
@@ -319,14 +450,21 @@ pub fn read_interactive_core_files() -> Result<InteractiveCoreReadResult, String
 
 fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
     let paths = ProjectPaths::new(repo_root);
-    let rom_status = if paths.rom_path.is_file() {
+    let rom_current = current_project_rom_exists(&paths.project_path, &paths.rom_path);
+    let rom_status = if rom_current {
         "ready"
+    } else if paths.rom_path.is_file() {
+        "stale"
     } else {
         "missing"
     };
-    let rom_detail = fs::metadata(&paths.rom_path)
-        .map(|metadata| format!("{} bytes", metadata.len()))
-        .unwrap_or_else(|_| "Build starter ROM before export".to_string());
+    let rom_detail = if rom_status == "stale" {
+        "Source changed after the last ROM build".to_string()
+    } else {
+        fs::metadata(&paths.rom_path)
+            .map(|metadata| format!("{} bytes", metadata.len()))
+            .unwrap_or_else(|_| "Build starter ROM before export".to_string())
+    };
 
     ProjectSummary {
         generated_at: unix_timestamp(),
@@ -841,7 +979,7 @@ impl ProjectPaths {
 }
 
 fn ensure_rom(paths: &ProjectPaths) -> Result<(), String> {
-    if paths.rom_path.is_file() {
+    if current_project_rom_exists(&paths.project_path, &paths.rom_path) {
         return Ok(());
     }
     if !paths.build_sgdk_script.is_file() {
@@ -1001,6 +1139,178 @@ fn readable_nonempty_file_bytes(path: &Path) -> Option<u64> {
         .map(|metadata| metadata.len())
 }
 
+fn current_project_rom_exists(project_path: &Path, rom_path: &Path) -> bool {
+    let Ok(rom_metadata) = fs::metadata(rom_path) else {
+        return false;
+    };
+    if !rom_metadata.is_file() || rom_metadata.len() == 0 {
+        return false;
+    }
+
+    let Ok(rom_modified) = rom_metadata.modified() else {
+        return true;
+    };
+    latest_project_input_modified(project_path)
+        .map(|input_modified| input_modified <= rom_modified)
+        .unwrap_or(true)
+}
+
+fn latest_project_input_modified(path: &Path) -> Option<SystemTime> {
+    let mut latest = None;
+    let entries = fs::read_dir(path).ok()?;
+    for entry in entries.filter_map(Result::ok) {
+        let entry_path = entry.path();
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        if file_name == "out" || file_name.starts_with('.') {
+            continue;
+        }
+
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        let modified = if metadata.is_dir() {
+            latest_project_input_modified(&entry_path)
+        } else if metadata.is_file() && is_project_build_input(&entry_path) {
+            metadata.modified().ok()
+        } else {
+            None
+        };
+
+        if let Some(modified) = modified {
+            latest = Some(match latest {
+                Some(current) if current >= modified => current,
+                _ => modified,
+            });
+        }
+    }
+    latest
+}
+
+fn is_project_build_input(path: &Path) -> bool {
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    if file_name == "Makefile" {
+        return true;
+    }
+
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    matches!(
+        extension.as_deref(),
+        Some(
+            "asm"
+                | "bin"
+                | "bmp"
+                | "c"
+                | "gif"
+                | "h"
+                | "inc"
+                | "json"
+                | "mml"
+                | "pcm"
+                | "png"
+                | "res"
+                | "s"
+                | "tmx"
+                | "tsx"
+                | "vgm"
+                | "wav"
+        )
+    )
+}
+
+fn remove_project_build_output(project_path: &Path) -> Result<(), String> {
+    let out_path = project_path.join("out");
+    if !out_path.exists() {
+        return Ok(());
+    }
+    fs::remove_dir_all(&out_path).map_err(|error| {
+        format!(
+            "Could not remove copied build output {}: {}",
+            out_path.display(),
+            error
+        )
+    })
+}
+
+fn ensure_project_memory_files(
+    starter_project: &Path,
+    active_project: &Path,
+) -> Result<(), String> {
+    for file_name in PROJECT_MEMORY_FILES {
+        let target_path = active_project.join(file_name);
+        if target_path.is_file() {
+            continue;
+        }
+
+        let starter_path = starter_project.join(file_name);
+        if starter_path.is_file() {
+            fs::copy(&starter_path, &target_path).map_err(|error| {
+                format!(
+                    "Could not copy project memory file {} to {}: {}",
+                    starter_path.display(),
+                    target_path.display(),
+                    error
+                )
+            })?;
+        } else {
+            fs::write(&target_path, default_project_memory_file(file_name)).map_err(|error| {
+                format!(
+                    "Could not create project memory file {}: {}",
+                    target_path.display(),
+                    error
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn default_project_memory_file(file_name: &str) -> &'static str {
+    match file_name {
+        "ASSETS.md" => {
+            r#"# Asset Manifest
+
+Use this file as the role ledger for the game. Every visible or audible game
+role should have exactly one truthful row, even when the role uses primitive
+tiles instead of a PNG.
+
+| Role | Source | Symbol / File | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Game code primitives | None yet | `src/main.c` | Pending | Add rows as soon as a project uses primitive drawing, bundled assets, ComfyUI sprites, or MML music. |
+
+## Role Source Rules
+
+- Simple geometric roles such as Pong paddles/balls, Snake body segments,
+  Tetris blocks, borders, grids, and UI text should usually be SGDK
+  primitives/tiles unless the user explicitly asks for styled generated art.
+- ComfyUI currently generates one Genesis-safe 32x32 sprite PNG at a time.
+  Treat each generated PNG as one role-specific SGDK `SPRITE`, not a reusable
+  sprite sheet or generic decoration.
+- If a generated image is cropped or sliced locally, record the source image,
+  crop/slice output, and final SGDK symbol in the role table.
+- Do not reuse one generated image for unrelated roles. A paddle is not a ball;
+  a Snake head is not a wall; a Tetris block is not a title logo.
+
+## Asset Source Decision Log
+
+- Pending: no project-specific asset roles have been chosen yet.
+"#
+        }
+        "PLAYTEST.md" => {
+            "# Playtest Notes\n\n## Latest Result\n\nNo game-specific playtest has run yet.\n\nPlayability gate: FAIL.\n\nReason: no game has been implemented, built, screen-checked, input-tested, or audio-checked yet.\n\n## Evidence\n\n- Build log: pending\n- Screenshot/frame capture: pending\n- Input test: pending\n- Audio test: pending when sound is expected\n"
+        }
+        _ => {
+            "# Game Notes\n\n## Concept\n\nBlank Drive16 project.\n\n## Known Issues\n\n- No game-specific behavior has been implemented yet.\n"
+        }
+    }
+}
+
 fn copy_project_tree(source: &Path, destination: &Path) -> Result<u64, String> {
     fs::create_dir_all(destination).map_err(|error| {
         format!(
@@ -1133,6 +1443,117 @@ mod tests {
         assert_eq!(result.source_rom_path, STARTER_ROM);
         assert_eq!(result.bytes, 10);
         assert_eq!(exported_bytes, b"DRIVE16ROM");
+    }
+
+    #[test]
+    fn active_project_reports_stale_rom_when_source_is_newer() {
+        let temp_dir = temp_repo("active-stale");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        let rom_path = active_project.join("out/rom.bin");
+        fs::create_dir_all(active_project.join("src")).unwrap();
+        fs::create_dir_all(rom_path.parent().unwrap()).unwrap();
+        fs::write(&rom_path, b"OLDROM").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        fs::write(active_project.join("src/main.c"), "int changed(){}").unwrap();
+
+        let result = ensure_active_project_for_repo(temp_dir.clone()).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "stale");
+        assert!(!result.rom_exists);
+        assert_eq!(result.detail, "Source changed after the last ROM build");
+    }
+
+    #[test]
+    fn active_project_ignores_notes_when_checking_rom_freshness() {
+        let temp_dir = temp_repo("active-notes");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        let rom_path = active_project.join("out/rom.bin");
+        fs::create_dir_all(active_project.join("src")).unwrap();
+        fs::create_dir_all(rom_path.parent().unwrap()).unwrap();
+        fs::write(active_project.join("src/main.c"), "int main(){}").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        fs::write(&rom_path, b"FRESHROM").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        fs::write(active_project.join("GAME.md"), "# Notes").unwrap();
+
+        let result = ensure_active_project_for_repo(temp_dir.clone()).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert!(result.rom_exists);
+    }
+
+    #[test]
+    fn active_project_backfills_missing_memory_files_without_overwriting_notes() {
+        let temp_dir = temp_repo("active-memory-backfill");
+        let starter_project = temp_dir.join(STARTER_PROJECT);
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(starter_project.join("src")).unwrap();
+        fs::create_dir_all(active_project.join("src")).unwrap();
+        fs::write(starter_project.join("GAME.md"), "# Starter Game Notes").unwrap();
+        fs::write(
+            starter_project.join("ASSETS.md"),
+            "# Starter Asset Manifest",
+        )
+        .unwrap();
+        fs::write(
+            starter_project.join("PLAYTEST.md"),
+            "# Starter Playtest Notes",
+        )
+        .unwrap();
+        fs::write(active_project.join("src/main.c"), "int main(){}").unwrap();
+        fs::write(active_project.join("GAME.md"), "# Existing Game Notes").unwrap();
+
+        let result = ensure_active_project_for_repo(temp_dir.clone()).unwrap();
+        let game_notes = fs::read_to_string(active_project.join("GAME.md")).unwrap();
+        let assets = fs::read_to_string(active_project.join("ASSETS.md")).unwrap();
+        let playtest = fs::read_to_string(active_project.join("PLAYTEST.md")).unwrap();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert!(!result.created);
+        assert_eq!(game_notes, "# Existing Game Notes");
+        assert_eq!(assets, "# Starter Asset Manifest");
+        assert_eq!(playtest, "# Starter Playtest Notes");
+    }
+
+    #[test]
+    fn active_project_memory_defaults_start_with_failed_gate() {
+        let temp_dir = temp_repo("active-memory-defaults");
+        let starter_project = temp_dir.join(STARTER_PROJECT);
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(starter_project.join("src")).unwrap();
+        fs::write(starter_project.join("src/main.c"), "int main(){}").unwrap();
+
+        let result = ensure_active_project_for_repo(temp_dir.clone()).unwrap();
+        let playtest = fs::read_to_string(active_project.join("PLAYTEST.md")).unwrap();
+        let audit = audit_project_memory_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert!(result.created);
+        assert!(playtest.contains("Playability gate: FAIL"));
+        assert_eq!(audit.gate, "fail");
+        assert_eq!(audit.status, "warning");
+        assert!(audit.detail.contains("Playability gate: FAIL"));
+    }
+
+    #[test]
+    fn new_active_project_drops_copied_starter_rom_output() {
+        let temp_dir = temp_repo("active-without-output");
+        let starter_project = temp_dir.join(STARTER_PROJECT);
+        fs::create_dir_all(starter_project.join("src")).unwrap();
+        fs::create_dir_all(starter_project.join("out")).unwrap();
+        fs::write(starter_project.join("src/main.c"), "int main(){}").unwrap();
+        fs::write(starter_project.join("out/rom.bin"), b"TEMPLATE").unwrap();
+
+        let result = ensure_active_project_for_repo(temp_dir.clone()).unwrap();
+        let active_rom = temp_dir.join(ACTIVE_PROJECT_DIRECTORY).join("out/rom.bin");
+        let active_rom_exists = active_rom.exists();
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(result.status, "ready");
+        assert!(!result.rom_exists);
+        assert!(!active_rom_exists);
     }
 
     #[test]

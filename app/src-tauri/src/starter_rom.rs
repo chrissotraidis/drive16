@@ -29,6 +29,7 @@ pub struct StarterRomPreview {
     pub rom_path: String,
     pub screenshot_path: String,
     pub frame_stream_path: String,
+    pub audio_dump_path: String,
     pub screenshot_data_url: String,
     pub frames: u32,
     pub stream_every: u32,
@@ -36,6 +37,7 @@ pub struct StarterRomPreview {
     pub frame_width: u16,
     pub frame_height: u16,
     pub framebuffer_frames: Vec<FramebufferFrame>,
+    pub audio_max_abs: i16,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,6 +57,7 @@ struct StarterPaths {
     rom_path: PathBuf,
     screenshot_path: PathBuf,
     frame_stream_path: PathBuf,
+    audio_dump_path: PathBuf,
     build_sgdk_script: PathBuf,
     build_genteel_script: PathBuf,
     local_genteel_bin: PathBuf,
@@ -114,6 +117,7 @@ fn launch_rom_for_paths(
 
     remove_if_exists(&paths.screenshot_path)?;
     remove_if_exists(&paths.frame_stream_path)?;
+    remove_if_exists(&paths.audio_dump_path)?;
 
     let mut command = Command::new(&genteel_bin);
     command
@@ -126,9 +130,15 @@ fn launch_rom_for_paths(
         .arg(STREAM_EVERY.to_string())
         .arg("--screenshot")
         .arg(&paths.screenshot_path)
+        .arg("--dump-audio")
+        .arg(&paths.audio_dump_path)
         .arg(&rom_path);
 
-    run_command_with_timeout(&mut command, "Genteel starter ROM launch", GENTEEL_RUN_TIMEOUT)?;
+    run_command_with_timeout(
+        &mut command,
+        "Genteel starter ROM launch",
+        GENTEEL_RUN_TIMEOUT,
+    )?;
 
     let screenshot_bytes = fs::read(&paths.screenshot_path).map_err(|error| {
         format!(
@@ -151,6 +161,7 @@ fn launch_rom_for_paths(
     let frame_width = first_frame.width;
     let frame_height = first_frame.height;
     let streamed_frames = framebuffer_frames.len();
+    let audio_max_abs = wav_max_abs(&paths.audio_dump_path)?;
     let screenshot_data_url = format!(
         "data:image/png;base64,{}",
         general_purpose::STANDARD.encode(screenshot_bytes)
@@ -164,6 +175,7 @@ fn launch_rom_for_paths(
         rom_path: repo_relative(&paths.repo_root, &rom_path),
         screenshot_path: repo_relative(&paths.repo_root, &paths.screenshot_path),
         frame_stream_path: repo_relative(&paths.repo_root, &paths.frame_stream_path),
+        audio_dump_path: repo_relative(&paths.repo_root, &paths.audio_dump_path),
         screenshot_data_url,
         frames: STARTER_FRAMES,
         stream_every: STREAM_EVERY,
@@ -171,6 +183,7 @@ fn launch_rom_for_paths(
         frame_width,
         frame_height,
         framebuffer_frames,
+        audio_max_abs,
     })
 }
 
@@ -181,6 +194,7 @@ impl StarterPaths {
             rom_path: project_path.join("out/rom.bin"),
             screenshot_path: repo_root.join("artifacts/phase3/starter-rom/starter-frame.png"),
             frame_stream_path: repo_root.join("artifacts/phase3/starter-rom/starter-frames.rgb565"),
+            audio_dump_path: repo_root.join("artifacts/phase3/starter-rom/starter-audio.wav"),
             build_sgdk_script: repo_root.join("scripts/build-sgdk.sh"),
             build_genteel_script: repo_root.join("scripts/build-genteel.sh"),
             local_genteel_bin: repo_root
@@ -423,6 +437,43 @@ fn read_frame_stream(path: &Path) -> Result<Vec<FramebufferFrame>, String> {
     }
 }
 
+fn wav_max_abs(path: &Path) -> Result<i16, String> {
+    let data = fs::read(path).map_err(|error| {
+        format!(
+            "Starter ROM audio dump was not created at {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
+        return Err(format!("Audio dump is not a WAV file: {}", path.display()));
+    }
+
+    let mut offset = 12;
+    while offset + 8 <= data.len() {
+        let chunk_id = &data[offset..offset + 4];
+        let chunk_len = read_u32(&data, offset + 4)? as usize;
+        let chunk_start = offset + 8;
+        let chunk_end = chunk_start + chunk_len;
+        if chunk_end > data.len() {
+            return Err("WAV chunk is truncated".to_string());
+        }
+
+        if chunk_id == b"data" {
+            let mut max_abs = 0i16;
+            for index in (chunk_start..chunk_end.saturating_sub(1)).step_by(2) {
+                let sample = i16::from_le_bytes([data[index], data[index + 1]]);
+                max_abs = max_abs.max(sample.saturating_abs());
+            }
+            return Ok(max_abs);
+        }
+
+        offset = chunk_end + (chunk_len % 2);
+    }
+
+    Err("WAV file did not include a data chunk".to_string())
+}
+
 fn read_u16(data: &[u8], offset: usize) -> Result<u16, String> {
     let bytes = data
         .get(offset..offset + 2)
@@ -562,6 +613,10 @@ mod tests {
             paths.frame_stream_path,
             PathBuf::from("/tmp/drive16/artifacts/phase3/starter-rom/starter-frames.rgb565")
         );
+        assert_eq!(
+            paths.audio_dump_path,
+            PathBuf::from("/tmp/drive16/artifacts/phase3/starter-rom/starter-audio.wav")
+        );
     }
 
     #[test]
@@ -577,6 +632,8 @@ mod tests {
         assert_eq!(preview.frame_width, 320);
         assert_eq!(preview.frame_height, 240);
         assert_eq!(preview.streamed_frames, preview.framebuffer_frames.len());
+        assert!(preview.audio_max_abs >= 0);
+        assert!(preview.audio_dump_path.ends_with("starter-audio.wav"));
         assert!(preview
             .framebuffer_frames
             .iter()
@@ -633,5 +690,43 @@ mod tests {
             frames[0].rgb565_data,
             general_purpose::STANDARD.encode(payload)
         );
+    }
+
+    #[test]
+    fn wav_max_abs_reads_pcm_data_chunk() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "drive16-starter-wav-test-{}-{}",
+            unix_timestamp(),
+            std::process::id()
+        ));
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        let wav_path = temp_dir.join("audio.wav");
+        fs::write(&wav_path, tiny_wav(&[-3, 18, -27, 6])).expect("WAV should be written");
+
+        let max_abs = wav_max_abs(&wav_path).expect("WAV should parse");
+        fs::remove_dir_all(&temp_dir).expect("temp dir should be removed");
+
+        assert_eq!(max_abs, 27);
+    }
+
+    fn tiny_wav(samples: &[i16]) -> Vec<u8> {
+        let data_len = samples.len() * 2;
+        let mut wav = Vec::new();
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_len as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&44100u32.to_le_bytes());
+        wav.extend_from_slice(&(44100u32 * 2).to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(data_len as u32).to_le_bytes());
+        for sample in samples {
+            wav.extend_from_slice(&sample.to_le_bytes());
+        }
+        wav
     }
 }

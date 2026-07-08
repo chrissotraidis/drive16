@@ -10,15 +10,20 @@ import {
 import {
   agentActivityFromEvent,
   agentPromptWithProject,
+  createAgentActivityRepairState,
   ensureActiveProject,
   resetActiveProject,
   sendAgentPrompt,
   setAgentProviderKey,
+  visibleAgentActivityEvents,
+  type ActiveProject,
 } from "./agent/opencodeSession";
 import {
   coreLaunchFailureReadiness,
   activeGamepadActionIds,
+  clampPlayerVolume,
   controllerProfileConfigured,
+  defaultPlayerVolume,
   detectInteractiveCoreReadiness,
   detectGamepadReadiness,
   firstConnectedGamepad,
@@ -29,10 +34,9 @@ import {
   playerInputActionFromKey,
   resetNostalgistPlayer,
   resetInputProfile,
-  resumeNostalgistAudio,
   resumeNostalgistPlayer,
   sendNostalgistInput,
-  toggleNostalgistMute,
+  setNostalgistVolume,
   sameGamepadReadiness,
   stopNostalgistPlayer,
   visibleControllerBindings,
@@ -80,6 +84,15 @@ type Message = {
   time: string;
 };
 
+type PendingAgentRun = {
+  sessionId: string;
+  startedAt: number;
+  previousSession?: string;
+  projectName: string;
+  waitingTimer?: number;
+  stallTimer?: number;
+};
+
 type ConversationMode = {
   state: HealthState;
   label: string;
@@ -117,6 +130,7 @@ type StarterRomPreview = {
   romPath: string;
   screenshotPath: string;
   frameStreamPath: string;
+  audioDumpPath?: string;
   screenshotDataUrl: string;
   frames: number;
   streamEvery: number;
@@ -124,6 +138,7 @@ type StarterRomPreview = {
   frameWidth: number;
   frameHeight: number;
   framebufferFrames: FramebufferFrame[];
+  audioMaxAbs?: number;
 };
 
 type ProjectFileEntry = {
@@ -293,12 +308,40 @@ type OpenCodeSendResult = {
   finish?: string | null;
 };
 
+type ProjectMemoryAuditResult = {
+  generatedAt: string;
+  status: HealthState;
+  detail: string;
+  projectPath: string;
+  gate: "pass" | "fail" | "unknown" | string;
+  files: Array<{
+    name: string;
+    status: HealthState;
+    detail: string;
+  }>;
+};
+
 type OpenCodeEvent = {
   id: number;
   type: string;
   detail: string;
   time: string;
 };
+
+type OpenCodeHeartbeat = {
+  active: boolean;
+  time: string;
+};
+
+type PlayerScreenEvidence =
+  | "none"
+  | "checking"
+  | "captured"
+  | "visible"
+  | "unverified"
+  | "inconclusive";
+type PlayerInputEvidence = "none" | "testing" | "tested" | "failed";
+type PlayerAudioEvidence = "none" | "checking" | "captured" | "silent" | "failed";
 
 type ModelOption = {
   id: string;
@@ -359,10 +402,15 @@ type DecodedFramebufferFrame = {
 
 const openRouterKeyUrl = "https://openrouter.ai/api/v1/key";
 const openRouterModelsUrl = "https://openrouter.ai/api/v1/models";
-const openRouterSessionKeyStorageKey = "drive16.openrouter.sessionKey.v1";
+const openRouterKeyStorageKey = "drive16.openrouter.key.v1";
+const openRouterAcceptedKeyStorageKey = "drive16.openrouter.acceptedKey.v1";
+const legacyOpenRouterSessionKeyStorageKey = "drive16.openrouter.sessionKey.v1";
+const activeProjectNameStorageKey = "drive16.activeProject.name.v1";
 const defaultOllamaEndpoint = "http://127.0.0.1:11434";
 const defaultOllamaModel = "qwen2.5-coder:7b";
 const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
+const playerSetupTimeoutMs = 20_000;
+const openCodeHeartbeatTimeoutMs = 15_000;
 
 const preferredOpenRouterModels = [
   defaultOpenRouterModel,
@@ -393,8 +441,8 @@ const fallbackModelOptions: ModelOption[] = [
   },
 ];
 
-// Non-secret settings persist across app restarts. The API key is NOT here:
-// it lives in OpenCode's local auth store.
+// Non-secret settings persist across app restarts. The API key has its own
+// storage path because it also needs to sync into OpenCode's local auth store.
 const persistedSettingsStorageKey = "drive16.settings.v1";
 
 type PersistedSettings = {
@@ -429,29 +477,110 @@ function savePersistedSettings(settings: PersistedSettings) {
   }
 }
 
-function loadOpenRouterSessionKey() {
+function loadOpenRouterKey() {
   if (typeof window === "undefined") return "";
 
   try {
-    return window.sessionStorage.getItem(openRouterSessionKeyStorageKey) ?? "";
+    return (
+      window.localStorage.getItem(openRouterKeyStorageKey) ??
+      window.sessionStorage.getItem(legacyOpenRouterSessionKeyStorageKey) ??
+      ""
+    );
   } catch {
     return "";
   }
 }
 
-function saveOpenRouterSessionKey(value: string) {
+function saveOpenRouterKey(value: string) {
   if (typeof window === "undefined") return;
 
   try {
     const trimmed = value.trim();
     if (trimmed) {
-      window.sessionStorage.setItem(openRouterSessionKeyStorageKey, trimmed);
+      window.localStorage.setItem(openRouterKeyStorageKey, trimmed);
     } else {
-      window.sessionStorage.removeItem(openRouterSessionKeyStorageKey);
+      window.localStorage.removeItem(openRouterKeyStorageKey);
+      window.localStorage.removeItem(openRouterAcceptedKeyStorageKey);
     }
+    window.sessionStorage.removeItem(legacyOpenRouterSessionKeyStorageKey);
   } catch {
     // Some locked-down WebViews can reject storage; the in-memory key still works.
   }
+}
+
+function openRouterKeyMarker(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  let hash = 5381;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    hash = (hash * 33) ^ trimmed.charCodeAt(index);
+  }
+  return `${trimmed.length}:${(hash >>> 0).toString(36)}`;
+}
+
+function loadOpenRouterAcceptedKeyMarker() {
+  if (typeof window === "undefined") return "";
+
+  try {
+    return window.localStorage.getItem(openRouterAcceptedKeyStorageKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveOpenRouterAcceptedKey(value: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    const marker = openRouterKeyMarker(value);
+    if (marker) {
+      window.localStorage.setItem(openRouterAcceptedKeyStorageKey, marker);
+    } else {
+      window.localStorage.removeItem(openRouterAcceptedKeyStorageKey);
+    }
+  } catch {
+    // If storage is unavailable, the current in-memory connection state still works.
+  }
+}
+
+function clearOpenRouterAcceptedKey() {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(openRouterAcceptedKeyStorageKey);
+  } catch {
+    // Nothing else to clear.
+  }
+}
+
+function openRouterKeyWasAccepted(value: string) {
+  const marker = openRouterKeyMarker(value);
+  return Boolean(marker) && marker === loadOpenRouterAcceptedKeyMarker();
+}
+
+function loadActiveProjectName(fallback = "Untitled Project") {
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    return window.localStorage.getItem(activeProjectNameStorageKey) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveActiveProjectName(value: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(activeProjectNameStorageKey, value.trim() || "Untitled Project");
+  } catch {
+    // Storage can be unavailable in locked-down WebViews; the in-memory name still works.
+  }
+}
+
+function resetActiveProjectName() {
+  saveActiveProjectName("Untitled Project");
 }
 
 const starterMessages: Message[] = [
@@ -459,21 +588,8 @@ const starterMessages: Message[] = [
     id: 1,
     role: "agent",
     source: "system",
-    body: "Starter project loaded. Describe what you want to build.",
-    time: "09:41",
-  },
-  {
-    id: 2,
-    role: "user",
-    body: "Make a sprite I can move left and right with music.",
-    time: "09:42",
-  },
-  {
-    id: 3,
-    role: "agent",
-    source: "proof",
-    body: "Try a prompt like that one: it builds the bundled sprite-and-music demo and loads it in the player.",
-    time: "09:42",
+    body: "New starter project ready. Describe what to build, or ask for a sprite you can move with music.",
+    time: formatMessageTime(),
   },
 ];
 
@@ -533,21 +649,21 @@ const previewOpenCode: OpenCodeBridgeStatus = {
 
 const previewProjectSummary: ProjectSummary = {
   generatedAt: "preview",
-  name: "Starter Project",
-  projectPath: "examples/app-starter-blank",
-  romPath: "examples/app-starter-blank/out/rom.bin",
+  name: "Untitled Project",
+  projectPath: "artifacts/phase3/active-project",
+  romPath: "artifacts/phase3/active-project/out/rom.bin",
   exportDirectory: "artifacts/phase3/exports",
-  romStatus: "warning",
-  romDetail: "Native project summary runs inside the Tauri app",
+  romStatus: "missing",
+  romDetail: "No ROM built yet",
   files: [
     {
       label: "Main C",
-      path: "examples/app-starter-blank/src/main.c",
+      path: "artifacts/phase3/active-project/src/main.c",
       state: "ready",
     },
     {
       label: "Resources",
-      path: "examples/app-starter-blank/res/resources.res",
+      path: "artifacts/phase3/active-project/res/resources.res",
       state: "ready",
     },
     {
@@ -647,7 +763,7 @@ function App() {
   const [preflightSource, setPreflightSource] = useState("checking");
   const [starterRom, setStarterRom] = useState<StarterRomPreview>(previewStarterRom);
   const [starterSource, setStarterSource] = useState("checking");
-  const [starterBusy, setStarterBusy] = useState(true);
+  const [starterBusy, setStarterBusy] = useState(false);
   const [projectSummary, setProjectSummary] =
     useState<ProjectSummary>(previewProjectSummary);
   const [projectSource, setProjectSource] = useState("checking");
@@ -670,6 +786,11 @@ function App() {
   const [openCodeSource, setOpenCodeSource] = useState("checking");
   const [openCodeSessionId, setOpenCodeSessionId] = useState<string | undefined>();
   const [openCodeEvents, setOpenCodeEvents] = useState<OpenCodeEvent[]>([]);
+  const [openCodeRawEvents, setOpenCodeRawEvents] = useState<OpenCodeEvent[]>([]);
+  const [openCodeHeartbeat, setOpenCodeHeartbeat] = useState<OpenCodeHeartbeat>({
+    active: false,
+    time: "",
+  });
   const [openCodeBusy, setOpenCodeBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -690,6 +811,13 @@ function App() {
   const [playerState, setPlayerState] = useState<PlayerSessionState>("idle");
   const [playerCanvasActive, setPlayerCanvasActive] = useState(false);
   const [playerAudio, setPlayerAudio] = useState<PlayerAudioState>("unavailable");
+  const [playerVolume, setPlayerVolume] = useState(defaultPlayerVolume);
+  const [playerScreenEvidence, setPlayerScreenEvidence] =
+    useState<PlayerScreenEvidence>("none");
+  const [playerInputEvidence, setPlayerInputEvidence] =
+    useState<PlayerInputEvidence>("none");
+  const [playerAudioEvidence, setPlayerAudioEvidence] =
+    useState<PlayerAudioEvidence>("none");
   const [agentRom, setAgentRom] = useState<{ path: string; stamp: number } | undefined>();
   const [agentProviders, setAgentProviders] = useState<string[]>([]);
   const [workspacePath, setWorkspacePath] = useState<string | undefined>();
@@ -703,7 +831,7 @@ function App() {
     );
   const [inputProofBusy, setInputProofBusy] = useState(false);
   const [actionDetail, setActionDetail] = useState(
-    "Starter project loaded. Describe what you want to build.",
+    "New starter project ready. Describe what you want to build.",
   );
   const [persisted] = useState(loadPersistedSettings);
   const [modelProvider, setModelProvider] = useState<ModelProvider>(
@@ -714,7 +842,7 @@ function App() {
   );
   const [modelOptions, setModelOptions] = useState<ModelOption[]>(fallbackModelOptions);
   const [modelsSource, setModelsSource] = useState("fallback");
-  const [openRouterKey, setOpenRouterKey] = useState(() => loadOpenRouterSessionKey());
+  const [openRouterKey, setOpenRouterKey] = useState(() => loadOpenRouterKey());
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
   const [ollamaEndpoint, setOllamaEndpoint] = useState(
     persisted.ollamaEndpoint ?? defaultOllamaEndpoint,
@@ -742,10 +870,14 @@ function App() {
     devices: 0,
     checks: [],
   });
-  const [modelConnection, setModelConnection] = useState<ModelConnectionReport>({
-    state: "idle",
-    detail: "Not tested",
-  });
+  const [modelConnection, setModelConnection] = useState<ModelConnectionReport>(() =>
+    modelProvider === "openrouter" && openRouterKeyWasAccepted(openRouterKey)
+      ? { state: "ready", detail: "OpenRouter key accepted" }
+      : {
+          state: "idle",
+          detail: "Not tested",
+        },
+  );
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const romViewportRef = useRef<HTMLDivElement | null>(null);
   const playerCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -754,19 +886,46 @@ function App() {
   const coreImportInputRef = useRef<HTMLInputElement | null>(null);
   const messageIdRef = useRef(starterMessages.length + 1);
   const openCodeEventIdRef = useRef(1);
+  const openCodeRawEventIdRef = useRef(1);
+  const agentActivityRepairRef = useRef(createAgentActivityRepairState());
+  const pendingAgentRunRef = useRef<PendingAgentRun | undefined>();
+  const openCodeHeartbeatTimerRef = useRef<number | undefined>();
   const controllerPressedRef = useRef<Set<PlayerInputActionId>>(new Set());
 
   useEffect(() => {
     void refreshPreflight();
-    void launchRom();
     void connectOpenCode();
-    void loadProjectSummary();
     void loadRecentProjects();
     void loadInteractiveCoreStatus();
     if (isTauriRuntime()) {
       void ensureActiveProject()
-        .then((project) => setWorkspacePath(project.projectPath))
-        .catch(() => undefined);
+        .then((project) => {
+          setWorkspacePath(project.projectPath);
+          setProjectSummary(
+            projectSummaryFromActiveProject(
+              project,
+              loadActiveProjectName(project.romExists ? "Active Project" : "Untitled Project"),
+            ),
+          );
+          setProjectSource("tauri");
+          if (project.romExists) {
+            setAgentRom({ path: project.romPath, stamp: Date.now() });
+            appendOpenCodeEvent("project.active.rom", project.romPath);
+            void launchRom(project.romPath, "Active project ROM ready.");
+          } else if (project.status === "stale") {
+            appendOpenCodeEvent("project.active.stale", project.detail);
+          }
+        })
+        .catch((error) => {
+          setProjectSource("error");
+          setProjectActionNotice({
+            state: "missing",
+            label: "Project load failed",
+            detail: errorDetail(error, "Could not load the active project"),
+          });
+        });
+    } else {
+      void loadProjectSummary();
     }
   }, []);
 
@@ -794,29 +953,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsOpen]);
 
-  // Keep non-secret settings across restarts.
-  useEffect(() => {
-    savePersistedSettings({
-      modelProvider,
-      activeModel,
-      ollamaEndpoint,
-      ollamaModel,
-      enhancements,
-      comfyUiEndpoint,
-      comfyUiCheckpoint,
-      comfyUiLora,
-    });
-  }, [
-    modelProvider,
-    activeModel,
-    ollamaEndpoint,
-    ollamaModel,
-    enhancements,
-    comfyUiEndpoint,
-    comfyUiCheckpoint,
-    comfyUiLora,
-  ]);
-
   useEffect(() => {
     if (openCode.state !== "ready" || !openCode.eventUrl) return;
     if (typeof EventSource === "undefined") {
@@ -832,18 +968,49 @@ function App() {
     };
 
     events.onmessage = (event) => {
-      appendOpenCodeEventFromData(event.data);
       const activity = agentActivityFromEvent(event.data);
-      if (activity && activity.kind === "tool") {
-        noteAction(activity.label);
+      if (activity) {
+        const staleDisposition = staleAgentActivityDisposition(activity.sessionId);
+        if (staleDisposition === "drop") {
+          return;
+        }
+        if (staleDisposition === "raw") {
+          appendOpenCodeRawEvent(
+            "agent.ignored.stale",
+            `${activity.eventType}: ${activity.sessionId ?? "unknown session"}`,
+          );
+          return;
+        }
+
+        for (const visibleActivity of visibleAgentActivityEvents(
+          activity,
+          agentActivityRepairRef.current,
+        )) {
+          const detail = visibleActivity.detail
+            ? `${visibleActivity.label}: ${visibleActivity.detail}`
+            : visibleActivity.label;
+          appendOpenCodeEvent(visibleActivity.eventType, detail);
+          applyAgentEvidenceEvent(visibleActivity.eventType);
+          noteAction(visibleActivity.label);
+          if (visibleActivity.eventType === "agent.finished") {
+            void finishPendingAgentRun(visibleActivity.sessionId);
+          } else {
+            recordPendingAgentProgress(visibleActivity.sessionId);
+          }
+        }
+        return;
       }
+      appendOpenCodeEventFromData(event.data);
     };
 
     events.onerror = () => {
+      clearOpenCodeHeartbeatTimer();
+      setOpenCodeHeartbeat((current) => ({ ...current, active: false }));
       appendOpenCodeEvent("sse.waiting", "OpenCode event stream is waiting to reconnect");
     };
 
     return () => {
+      clearOpenCodeHeartbeatTimer();
       events.close();
     };
   }, [openCode.eventUrl, openCode.state]);
@@ -854,12 +1021,18 @@ function App() {
     element.scrollTop = element.scrollHeight;
   }, [messages]);
 
-  // When the agent finishes a build, load the fresh ROM into the player.
-  // The stamp changes on every build so a rebuild at the same path replays.
+  // When the agent finishes a build, capture a preview frame first. Interactive
+  // Play is a separate check because missing cores should not leave a black box.
   useEffect(() => {
     if (!agentRom) return;
     setLoadedPlayerRom(undefined);
-    void playActiveRom();
+    void (async () => {
+      await launchRom(
+        agentRom.path,
+        "Agent ROM preview captured. Playability still needs input/audio evidence.",
+      );
+      void playActiveRom();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentRom?.stamp]);
 
@@ -951,11 +1124,63 @@ function App() {
     };
   }, [inputProfile]);
 
-  const buildLabel = useMemo(() => {
-    if (buildState === "building") return "Working";
-    if (buildState === "error") return "Error";
-    return "Ready";
-  }, [buildState]);
+  const activeRomSource = useMemo(
+    () => activeRomSourceFor(projectSummary, importResult, v1PromptResult, agentRom?.path),
+    [importResult, projectSummary, v1PromptResult, agentRom],
+  );
+  const activeRomPlayable = useMemo(
+    () => canPlayActiveRom(activeRomSource, projectSummary),
+    [activeRomSource, projectSummary],
+  );
+  const playabilityGateState = useMemo(
+    () =>
+      appPlayabilityGateState({
+        activeRomPlayable,
+        lastInputAction,
+        playerAudio,
+        playerAudioEvidence,
+        playerInputEvidence,
+        playerScreenEvidence,
+        proofMaxAbs: starterRom.audioMaxAbs,
+        sessionActive: Boolean(playerRuntimeRef.current),
+      }),
+    [
+      activeRomPlayable,
+      lastInputAction,
+      playerAudio,
+      playerAudioEvidence,
+      playerInputEvidence,
+      playerScreenEvidence,
+      playerState,
+      starterRom.audioMaxAbs,
+    ],
+  );
+  const topBarStatus = useMemo(() => {
+    if (buildState === "building") return { state: "building", label: "Working" };
+    if (buildState === "error") return { state: "error", label: "Error" };
+    if (activeRomPlayable && playabilityGateState === "missing") {
+      return { state: "error", label: "Gate Failed" };
+    }
+    if (activeRomPlayable && playabilityGateState === "warning") {
+      const checking =
+        starterBusy ||
+        playerState === "loading" ||
+        playerScreenEvidence === "checking" ||
+        playerInputEvidence === "testing" ||
+        playerAudioEvidence === "checking";
+      return { state: "warning", label: checking ? "Checking" : "Needs Check" };
+    }
+    return { state: "running", label: "Ready" };
+  }, [
+    activeRomPlayable,
+    buildState,
+    playabilityGateState,
+    playerAudioEvidence,
+    playerInputEvidence,
+    playerScreenEvidence,
+    playerState,
+    starterBusy,
+  ]);
 
   const actionFeedback = useMemo<ProjectActionNotice>(() => {
     if (buildState === "error") {
@@ -1046,10 +1271,6 @@ function App() {
     [activeModel, modelConnection, modelProvider, ollamaModel, openCode, openRouterKey],
   );
 
-  const activeRomSource = useMemo(
-    () => activeRomSourceFor(projectSummary, importResult, v1PromptResult, agentRom?.path),
-    [importResult, projectSummary, v1PromptResult, agentRom],
-  );
   const preflightWithInteractivePlay = useMemo(
     () => [interactiveCoreHealthCheck(interactiveCoreReadiness), ...preflight.checks],
     [interactiveCoreReadiness, preflight.checks],
@@ -1081,10 +1302,22 @@ function App() {
     // reconnects on demand and reports real errors. The freeform/gated chat
     // below only exists for the browser preview, which has no agent bridge.
     if (isTauriRuntime()) {
-      try {
-        await runAgentPrompt(trimmed);
-      } finally {
+      const clarifyingReply = clarifyingReplyForBuildPrompt(trimmed);
+      if (clarifyingReply) {
+        setMessages((current) => [...current, makeMessage("agent", clarifyingReply, "system")]);
+        appendOpenCodeEvent("agent.questions", clarifyingReply);
+        noteAction("Waiting for a little more direction before building.");
         setOpenCodeBusy(false);
+        return;
+      }
+
+      let agentRunPending = false;
+      try {
+        agentRunPending = await runAgentPrompt(trimmed);
+      } finally {
+        if (!agentRunPending) {
+          setOpenCodeBusy(false);
+        }
       }
       return;
     }
@@ -1095,6 +1328,18 @@ function App() {
     if (shouldRunV1) {
       setBuildState("building");
       setV1PromptSource("running");
+    }
+
+    const clarifyingReply = clarifyingReplyForBuildPrompt(trimmed);
+    if (!shouldRunV1 && clarifyingReply) {
+      setMessages((current) => [
+        ...current,
+        makeMessage("agent", clarifyingReply, "system"),
+      ]);
+      appendOpenCodeEvent("agent.questions", clarifyingReply);
+      noteAction("Waiting for a little more direction before building.");
+      setOpenCodeBusy(false);
+      return;
     }
 
     if (!shouldRunV1) {
@@ -1160,12 +1405,19 @@ function App() {
           model: activeModel,
           messages: openRouterFreeformMessages(messages, trimmed),
         });
+        const guardedReply = guardUnverifiedModelReply(reply.content);
         const agentMessage = makeMessage(
           "agent",
-          reply.content,
+          guardedReply,
           "model",
         );
         setMessages((current) => [...current, agentMessage]);
+        if (guardedReply !== reply.content) {
+          appendOpenCodeEvent(
+            "message.model.guarded",
+            "Freeform reply included unverified ROM/audio success claims.",
+          );
+        }
         appendOpenCodeEvent(
           "message.model",
           `${shortModelLabel(reply.model)} replied${
@@ -1200,12 +1452,27 @@ function App() {
     }
   }
 
-  async function runAgentPrompt(trimmed: string) {
+  async function runAgentPrompt(trimmed: string): Promise<boolean> {
+    const startedAt = Date.now();
+    const previousSession = openCodeSessionId;
+    const clarifyingReply = clarifyingReplyForBuildPrompt(trimmed);
+    if (clarifyingReply) {
+      setMessages((current) => [
+        ...current,
+        makeMessage("agent", clarifyingReply, "system"),
+      ]);
+      appendOpenCodeEvent("agent.questions", clarifyingReply);
+      noteAction("Waiting for a little more direction before building.");
+      setBuildState("running");
+      return false;
+    }
+
     // Reconnect on demand: startup connection may have raced the server
     // boot, and the server restarts when a key is saved.
     let bridge = openCode;
     let providers = agentProviders;
     if (bridge.state !== "ready" || !providers.includes("openrouter")) {
+      appendOpenCodeEvent("agent.reconnect", bridge.detail);
       const report = await connectOpenCode();
       if (report) {
         bridge = report;
@@ -1223,7 +1490,7 @@ function App() {
         ),
       ]);
       setBuildState("error");
-      return;
+      return false;
     }
 
     if (modelProvider === "ollama") {
@@ -1235,7 +1502,7 @@ function App() {
           "system",
         ),
       ]);
-      return;
+      return false;
     }
 
     if (!providers.includes("openrouter")) {
@@ -1247,36 +1514,69 @@ function App() {
           "system",
         ),
       ]);
-      return;
+      return false;
     }
 
     setBuildState("building");
+    setPlayerScreenEvidence("none");
+    setPlayerInputEvidence("none");
+    setPlayerAudioEvidence("none");
+    setLastInputAction("No local input yet");
+    agentActivityRepairRef.current = createAgentActivityRepairState();
+    const visiblePlan = defaultPlanForBuildPrompt(trimmed, enhancements);
     noteAction("The agent is working on your request.");
+    if (visiblePlan) {
+      setMessages((current) => [...current, makeMessage("agent", visiblePlan, "system")]);
+      appendOpenCodeEvent("agent.plan", visiblePlan);
+    } else {
+      appendOpenCodeEvent(
+        "agent.plan",
+        "Reading project notes, editing the active project, building the ROM, then checking screen/input/audio evidence.",
+      );
+    }
+    appendOpenCodeEvent(
+      "agent.started",
+      `session: new; model: ${shortModelLabel(activeModel)}`,
+    );
+    const waitNotice = window.setTimeout(() => {
+      appendOpenCodeEvent(
+        "agent.waiting",
+        `Still waiting after ${formatDurationMs(Date.now() - startedAt)}; check the activity feed for tool progress.`,
+      );
+    }, 20_000);
     try {
       const project = await ensureActiveProject();
+      const projectName = looksLikeFollowUpPrompt(trimmed)
+        ? projectSummary.name || loadActiveProjectName("Untitled Project")
+        : projectNameFromPrompt(trimmed);
+      saveActiveProjectName(projectName);
       setWorkspacePath(project.projectPath);
+      setProjectSummary(projectSummaryFromActiveProject(project, projectName));
+      setProjectSource("tauri");
+      appendOpenCodeEvent("agent.workspace", project.projectPath);
       const result = await sendAgentPrompt({
-        sessionId: openCodeSessionId ?? undefined,
-        text: agentPromptWithProject(project.projectPath, trimmed),
+        // OpenCode session reuse currently makes later turns repeat the first
+        // instruction. Keep continuity in the project workspace instead.
+        sessionId: undefined,
+        text: agentPromptWithProject(project.projectPath, trimmed, {
+          spriteGeneration: enhancements.spriteGeneration,
+          musicGeneration: enhancements.musicGeneration,
+          comfyUiEndpoint,
+          comfyUiCheckpoint,
+          comfyUiLora,
+        }),
         providerId: "openrouter",
         modelId: activeModel,
+        background: true,
       });
       setOpenCodeSessionId(result.sessionId);
-
-      const reply =
-        result.replyText?.trim() ||
-        "The agent finished but did not send a reply. Check the activity feed.";
-      setMessages((current) => [...current, makeMessage("agent", reply, "opencode")]);
-      appendOpenCodeEvent("agent.reply", `finish: ${result.finish ?? "unknown"}`);
-
-      const after = await ensureActiveProject();
-      if (after.romExists) {
-        setAgentRom({ path: after.romPath, stamp: Date.now() });
-        noteAction("The project ROM is ready. Loading it into the player.");
-      } else {
-        noteAction("The agent replied. No ROM has been built yet.");
-      }
-      setBuildState("running");
+      startPendingAgentRun(result.sessionId, startedAt, previousSession, projectName);
+      appendOpenCodeEvent(
+        "agent.accepted",
+        `session: ${result.sessionId}; previous: ${previousSession ?? "none"}`,
+      );
+      noteAction("The agent accepted the request. Watching the live build log.");
+      return true;
     } catch (error) {
       const detail = errorDetail(error, "The agent request failed with no detail");
       setMessages(
@@ -1290,8 +1590,198 @@ function App() {
         label: "Agent request failed",
         detail,
       });
-      appendOpenCodeEvent("agent.failed", detail);
+      appendOpenCodeEvent(
+        "agent.failed",
+        `${detail}; after ${formatDurationMs(Date.now() - startedAt)}`,
+      );
       setBuildState("error");
+      return false;
+    } finally {
+      window.clearTimeout(waitNotice);
+    }
+  }
+
+  function startPendingAgentRun(
+    sessionId: string,
+    startedAt: number,
+    previousSession: string | undefined,
+    projectName: string,
+  ) {
+    clearPendingAgentRunTimers(pendingAgentRunRef.current);
+    const pending: PendingAgentRun = {
+      sessionId,
+      startedAt,
+      previousSession,
+      projectName,
+    };
+    pending.waitingTimer = window.setTimeout(() => {
+      appendOpenCodeEvent(
+        "agent.no_progress",
+        `No build activity yet after ${formatDurationMs(Date.now() - startedAt)}.`,
+      );
+      noteAction("The agent request was accepted, but no build activity has started yet.");
+    }, 45_000);
+    pending.stallTimer = window.setTimeout(() => {
+      failPendingAgentRun(
+        sessionId,
+        "The agent request was accepted, but OpenCode did not start assistant or tool activity.",
+      );
+    }, 120_000);
+    pendingAgentRunRef.current = pending;
+  }
+
+  function recordPendingAgentProgress(sessionId: string | undefined) {
+    const pending = pendingAgentRunRef.current;
+    if (!pending) return;
+    if (sessionId && pending.sessionId !== sessionId) return;
+
+    if (pending.waitingTimer) {
+      window.clearTimeout(pending.waitingTimer);
+      pending.waitingTimer = undefined;
+    }
+    if (pending.stallTimer) {
+      window.clearTimeout(pending.stallTimer);
+    }
+    pending.stallTimer = window.setTimeout(() => {
+      failPendingAgentRun(
+        pending.sessionId,
+        "The agent stopped sending build activity before finishing.",
+      );
+    }, 180_000);
+  }
+
+  function failPendingAgentRun(sessionId: string, detail: string) {
+    const pending = pendingAgentRunRef.current;
+    if (!pending || pending.sessionId !== sessionId) return;
+
+    clearPendingAgentRunTimers(pending);
+    pendingAgentRunRef.current = undefined;
+    setMessages((current) => [
+      ...current,
+      makeMessage("agent", `${detail} Try again, or open Settings and re-test OpenRouter.`, "system"),
+    ]);
+    setProjectActionNotice({
+      state: "missing",
+      label: "Agent stalled",
+      detail,
+    });
+    appendOpenCodeEvent(
+      "agent.stalled",
+      `${detail}; after ${formatDurationMs(Date.now() - pending.startedAt)}`,
+    );
+    noteAction("The agent stalled before producing build activity.");
+    setBuildState("error");
+    setOpenCodeBusy(false);
+  }
+
+  function clearPendingAgentRunTimers(pending: PendingAgentRun | undefined) {
+    if (!pending) return;
+    if (pending.waitingTimer) {
+      window.clearTimeout(pending.waitingTimer);
+    }
+    if (pending.stallTimer) {
+      window.clearTimeout(pending.stallTimer);
+    }
+  }
+
+  function staleAgentActivityDisposition(
+    sessionId: string | undefined,
+  ): "accept" | "raw" | "drop" {
+    const pending = pendingAgentRunRef.current;
+    if (!sessionId) {
+      // While a build is pending, only session-scoped OpenCode activity can
+      // advance or finish it. Unscoped events remain available in the raw log.
+      return pending ? "raw" : "accept";
+    }
+
+    if (!pending) {
+      // Session-scoped activity after a reset or finished build belongs to old
+      // OpenCode state. Do not let it leak into the current project surface.
+      return "drop";
+    }
+
+    return pending.sessionId === sessionId ? "accept" : "raw";
+  }
+
+  async function finishPendingAgentRun(sessionId?: string) {
+    const pending = pendingAgentRunRef.current;
+    if (!pending) return;
+    if (sessionId && pending.sessionId !== sessionId) return;
+
+    clearPendingAgentRunTimers(pending);
+    pendingAgentRunRef.current = undefined;
+    try {
+      const after = await ensureActiveProject();
+      saveActiveProjectName(pending.projectName);
+      setWorkspacePath(after.projectPath);
+      setProjectSummary(projectSummaryFromActiveProject(after, pending.projectName));
+      setProjectSource("tauri");
+
+      if (after.romExists) {
+        resetActiveRomSession();
+        setAgentRom({ path: after.romPath, stamp: Date.now() });
+        setPlayerScreenEvidence("checking");
+        setPlayerInputEvidence("none");
+        setPlayerAudioEvidence((current) =>
+          current === "captured" || current === "failed" ? current : "checking",
+        );
+        setMessages((current) => [
+          ...current,
+          makeMessage(
+            "agent",
+            "The agent produced a ROM file. I’m loading it now, but it is not marked playable until Drive16 has screen, input, and audio evidence.",
+            "opencode",
+          ),
+        ]);
+        setProjectActionNotice({
+          state: "warning",
+          label: "ROM built, checking",
+          detail: "Loading the player before marking the game playable.",
+        });
+        noteAction("ROM file built. Loading the player for verification.");
+        appendOpenCodeEvent(
+          "agent.rom.built",
+          `${after.romPath}; ${formatDurationMs(Date.now() - pending.startedAt)}`,
+        );
+        void auditActiveProjectMemory();
+        setBuildState("running");
+      } else {
+        const stale = after.status === "stale";
+        const detail = `${after.detail}: ${after.romPath}`;
+        setMessages((current) => [
+          ...current,
+          makeMessage(
+            "agent",
+            stale
+              ? `The agent changed the project, but it did not produce a fresh ROM. ${after.detail}.`
+              : `The agent stopped before producing a ROM. ${after.detail}.`,
+            "system",
+          ),
+        ]);
+        setProjectActionNotice({
+          state: stale ? "warning" : "missing",
+          label: stale ? "Build did not finish" : "ROM missing",
+          detail,
+        });
+        noteAction(stale ? "The source changed, but the ROM was not rebuilt." : "No ROM was built.");
+        appendOpenCodeEvent(stale ? "agent.rom.stale" : "agent.rom.missing", detail);
+        setBuildState("error");
+      }
+    } catch (error) {
+      const detail = errorDetail(error, "Could not refresh the active project after the agent finished");
+      setMessages((current) => [
+        ...current,
+        makeMessage("agent", `The agent finished, but I could not refresh the ROM: ${detail}`, "system"),
+      ]);
+      setProjectActionNotice({
+        state: "missing",
+        label: "Project refresh failed",
+        detail,
+      });
+      appendOpenCodeEvent("agent.refresh.failed", detail);
+      setBuildState("error");
+    } finally {
+      setOpenCodeBusy(false);
     }
   }
 
@@ -1303,28 +1793,141 @@ function App() {
       role,
       source,
       body,
-      time: "Now",
+      time: formatMessageTime(),
     };
   }
 
   function appendOpenCodeEvent(type: string, detail: string) {
+    appendOpenCodeRawEvent(type, detail);
+
+    if (isHeartbeatEvent(type, detail)) {
+      markOpenCodeHeartbeat();
+      return;
+    }
+
+    if (
+      detail === "OpenCode event received" &&
+      (type === "event" || type.toLowerCase().includes("connected"))
+    ) {
+      return;
+    }
+
     const id = openCodeEventIdRef.current;
     openCodeEventIdRef.current += 1;
-    setOpenCodeEvents((current) =>
-      [
+    setOpenCodeEvents((current) => {
+      const recentDuplicate = current
+        .slice(-8)
+        .some((event) => event.type === type && event.detail === detail);
+      if (recentDuplicate) {
+        return current;
+      }
+
+      return [
+        ...current,
         {
           id,
           type,
           detail,
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          }),
+          time: formatLogTime(),
         },
+      ].slice(-60);
+    });
+  }
+
+  function appendOpenCodeRawEvent(type: string, detail: string) {
+    const id = openCodeRawEventIdRef.current;
+    openCodeRawEventIdRef.current += 1;
+    setOpenCodeRawEvents((current) =>
+      [
         ...current,
-      ].slice(0, 8),
+        {
+          id,
+          type,
+          detail,
+          time: formatLogTime(),
+        },
+      ].slice(-200),
     );
+  }
+
+  function applyAgentEvidenceEvent(eventType: string) {
+    if (eventType === "agent.screenshot.checking") {
+      setPlayerScreenEvidence("checking");
+      return;
+    }
+    if (eventType === "agent.screenshot.checked") {
+      setPlayerScreenEvidence((current) => (current === "visible" ? "visible" : "captured"));
+      return;
+    }
+    if (eventType === "agent.screenshot.failed") {
+      setPlayerScreenEvidence("unverified");
+      return;
+    }
+    if (eventType === "agent.input.testing") {
+      setPlayerInputEvidence("testing");
+      return;
+    }
+    if (eventType === "agent.input.tested") {
+      setPlayerInputEvidence("tested");
+      return;
+    }
+    if (eventType === "agent.input.failed") {
+      setPlayerInputEvidence("failed");
+      return;
+    }
+    if (eventType === "agent.audio.checking") {
+      setPlayerAudioEvidence("checking");
+      return;
+    }
+    if (eventType === "agent.audio.checked") {
+      setPlayerAudioEvidence("captured");
+      return;
+    }
+    if (eventType === "agent.audio.failed") {
+      setPlayerAudioEvidence("failed");
+    }
+  }
+
+  async function auditActiveProjectMemory() {
+    if (!isTauriRuntime()) return;
+
+    try {
+      const audit = await invoke<ProjectMemoryAuditResult>("audit_active_project_memory");
+      const eventType =
+        audit.status === "ready"
+          ? "project.memory.ready"
+          : audit.status === "missing"
+            ? "project.memory.missing"
+            : "project.memory.warning";
+      appendOpenCodeEvent(eventType, `${audit.gate.toUpperCase()}: ${audit.detail}`);
+    } catch (error) {
+      appendOpenCodeEvent(
+        "project.memory.failed",
+        errorDetail(error, "Project memory audit failed"),
+      );
+    }
+  }
+
+  function markOpenCodeHeartbeat() {
+    clearOpenCodeHeartbeatTimer();
+    setOpenCodeHeartbeat({ active: true, time: formatLogTime() });
+    openCodeHeartbeatTimerRef.current = window.setTimeout(() => {
+      setOpenCodeHeartbeat((current) => ({ ...current, active: false }));
+      openCodeHeartbeatTimerRef.current = undefined;
+    }, openCodeHeartbeatTimeoutMs);
+  }
+
+  function clearOpenCodeHeartbeatTimer() {
+    if (!openCodeHeartbeatTimerRef.current) return;
+    window.clearTimeout(openCodeHeartbeatTimerRef.current);
+    openCodeHeartbeatTimerRef.current = undefined;
+  }
+
+  function resetBuildActivityLog() {
+    clearOpenCodeHeartbeatTimer();
+    setOpenCodeEvents([]);
+    setOpenCodeRawEvents([]);
+    setOpenCodeHeartbeat({ active: false, time: "" });
   }
 
   function noteAction(detail: string) {
@@ -1335,21 +1938,41 @@ function App() {
     try {
       const parsed = JSON.parse(data) as {
         type?: string;
+        payload?: {
+          type?: string;
+          properties?: {
+            type?: string;
+            sessionID?: string;
+            messageID?: string;
+            info?: { id?: string; role?: string };
+            part?: { type?: string; messageID?: string };
+          };
+        };
         properties?: {
+          type?: string;
           sessionID?: string;
           messageID?: string;
           info?: { id?: string; role?: string };
           part?: { type?: string; messageID?: string };
         };
       };
-      const type = parsed.type ?? "event";
-      const properties = parsed.properties;
+      const properties = parsed.payload?.properties ?? parsed.properties;
+      const type = properties?.type ?? parsed.payload?.type ?? parsed.type ?? "event";
+      if (type === "heartbeat") {
+        appendOpenCodeRawEvent("heartbeat", "OpenCode event received");
+        markOpenCodeHeartbeat();
+        return;
+      }
+      if (!properties && (type === "event" || type.toLowerCase().includes("connected"))) {
+        return;
+      }
       const detail =
         properties?.sessionID ??
         properties?.messageID ??
         properties?.info?.id ??
         properties?.part?.messageID ??
         "OpenCode event received";
+      if (detail === "OpenCode event received" && type.toLowerCase().endsWith("updated")) return;
       appendOpenCodeEvent(type, detail);
     } catch {
       appendOpenCodeEvent("event.raw", data.slice(0, 80));
@@ -1392,33 +2015,12 @@ function App() {
       }
     }
 
-    try {
-      const response = await fetch(previewOpenCode.healthUrl, {
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const health = (await response.json()) as { healthy?: boolean; version?: string };
-      setOpenCode({
-        ...previewOpenCode,
-        state: health.healthy ? "ready" : "warning",
-        detail: health.healthy
-          ? "OpenCode preview server is reachable"
-          : "OpenCode preview server reported unhealthy",
-        version: health.version,
-      });
-      setOpenCodeSource("preview");
-      appendOpenCodeEvent("server.ready", "OpenCode preview server is reachable");
-    } catch (error) {
-      setOpenCode({
-        ...previewOpenCode,
-        state: "warning",
-        detail:
-          error instanceof Error
-            ? error.message
-            : "OpenCode preview server is not reachable",
-      });
-      setOpenCodeSource("preview");
-    }
+    setOpenCode({
+      ...previewOpenCode,
+      state: "warning",
+      detail: "OpenCode checks run in the desktop app; browser preview does not probe the local sidecar.",
+    });
+    setOpenCodeSource("preview");
     return undefined;
   }
 
@@ -1547,6 +2149,7 @@ function App() {
   }
 
   function applyV1PromptResult(result: V1PromptResult, assetMode: PromptAssetMode = "core") {
+    resetActiveRomSession();
     setImportResult(undefined);
     setV1PromptResult(result);
     setV1PromptSource(isTauriRuntime() ? "tauri" : "preview");
@@ -1554,6 +2157,9 @@ function App() {
     setStarterSource(isTauriRuntime() ? "tauri" : "preview");
     setStarterBusy(false);
     setTransport("running");
+    setPlayerInputEvidence("none");
+    setPlayerAudioEvidence(result.audioMaxAbs > 0 ? "captured" : "silent");
+    setLastInputAction("No local input yet");
     setStarterRom({
       status: result.status,
       detail: result.detail,
@@ -1562,6 +2168,7 @@ function App() {
       romPath: result.romPath,
       screenshotPath: result.neutralScreenshotPath,
       frameStreamPath: result.frameStreamPath,
+      audioDumpPath: result.audioDumpPath,
       screenshotDataUrl: result.screenshotDataUrl,
       frames: result.frames,
       streamEvery: result.streamEvery,
@@ -1569,6 +2176,7 @@ function App() {
       frameWidth: result.frameWidth,
       frameHeight: result.frameHeight,
       framebufferFrames: result.framebufferFrames,
+      audioMaxAbs: result.audioMaxAbs,
     });
     setProjectSummary({
       generatedAt: result.generatedAt,
@@ -1868,7 +2476,18 @@ function App() {
       if (nextOptions.length > 0) {
         setModelOptions(nextOptions);
         if (!nextOptions.some((model) => model.id === activeModel)) {
-          setActiveModel(nextOptions[0].id);
+          const nextActiveModel = nextOptions[0].id;
+          setActiveModel(nextActiveModel);
+          savePersistedSettings({
+            modelProvider,
+            activeModel: nextActiveModel,
+            ollamaEndpoint,
+            ollamaModel,
+            enhancements,
+            comfyUiEndpoint,
+            comfyUiCheckpoint,
+            comfyUiLora,
+          });
         }
       }
       setModelsSource("ready");
@@ -1917,10 +2536,6 @@ function App() {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      setModelConnection({
-        state: "ready",
-        detail: "OpenRouter key accepted",
-      });
       appendOpenCodeEvent("model.ready", shortModelLabel(activeModel));
 
       // Hand the BYOK key to the OpenCode agent so chat prompts can build.
@@ -1933,11 +2548,13 @@ function App() {
             setAgentProviders((current) =>
               current.includes("openrouter") ? current : [...current, "openrouter"],
             );
+            saveOpenRouterAcceptedKey(trimmedKey);
             setModelConnection({
               state: "ready",
               detail: "OpenRouter key accepted and saved for the agent",
             });
           } else {
+            clearOpenRouterAcceptedKey();
             setModelConnection({
               state: "warning",
               detail: `Key accepted, but the agent could not activate OpenRouter: ${auth.detail}`,
@@ -1949,13 +2566,21 @@ function App() {
         } catch (error) {
           const detail = errorDetail(error, "Could not hand the key to the agent");
           appendOpenCodeEvent("agent.auth.failed", detail);
+          clearOpenRouterAcceptedKey();
           setModelConnection({
             state: "warning",
             detail: `Key accepted by OpenRouter, but the agent setup failed: ${detail}`,
           });
         }
+      } else {
+        saveOpenRouterAcceptedKey(trimmedKey);
+        setModelConnection({
+          state: "ready",
+          detail: "OpenRouter key accepted",
+        });
       }
     } catch (error) {
+      clearOpenRouterAcceptedKey();
       setModelConnection({
         state: "missing",
         detail:
@@ -2070,11 +2695,15 @@ function App() {
         ? await invoke<ComfyUiEndpointStatus>("check_comfyui_endpoint", {
             request: { endpoint, checkpoint, lora },
           })
-        : await checkComfyUiEndpointInBrowser(endpoint, checkpoint, lora);
+        : browserComfyUiEndpointStatus(endpoint);
 
       setComfyUiConnection(result);
       appendOpenCodeEvent(
-        result.state === "ready" ? "comfyui.ready" : "comfyui.missing",
+        result.state === "ready"
+          ? "comfyui.ready"
+          : result.state === "warning"
+            ? "comfyui.warning"
+            : "comfyui.missing",
         result.detail,
       );
     } catch (error) {
@@ -2098,12 +2727,27 @@ function App() {
 
   function handleOpenRouterKeyChange(value: string) {
     setOpenRouterKey(value);
-    saveOpenRouterSessionKey(value);
+    saveOpenRouterKey(value);
+    clearOpenRouterAcceptedKey();
     resetModelConnectionIfChecked("OpenRouter not tested");
   }
 
+  useEffect(() => {
+    saveOpenRouterKey(openRouterKey);
+  }, [openRouterKey]);
+
   function handleProviderChange(value: ModelProvider) {
     setModelProvider(value);
+    savePersistedSettings({
+      modelProvider: value,
+      activeModel,
+      ollamaEndpoint,
+      ollamaModel,
+      enhancements,
+      comfyUiEndpoint,
+      comfyUiCheckpoint,
+      comfyUiLora,
+    });
     // A provider already connected in OpenCode stays ready across switches;
     // only untested providers start from idle.
     if (value === "openrouter" && agentProviders.includes("openrouter")) {
@@ -2126,16 +2770,46 @@ function App() {
 
   function handleOpenRouterModelChange(value: string) {
     setActiveModel(value);
+    savePersistedSettings({
+      modelProvider,
+      activeModel: value,
+      ollamaEndpoint,
+      ollamaModel,
+      enhancements,
+      comfyUiEndpoint,
+      comfyUiCheckpoint,
+      comfyUiLora,
+    });
     resetModelConnectionIfChecked("OpenRouter not tested");
   }
 
   function handleOllamaEndpointChange(value: string) {
     setOllamaEndpoint(value);
+    savePersistedSettings({
+      modelProvider,
+      activeModel,
+      ollamaEndpoint: value,
+      ollamaModel,
+      enhancements,
+      comfyUiEndpoint,
+      comfyUiCheckpoint,
+      comfyUiLora,
+    });
     resetModelConnectionIfChecked("Ollama not tested");
   }
 
   function handleOllamaModelChange(value: string) {
     setOllamaModel(value);
+    savePersistedSettings({
+      modelProvider,
+      activeModel,
+      ollamaEndpoint,
+      ollamaModel: value,
+      enhancements,
+      comfyUiEndpoint,
+      comfyUiCheckpoint,
+      comfyUiLora,
+    });
     resetModelConnectionIfChecked("Ollama not tested");
   }
 
@@ -2150,16 +2824,46 @@ function App() {
 
   function handleComfyUiEndpointChange(value: string) {
     setComfyUiEndpoint(value);
+    savePersistedSettings({
+      modelProvider,
+      activeModel,
+      ollamaEndpoint,
+      ollamaModel,
+      enhancements,
+      comfyUiEndpoint: value,
+      comfyUiCheckpoint,
+      comfyUiLora,
+    });
     resetComfyUiConnectionIfChecked();
   }
 
   function handleComfyUiCheckpointChange(value: string) {
     setComfyUiCheckpoint(value);
+    savePersistedSettings({
+      modelProvider,
+      activeModel,
+      ollamaEndpoint,
+      ollamaModel,
+      enhancements,
+      comfyUiEndpoint,
+      comfyUiCheckpoint: value,
+      comfyUiLora,
+    });
     resetComfyUiConnectionIfChecked();
   }
 
   function handleComfyUiLoraChange(value: string) {
     setComfyUiLora(value);
+    savePersistedSettings({
+      modelProvider,
+      activeModel,
+      ollamaEndpoint,
+      ollamaModel,
+      enhancements,
+      comfyUiEndpoint,
+      comfyUiCheckpoint,
+      comfyUiLora: value,
+    });
     resetComfyUiConnectionIfChecked();
   }
 
@@ -2179,10 +2883,23 @@ function App() {
   }
 
   function handleEnhancementChange(key: keyof EnhancementSettings, enabled: boolean) {
-    setEnhancements((current) => ({
-      ...current,
-      [key]: enabled,
-    }));
+    setEnhancements((current) => {
+      const next = {
+        ...current,
+        [key]: enabled,
+      };
+      savePersistedSettings({
+        modelProvider,
+        activeModel,
+        ollamaEndpoint,
+        ollamaModel,
+        enhancements: next,
+        comfyUiEndpoint,
+        comfyUiCheckpoint,
+        comfyUiLora,
+      });
+      return next;
+    });
 
     if (key === "spriteGeneration" && !enabled) {
       setComfyUiConnection((current) => ({
@@ -2212,6 +2929,13 @@ function App() {
   }
 
   function startNewProject() {
+    disposeInteractivePlayer();
+    setPlayerCanvasActive(false);
+    setPlayerState("stopped");
+    setPlayerAudio("unavailable");
+    setPlayerScreenEvidence("none");
+    setPlayerInputEvidence("none");
+    setPlayerAudioEvidence("none");
     setMessages([
       makeMessage(
         "agent",
@@ -2227,16 +2951,52 @@ function App() {
     setV1PromptSource("idle");
     setOpenCodeSessionId(undefined);
     setAgentRom(undefined);
+    agentActivityRepairRef.current = createAgentActivityRepairState();
+    setLoadedPlayerRom(undefined);
+    setLastPlayerInput(undefined);
+    setLastInputAction("No local input yet");
+    resetBuildActivityLog();
+    resetActiveProjectName();
+    clearPendingAgentRunTimers(pendingAgentRunRef.current);
+    pendingAgentRunRef.current = undefined;
+    setOpenCodeBusy(false);
     if (isTauriRuntime()) {
       void resetActiveProject()
-        .then((project) => setWorkspacePath(project.projectPath))
+        .then((project) => {
+          setWorkspacePath(project.projectPath);
+          setProjectSummary(projectSummaryFromActiveProject(project, "Untitled Project"));
+          setProjectSource("tauri");
+        })
         .catch((error) => {
-          noteAction(errorDetail(error, "Could not reset the project workspace"));
+          const detail = errorDetail(error, "Could not reset the project workspace");
+          setProjectActionNotice({
+            state: "missing",
+            label: "Project reset failed",
+            detail,
+          });
+          appendOpenCodeEvent("project.reset.failed", detail);
+          noteAction(detail);
         });
     }
-    setTransport("running");
+    setTransport("paused");
     setSpriteX(52);
-    setProjectSummary(previewProjectSummary);
+    setStarterRom({
+      ...previewStarterRom,
+      detail: "Blank project ready. Build a ROM to preview it.",
+      projectPath: "artifacts/phase3/active-project",
+      romPath: "artifacts/phase3/active-project/out/rom.bin",
+    });
+    setStarterSource("preview");
+    setStarterBusy(false);
+    setBuildState("running");
+    setProjectSummary({
+      ...previewProjectSummary,
+      name: "Untitled Project",
+      projectPath: "artifacts/phase3/active-project",
+      romPath: "artifacts/phase3/active-project/out/rom.bin",
+      romStatus: "missing",
+      romDetail: "No ROM built yet",
+    });
     setProjectSource(isTauriRuntime() ? "checking" : "preview");
     setProjectActionNotice({
       state: "ready",
@@ -2245,8 +3005,6 @@ function App() {
     });
     noteAction("New project started from the blank starter template.");
     appendOpenCodeEvent("project.new", "Blank starter template loaded");
-    void loadProjectSummary();
-    void launchRom(undefined, "New starter project ready.");
   }
 
   async function saveProject() {
@@ -2316,10 +3074,17 @@ function App() {
       return;
     }
 
+    resetActiveRomSession();
     setImportResult(undefined);
     setImportReadiness(undefined);
     setV1PromptResult(undefined);
     setV1PromptSource("idle");
+    setAgentRom(undefined);
+    setOpenCodeSessionId(undefined);
+    setPlayerInputEvidence("none");
+    setPlayerAudioEvidence("none");
+    setLastInputAction("No local input yet");
+    saveActiveProjectName(target.name);
     setProjectSummary(projectSummaryFromSnapshot(target));
     setProjectActionNotice({
       state: "ready",
@@ -2350,6 +3115,7 @@ function App() {
   }
 
   function activateImportedRom(result: RomImportResult) {
+    resetActiveRomSession();
     setImportResult(result);
     setImportReadiness({
       generatedAt: result.generatedAt,
@@ -2366,12 +3132,28 @@ function App() {
     setV1PromptResult(undefined);
     setV1PromptSource("idle");
     setAgentRom(undefined);
+    setPlayerInputEvidence("none");
+    setPlayerAudioEvidence("none");
+    setLastInputAction("No local input yet");
     setProjectActionNotice({
       state: result.status,
       label: "Imported ROM active",
       detail: `${result.sourceName} copied to ${result.importPath}`,
     });
     noteAction(`Imported ROM active: ${result.sourceName}.`);
+  }
+
+  function resetActiveRomSession() {
+    disposeInteractivePlayer();
+    setPlayerCanvasActive(false);
+    setPlayerState("stopped");
+    setPlayerAudio("unavailable");
+    setPlayerScreenEvidence("none");
+    setPlayerInputEvidence("none");
+    setPlayerAudioEvidence("none");
+    setLoadedPlayerRom(undefined);
+    setLastPlayerInput(undefined);
+    setLastInputAction("No local input yet");
   }
 
   async function importRom() {
@@ -2426,7 +3208,7 @@ function App() {
       activateImportedRom(result);
       setLoadedPlayerRom(playerRomFromBytes(result.importPath, result.sourceName, selectedBytes));
       appendOpenCodeEvent("rom.imported", result.importPath);
-      void launchRom(result.importPath, "Imported ROM ready.");
+      void launchRom(result.importPath, "Imported ROM preview captured.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "ROM import setup failed";
       setProjectActionNotice({
@@ -2451,7 +3233,7 @@ function App() {
         : previewTestRomImport();
       activateImportedRom(result);
       appendOpenCodeEvent("rom.imported.test", result.importPath);
-      void launchRom(result.importPath, "Test ROM imported and ready.");
+      void launchRom(result.importPath, "Test ROM preview captured.");
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Test ROM import failed";
       setProjectActionNotice({
@@ -2468,11 +3250,25 @@ function App() {
 
   function runCurrentProject() {
     const activePath = importResult?.importPath ?? projectSummary.romPath;
-    noteAction(importResult ? "Verifying the imported ROM." : "Verifying the current starter ROM.");
+    if (!importResult && projectSummary.romStatus !== "ready") {
+      const detail = projectSummary.romDetail || "Build a ROM before verifying this project.";
+      setProjectActionNotice({
+        state: "missing",
+        label: "No ROM to verify",
+        detail,
+      });
+      noteAction("No ROM is available to verify yet.");
+      appendOpenCodeEvent("verify.no_rom", detail);
+      return;
+    }
+
+    noteAction(importResult ? "Verifying the imported ROM." : "Verifying the active project ROM.");
     appendOpenCodeEvent("verify.started", activePath);
     void launchRom(
-      importResult?.importPath,
-      importResult ? "Imported ROM verified." : "Project ROM verified.",
+      activePath,
+      importResult
+        ? "Imported ROM preview captured."
+        : "Active project ROM preview captured.",
     );
   }
 
@@ -2480,6 +3276,9 @@ function App() {
     if (!interactiveCoreReadiness.canPlay) {
       setPlayerState("stopped");
       setPlayerCanvasActive(false);
+      setPlayerScreenEvidence((current) =>
+        current === "captured" ? "captured" : "unverified",
+      );
       const detail = `${interactiveCoreReadiness.detail} ${interactiveCoreReadiness.verifyDetail}`;
       setProjectActionNotice({
         state: "warning",
@@ -2496,6 +3295,9 @@ function App() {
         "Browser preview cannot read this ROM from disk. Import a ROM in this browser session or use the desktop app to Play the current project.";
       setPlayerState("stopped");
       setPlayerCanvasActive(false);
+      setPlayerScreenEvidence((current) =>
+        current === "captured" ? "captured" : "unverified",
+      );
       setProjectActionNotice({
         state: "warning",
         label: "Desktop app needed for Play",
@@ -2508,6 +3310,9 @@ function App() {
 
     setPlayerState("loading");
     setPlayerCanvasActive(true);
+    setPlayerAudio("muted");
+    setPlayerVolume(defaultPlayerVolume);
+    setPlayerScreenEvidence("checking");
     noteAction(`Preparing ${activeRomSource.label} for interactive Play.`);
     appendOpenCodeEvent("player.prepare.started", activeRomSource.path);
 
@@ -2522,25 +3327,31 @@ function App() {
 
       disposeInteractivePlayer();
       const core = await readConfiguredInteractiveCoreForPlayer();
-      const runtime = await launchNostalgistMegadrivePlayer({
-        canvas,
-        core,
-        rom: payload,
-      });
+      const runtime = await withTimeout(
+        launchNostalgistMegadrivePlayer({
+          canvas,
+          core,
+          rom: payload,
+        }),
+        playerSetupTimeoutMs,
+        `Interactive Play setup timed out after ${formatDurationMs(playerSetupTimeoutMs)}.`,
+      );
       playerRuntimeRef.current = runtime;
       setPlayerState("playing");
-      void resumeNostalgistAudio(runtime).then(setPlayerAudio);
+      setPlayerAudio("muted");
+      setPlayerVolume(defaultPlayerVolume);
+      schedulePlayerVisibilityCheck(payload.sourcePath);
       setProjectActionNotice({
-        state: "ready",
-        label: "Interactive player started",
-        detail: `${payload.sourceName} is running with ${
+        state: "warning",
+        label: "Player started muted",
+        detail: `${payload.sourceName} started with ${
           runtime.coreSource === "user" ? "the user core" : "the dev CDN core"
-        }.`,
+        }. App volume is 0%; raise it manually if you want sound.`,
       });
       noteAction(
-        `Playing ${payload.sourceName} with ${
+        `Player started for ${payload.sourceName} with ${
           runtime.coreSource === "user" ? "the user core" : "the dev CDN core"
-        }.`,
+        }; app volume is 0%.`,
       );
       appendOpenCodeEvent("player.playing", `${payload.sourcePath} via ${runtime.coreSource}`);
     } catch (error) {
@@ -2552,6 +3363,9 @@ function App() {
       disposeInteractivePlayer();
       setPlayerCanvasActive(false);
       setPlayerState("error");
+      setPlayerScreenEvidence((current) =>
+        current === "captured" ? "captured" : "unverified",
+      );
       setProjectActionNotice({
         state: launchFailure ? "warning" : "missing",
         label: launchFailure ? "Play setup needed" : "Play setup failed",
@@ -2559,6 +3373,99 @@ function App() {
       });
       noteAction(launchFailure ? launchFailure.detail : detail);
       appendOpenCodeEvent("player.failed", detail);
+    }
+  }
+
+  function schedulePlayerVisibilityCheck(sourcePath: string) {
+    const sampleDelays = [900, 1_800, 3_200, 6_000];
+    const samples: Array<"visible" | "blank" | "unknown"> = [];
+    let reported = false;
+
+    sampleDelays.forEach((delay) => {
+      window.setTimeout(() => {
+        const runtime = playerRuntimeRef.current;
+        if (!runtime || runtime.rom.sourcePath !== sourcePath || reported) return;
+
+        const visibility = readCanvasVisibility(playerCanvasRef.current);
+        samples.push(visibility);
+        if (visibility === "visible") {
+          reported = true;
+          setPlayerScreenEvidence("visible");
+          const detail =
+            "The player is rendering visible frames. Controls and audio still need evidence before calling this game playable.";
+          setProjectActionNotice({
+            state: "warning",
+            label: "Screen visible, playtest incomplete",
+            detail,
+          });
+          noteAction(detail);
+          appendOpenCodeEvent("player.screen.visible", sourcePath);
+          return;
+        }
+        if (samples.length < sampleDelays.length) return;
+
+        reported = true;
+        const unknownCount = samples.filter((sample) => sample === "unknown").length;
+        const mostlyUnknown = unknownCount >= Math.ceil(samples.length / 2);
+        setPlayerScreenEvidence(mostlyUnknown ? "inconclusive" : "unverified");
+
+        const detail =
+          mostlyUnknown
+            ? "The player started, but Drive16 could not read enough canvas pixels to prove the screen. Treat playability as unverified."
+            : "The player started, but Drive16 could not detect visible non-black frame output. The ROM may be blank, stalled, or missing a readable first state.";
+        setProjectActionNotice({
+          state: "warning",
+          label: mostlyUnknown ? "Screen check inconclusive" : "Screen not verified",
+          detail,
+        });
+        setMessages((current) => [
+          ...current,
+          makeMessage("agent", detail, "system"),
+        ]);
+        noteAction(detail);
+        appendOpenCodeEvent(
+          mostlyUnknown ? "player.screen.inconclusive" : "player.screen.unverified",
+          sourcePath,
+        );
+      }, delay);
+    });
+  }
+
+  function readCanvasVisibility(canvas: HTMLCanvasElement | null): "visible" | "blank" | "unknown" {
+    if (!canvas || canvas.width <= 0 || canvas.height <= 0) return "unknown";
+
+    try {
+      const width = Math.min(96, canvas.width);
+      const height = Math.min(72, canvas.height);
+      const sample = document.createElement("canvas");
+      sample.width = width;
+      sample.height = height;
+      const context = sample.getContext("2d", { willReadFrequently: true });
+      if (!context) return "unknown";
+      context.drawImage(canvas, 0, 0, width, height);
+      const pixels = context.getImageData(0, 0, width, height).data;
+      let opaquePixels = 0;
+      let nonBlackPixels = 0;
+      let minBrightness = 255;
+      let maxBrightness = 0;
+      for (let index = 0; index < pixels.length; index += 16) {
+        const alpha = pixels[index + 3];
+        const brightness = Math.max(pixels[index], pixels[index + 1], pixels[index + 2]);
+        if (alpha > 0) {
+          opaquePixels += 1;
+          minBrightness = Math.min(minBrightness, brightness);
+          maxBrightness = Math.max(maxBrightness, brightness);
+          if (brightness > 8) {
+            nonBlackPixels += 1;
+          }
+        }
+      }
+      if (opaquePixels < 20) return "unknown";
+      if (nonBlackPixels > 12) return "visible";
+      if (maxBrightness - minBrightness > 8) return "visible";
+      return "blank";
+    } catch {
+      return "unknown";
     }
   }
 
@@ -2702,6 +3609,7 @@ function App() {
     } finally {
       playerRuntimeRef.current = undefined;
       setPlayerAudio("unavailable");
+      setPlayerVolume(defaultPlayerVolume);
     }
   }
 
@@ -2759,22 +3667,107 @@ function App() {
   function focusRomInput() {
     setRomInputFocused(true);
     romViewportRef.current?.focus();
-    const runtime = playerRuntimeRef.current;
-    if (runtime && playerAudio === "unavailable") {
-      void resumeNostalgistAudio(runtime).then(setPlayerAudio);
-    }
     noteAction("ROM input focus is on the viewport.");
     appendOpenCodeEvent("input.focused", projectSummary.romPath);
   }
 
-  function toggleInteractivePlayerMute() {
+  function setInteractivePlayerVolume(value: number) {
+    const nextVolume = clampPlayerVolume(value);
+    setPlayerVolume(nextVolume);
     const runtime = playerRuntimeRef.current;
-    if (!runtime) return;
-    if (playerAudio === "unavailable") {
-      void resumeNostalgistAudio(runtime).then(setPlayerAudio);
+    if (!runtime) {
+      setPlayerAudio(nextVolume > 0 ? "needs-gesture" : "unavailable");
       return;
     }
-    setPlayerAudio(toggleNostalgistMute(runtime));
+
+    void setNostalgistVolume(runtime, nextVolume).then((state) => {
+      setPlayerAudio(nextVolume === 0 ? "muted" : state);
+      appendOpenCodeEvent("player.audio.volume", `${nextVolume}%`);
+      if (nextVolume === 0) {
+        setProjectActionNotice({
+          state: "warning",
+          label: "Volume muted",
+          detail: "App volume is 0%. Raise the slider manually if you want sound.",
+        });
+        noteAction("App volume is muted.");
+      } else if (state === "needs-gesture") {
+        const detail =
+          "Sound is waiting for the browser audio context. Adjust the volume again after clicking the game screen.";
+        setProjectActionNotice({
+          state: "warning",
+          label: "Sound needs a click",
+          detail,
+        });
+        noteAction(detail);
+      }
+    });
+  }
+
+  function toggleInteractivePlayerMute() {
+    const runtime = playerRuntimeRef.current;
+    if (!runtime) {
+      const detail = "Start a ROM before changing audio.";
+      setProjectActionNotice({
+        state: "warning",
+        label: "Audio unavailable",
+        detail,
+      });
+      noteAction(detail);
+      appendOpenCodeEvent("player.audio.unavailable", "No interactive ROM is running");
+      return;
+    }
+    if (playerVolume === 0) {
+      const detail = "App volume is 0%. Use the volume slider to raise sound deliberately.";
+      setProjectActionNotice({
+        state: "warning",
+        label: "Volume is muted",
+        detail,
+      });
+      noteAction(detail);
+      appendOpenCodeEvent("player.audio.volume", "0%");
+      return;
+    }
+    if (playerAudio === "unavailable" || playerAudio === "needs-gesture") {
+      void setNostalgistVolume(runtime, playerVolume).then((state) => {
+        setPlayerAudio(state);
+        if (state === "unavailable") {
+          const detail =
+            "Audio is not available in this player session yet. The ROM may have no audio output, or the web audio context is unavailable for this core session.";
+          setProjectActionNotice({
+            state: "warning",
+            label: "Audio unavailable",
+            detail,
+          });
+          noteAction(detail);
+          appendOpenCodeEvent("player.audio.unavailable", runtime.rom.sourcePath);
+        } else if (state === "needs-gesture") {
+          const detail =
+            "Sound is still waiting for the browser audio context. Click the game screen, then try Enable sound again.";
+          setProjectActionNotice({
+            state: "warning",
+            label: "Sound needs a click",
+            detail,
+          });
+          noteAction(detail);
+          appendOpenCodeEvent("player.audio.needs_gesture", runtime.rom.sourcePath);
+        } else {
+          noteAction(state === "audible" ? "Sound is on." : "Sound is muted.");
+          appendOpenCodeEvent("player.audio", state);
+        }
+      });
+      return;
+    }
+    void setNostalgistVolume(runtime, defaultPlayerVolume).then(() => {
+      setPlayerVolume(defaultPlayerVolume);
+      setPlayerAudio("muted");
+      setProjectActionNotice({
+        state: "warning",
+        label: "Volume muted",
+        detail: "App volume is 0%. Raise the slider manually if you want sound.",
+      });
+      noteAction("App volume is muted.");
+      appendOpenCodeEvent("player.audio.volume", "0%");
+    });
   }
 
   function handleRomKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -2835,6 +3828,7 @@ function App() {
     setBuildState("building");
     setV1PromptSource("running");
     setLastInputAction("Right proof verifying");
+    setPlayerInputEvidence("testing");
     noteAction("Verifying scripted Right-input proof.");
     appendOpenCodeEvent("input.proof.started", "Scripted Right input");
 
@@ -2842,6 +3836,7 @@ function App() {
       const promptResult = await runV1Prompt(prompt);
       applyV1PromptResult(promptResult, "core");
       setLastInputAction("Right proof passed");
+      setPlayerInputEvidence("tested");
       setMessages((current) => [
         ...current,
         makeMessage(
@@ -2857,6 +3852,7 @@ function App() {
       setBuildState("error");
       setV1PromptSource("error");
       setLastInputAction("Right proof failed");
+      setPlayerInputEvidence("failed");
       setMessages((current) => [
         ...current,
         makeMessage("agent", `Scripted Right-input proof failed. ${detail}`, "proof"),
@@ -2913,6 +3909,11 @@ function App() {
     if (!isTauriRuntime()) {
       setStarterRom(makePreviewStarterRom(romPath));
       setStarterSource("preview");
+      if (romPath) {
+        setPlayerScreenEvidence((current) =>
+          current === "visible" ? "visible" : "captured",
+        );
+      }
       setBuildState("running");
       noteAction(`${doneMessage} Browser preview is using simulated frames.`);
       setStarterBusy(false);
@@ -2925,6 +3926,24 @@ function App() {
         : await invoke<StarterRomPreview>("launch_starter_rom");
       setStarterRom(preview);
       setStarterSource("tauri");
+      if (romPath) {
+        setPlayerScreenEvidence((current) =>
+          current === "visible" ? "visible" : "captured",
+        );
+        setPlayerAudioEvidence(
+          typeof preview.audioMaxAbs === "number"
+            ? preview.audioMaxAbs > 0
+              ? "captured"
+              : "silent"
+            : "none",
+        );
+        appendOpenCodeEvent(
+          preview.audioMaxAbs && preview.audioMaxAbs > 0
+            ? "preview.audio.captured"
+            : "preview.audio.silent",
+          `${preview.audioDumpPath ?? "audio dump"}; maxAbs=${preview.audioMaxAbs ?? 0}`,
+        );
+      }
       setBuildState("running");
       noteAction(doneMessage);
     } catch (error) {
@@ -2944,6 +3963,13 @@ function App() {
       setStarterBusy(false);
     }
   }
+
+  const providerSetupHint =
+    modelConnection.state === "ready" || agentProviders.includes("openrouter")
+      ? ""
+      : modelProvider === "openrouter" && openRouterKey.trim()
+        ? "Open Settings to verify your saved key"
+        : "Add a model key in Settings to start building";
 
   return (
     <main
@@ -2973,8 +3999,8 @@ function App() {
         }}
       />
       <TopBar
-        buildLabel={buildLabel}
-        buildState={buildState}
+        buildLabel={topBarStatus.label}
+        buildState={topBarStatus.state}
         exportBusy={exportBusy}
         menuOpen={projectMenuOpen}
         projectName={projectSummary.name}
@@ -2992,14 +4018,15 @@ function App() {
       <section className="workspace" aria-label="Drive16 workspace">
         <ChatRail
           activityNote={actionDetail}
+          buildEvents={openCodeEvents}
+          heartbeat={openCodeHeartbeat}
+          rawBuildEvents={openCodeRawEvents}
           busy={openCodeBusy || buildState === "building"}
           collapsed={conversationCollapsed}
           draft={draft}
           messages={messages}
           messagesRef={messagesRef}
-          needsProviderSetup={
-            modelConnection.state !== "ready" && !agentProviders.includes("openrouter")
-          }
+          providerSetupHint={providerSetupHint}
           sendDisabled={openCodeBusy}
           onDraftChange={setDraft}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -3016,10 +4043,16 @@ function App() {
           keyboardBindings={keyboardBindingRows}
           keyboardMappings={keyboardMappings}
           lastInputAction={lastInputAction}
+          playerInputEvidence={playerInputEvidence}
           playerAudio={playerAudio}
+          playerAudioEvidence={playerAudioEvidence}
+          playerVolume={playerVolume}
           playerCanvasActive={playerCanvasActive}
+          playerScreenEvidence={playerScreenEvidence}
           playerState={playerState}
+          playDisabled={starterBusy || buildState === "building" || !activeRomPlayable}
           profileSource={inputProfile.source}
+          romUnavailable={!activeRomPlayable}
           romInputFocused={romInputFocused}
           romLabel={activeRomSource.label}
           sessionActive={Boolean(playerRuntimeRef.current)}
@@ -3045,6 +4078,7 @@ function App() {
           onToggleFocus={toggleEmulatorFocus}
           onToggleMute={toggleInteractivePlayerMute}
           onTogglePause={toggleInteractivePlayerPause}
+          onVolumeChange={setInteractivePlayerVolume}
         />
       </section>
 
@@ -3184,12 +4218,106 @@ function errorDetail(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function formatDurationMs(durationMs: number) {
+  if (durationMs < 1000) return `${durationMs}ms`;
+  return `${(durationMs / 1000).toFixed(1)}s`;
+}
+
+function formatMessageTime(date = new Date()) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatLogTime(date = new Date()) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function isHeartbeatEvent(type: string, detail: string) {
+  return type.toLowerCase().includes("heartbeat") || detail.toLowerCase().includes("heartbeat");
+}
+
 function isV1Prompt(text: string) {
   const normalized = text.toLowerCase();
   return (
     normalized.includes("sprite") &&
     normalized.includes("music") &&
     (normalized.includes("move") || normalized.includes("left") || normalized.includes("right"))
+  );
+}
+
+function clarifyingReplyForBuildPrompt(text: string) {
+  const normalized = text.toLowerCase().trim();
+  if (!looksLikeBuildPrompt(normalized)) return undefined;
+  if (/just build|don't ask|do not ask|no questions|simple|basic/.test(normalized)) {
+    return undefined;
+  }
+  if (mentionsKnownGameShape(normalized)) return undefined;
+  if (!/\b(game|rom)\b/.test(normalized)) return undefined;
+
+  return [
+    "Before I build, give me a little direction:",
+    "1. What genre or reference should it follow?",
+    "2. What should the player control?",
+    "3. Should I use primitive tiles first, or try generated sprites/music?",
+  ].join("\n");
+}
+
+function defaultPlanForBuildPrompt(text: string, enabledEnhancements: EnhancementSettings) {
+  const normalized = text.toLowerCase();
+  if (looksLikeFollowUpPrompt(normalized)) {
+    return "I’ll treat this as a follow-up on the current project: read the game notes, make the requested change in the active folder, rebuild, and check the screen/input/audio evidence before saying it worked.";
+  }
+  if (!looksLikeBuildPrompt(normalized)) return undefined;
+
+  const assetPlan = [
+    enabledEnhancements.spriteGeneration
+      ? "ComfyUI sprites for the main game objects if the local generator is reachable"
+      : "primitive or bundled sprites",
+    enabledEnhancements.musicGeneration
+      ? "a short MML loop unless you asked for no music"
+      : "no generated music unless enabled",
+  ].join(", ");
+
+  return `I’m starting the build with Drive16’s standard first-pass checklist: visible start state, working controls, score/state sanity, ${assetPlan}, build, screenshot check, input check, and audio check when sound is expected. Actual tool activity will appear in the build log.`;
+}
+
+function looksLikeBuildPrompt(normalized: string) {
+  return /\b(make|build|create|add|generate|turn|change|fix|repair)\b/.test(normalized);
+}
+
+function mentionsKnownGameShape(normalized: string) {
+  return /\b(snake|sprite|pong|breakout|platformer|shooter|racing|maze|runner|space|asteroids|tetris|pac|pinball|fighting|rpg)\b/.test(normalized);
+}
+
+function looksLikeFollowUpPrompt(normalized: string) {
+  return (
+    /\b(change|fix|repair|adjust|update|improve|tweak|refine|iterate|continue|remove|replace)\b/.test(
+      normalized,
+    ) ||
+    /\bmake (it|this|the)\b/.test(normalized) ||
+    /\b(faster|slower|bigger|smaller|harder|easier|louder|quieter)\b/.test(normalized)
   );
 }
 
@@ -3233,7 +4361,7 @@ function getConversationMode(
       return {
         state: "missing",
         label: "OpenRouter key needed",
-        detail: "Paste a session key in Settings; it stays in this app window.",
+        detail: "Paste an API key in Settings; it stays on this machine.",
       };
     }
 
@@ -3280,7 +4408,7 @@ function freeformGateMessage(
   }
 
   if (!openRouterKeyPresent) {
-    return "OpenRouter needs a session key before freeform chat can answer. Paste a BYOK key in Agent Settings and test it; the key stays in this app window and is not committed to the project. ROM-changing prompts still use the verified local build path.";
+    return "OpenRouter needs an API key before freeform chat can answer. Paste a BYOK key in Agent Settings and test it; the key stays on this machine and is not committed to the project. ROM-changing prompts still use the verified local build path.";
   }
 
   if (connection.state !== "ready") {
@@ -3300,6 +4428,24 @@ function openRouterReplyFailureMessage(detail: string) {
     return `OpenRouter could not answer because the request failed: ${detail}.`;
   }
   return `OpenRouter could not answer: ${detail}.`;
+}
+
+function guardUnverifiedModelReply(content: string) {
+  if (!freeformReplyClaimsLocalProof(content)) return content;
+
+  return [
+    "I can’t treat that as verified because this was a freeform model reply, not a local Drive16 build.",
+    "To prove a ROM works, Drive16 needs build, screen, input, and audio evidence from the local tools.",
+    `Model draft: ${content}`,
+  ].join("\n\n");
+}
+
+function freeformReplyClaimsLocalProof(content: string) {
+  return /\b(rom|music|audio|sound|build|compiled?|verified|playable|loaded)\b/i.test(
+    content,
+  ) && /\b(built|compiled?|verified|ready|playing|playable|works?|loaded|finished|successfully)\b/i.test(
+    content,
+  );
 }
 
 function preflightSummaryLabel(state: HealthState, source = "") {
@@ -3362,6 +4508,58 @@ function activeRomSourceFor(
     storage: "repo",
     canVerify: true,
   };
+}
+
+function canPlayActiveRom(activeRomSource: ActiveRomSource, projectSummary: ProjectSummary) {
+  if (activeRomSource.kind === "imported") return true;
+  if (activeRomSource.kind === "generated" && activeRomSource.path !== projectSummary.romPath) {
+    return true;
+  }
+  return projectSummary.romStatus === "ready";
+}
+
+function appPlayabilityGateState({
+  activeRomPlayable,
+  lastInputAction,
+  playerAudio,
+  playerAudioEvidence,
+  playerInputEvidence,
+  playerScreenEvidence,
+  proofMaxAbs,
+  sessionActive,
+}: {
+  activeRomPlayable: boolean;
+  lastInputAction: string;
+  playerAudio: PlayerAudioState;
+  playerAudioEvidence: PlayerAudioEvidence;
+  playerInputEvidence: PlayerInputEvidence;
+  playerScreenEvidence: PlayerScreenEvidence;
+  proofMaxAbs?: number;
+  sessionActive: boolean;
+}): HealthState {
+  if (!activeRomPlayable) return "missing";
+
+  const screenState: HealthState = playerScreenEvidence === "visible" ? "ready" : "warning";
+  const inputState: HealthState =
+    playerInputEvidence === "failed"
+      ? "missing"
+      : playerInputEvidence === "tested" ||
+          (sessionActive && lastInputAction !== "No local input yet")
+        ? "ready"
+        : "warning";
+  const audioState: HealthState =
+    playerAudioEvidence === "failed" || playerAudioEvidence === "silent"
+      ? "missing"
+      : playerAudioEvidence === "captured" ||
+          playerAudio === "audible" ||
+          (typeof proofMaxAbs === "number" && proofMaxAbs > 0)
+        ? "ready"
+        : "warning";
+  const states = [screenState, inputState, audioState];
+
+  if (states.includes("missing")) return "missing";
+  if (states.every((state) => state === "ready")) return "ready";
+  return "warning";
 }
 
 function playerStateLabel(state: PlayerSessionState) {
@@ -3650,6 +4848,43 @@ function projectSummaryFromImport(result: RomImportResult): ProjectSummary {
   };
 }
 
+function projectSummaryFromActiveProject(
+  project: ActiveProject,
+  name = "Untitled Project",
+): ProjectSummary {
+  const romStatus: HealthState = project.romExists
+    ? "ready"
+    : project.status === "stale"
+      ? "warning"
+      : "missing";
+  return {
+    generatedAt: project.generatedAt,
+    name,
+    projectPath: project.projectPath,
+    romPath: project.romPath,
+    exportDirectory: previewProjectSummary.exportDirectory,
+    romStatus,
+    romDetail: project.detail,
+    files: [
+      {
+        label: "Main C",
+        path: `${project.projectPath}/src/main.c`,
+        state: "ready",
+      },
+      {
+        label: "Resources",
+        path: `${project.projectPath}/res/resources.res`,
+        state: "ready",
+      },
+      {
+        label: "ROM",
+        path: project.romPath,
+        state: romStatus,
+      },
+    ],
+  };
+}
+
 function projectSummaryFromSnapshot(snapshot: ProjectSnapshot): ProjectSummary {
   const romPath = `${snapshot.projectPath}/out/rom.bin`;
   return {
@@ -3678,6 +4913,33 @@ function projectSummaryFromSnapshot(snapshot: ProjectSnapshot): ProjectSummary {
       },
     ],
   };
+}
+
+function projectNameFromPrompt(prompt: string) {
+  const lower = prompt.toLowerCase();
+  const knownGames: Array<[string, string]> = [
+    ["snake", "Snake"],
+    ["asteroids", "Asteroids"],
+    ["asteroid", "Asteroids"],
+    ["pong", "Pong"],
+    ["breakout", "Breakout"],
+    ["tetris", "Tetris"],
+    ["space invaders", "Space Invaders"],
+    ["platformer", "Platformer"],
+  ];
+  const match = knownGames.find(([needle]) => lower.includes(needle));
+  if (match) return match[1];
+
+  const cleaned = prompt
+    .replace(/^(please\s+)?(make|create|build|write|generate)\s+(a|an|the)?\s*/i, "")
+    .replace(/\b(simple|basic|version|game|of|for|the|sega|genesis)\b/gi, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" ");
+  if (!cleaned) return "Untitled Project";
+  return cleaned.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function acceptedRomExtensionForName(fileName: string, extensions: string[]) {
@@ -3774,40 +5036,22 @@ function providerDisplayLabel(
   return `Ollama ${shortOllamaLabel(ollamaModel)}`;
 }
 
-async function checkComfyUiEndpointInBrowser(
-  endpoint: string,
-  _checkpoint: string,
-  _lora: string,
-): Promise<ComfyUiEndpointStatus> {
+function browserComfyUiEndpointStatus(endpoint: string): ComfyUiEndpointStatus {
   const baseUrl = normalizeComfyUiEndpoint(endpoint);
   const systemStatsUrl = `${baseUrl}/system_stats`;
-  const response = await fetch(systemStatsUrl, {
-    headers: { Accept: "application/json" },
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-  const stats = (await response.json()) as {
-    system?: { comfyui_version?: string };
-    devices?: unknown[];
-  };
-  if (!stats.system) {
-    throw new Error("system stats missing");
-  }
 
   return {
     generatedAt: Date.now().toString(),
-    state: "ready",
-    detail: "ComfyUI system stats available",
+    state: "warning",
+    detail: "Use the desktop app to test ComfyUI; browser preview cannot read the local API.",
     baseUrl,
     systemStatsUrl,
-    version: stats.system.comfyui_version,
-    devices: Array.isArray(stats.devices) ? stats.devices.length : 0,
+    devices: 0,
     checks: [
       {
         name: "API",
-        state: "ready",
-        detail: "System stats available",
+        state: "warning",
+        detail: "ComfyUI checks run through the native app.",
       },
     ],
   };

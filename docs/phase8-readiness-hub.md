@@ -25,7 +25,15 @@ checks:
 
 ## Boundaries
 
-- No API keys are persisted.
+- OpenRouter API keys are now kept in local app storage for refresh survival and
+  synced into OpenCode auth when tested. A successful test also stores a local
+  accepted-key marker for that exact saved key so Settings can reopen as
+  connected after refresh; changing or clearing the key clears the accepted
+  state. Keys must still never be committed, logged, exported, or captured in
+  evidence artifacts.
+- The desktop shell uses the active project workspace as the project header
+  source. The older native starter-project summary must not overwrite the
+  active project name on refresh.
 - No emulator cores are bundled or downloaded.
 - No packaging, signing, notarization, CSP, or license decision was changed.
 - OpenRouter freeform replies and the CORE local proof route from Phase 8 Slice
