@@ -18,7 +18,7 @@ Drive16:  (writes C, composes an FM song, builds, verifies)  →  the game
           appears on the right, playable
 ```
 
-## Current status (2026-07-08)
+## Current status (2026-07-09)
 
 The desktop shell and local tool loop are real, but the builder is still in a
 reliability/playability hardening phase. A ROM existing is not treated as proof
@@ -34,9 +34,9 @@ that the generated game is good or playable.
 | Original music through MML | Tooling works; chat-built games must still prove it was wired and captured |
 | AI sprites through ComfyUI | Tooling exists; Settings can check/launch local ComfyUI, but the agent must disclose fallback art when unavailable |
 | Asset and sound disclosure | In progress: `ASSETS.md` is the role ledger and the project menu previews its rows |
-| Playability verification | In progress: screen/input/audio evidence is visible and common genre gates are being wired into the agent loop |
-| Live game-quality audit | Pending; verifier/template exists for Snake, Pong, Tetris, and Asteroids native runs |
-| Model bakeoff | Pending; verifier scaffold exists, but it waits on the live game-quality audit |
+| Playability verification | Working for the primitive/fallback audit: screen, input, restart, audio, genre, freshness, and project-memory evidence are required |
+| Live game-quality audit | Complete for DeepSeek V3.1 primitive/fallback runs across Snake, Pong, Tetris, and Asteroids |
+| Model bakeoff | Pending; live-audit plumbing is green, but first-run UX and generated-game quality are being raised before comparison |
 | Ollama as the agent brain | Planned (readiness check only) |
 | Distributable .app/.dmg (currently runs from the repo checkout) | Planned (packaging track) |
 | LICENSE file | Pending owner confirmation (MIT proposed) |
@@ -158,6 +158,7 @@ pnpm --dir app check:live-game-audit-readiness # writes primitive/fallback vs ge
 pnpm --dir app prepare:live-game-audit        # refreshes readiness, then writes report.json
 pnpm --dir app prepare:live-game-audit:prompt # prepares one Snake/Pong/Tetris/Asteroids run packet
 pnpm --dir app run:live-game-audit:prompt -- --prompt snake-basic --model openrouter/<model>
+pnpm --dir app promote:live-game-audit -- --run snake-basic=<run-id> --run pong-basic=<run-id> --run tetris-basic=<run-id> --run asteroids-basic=<run-id>
 pnpm --dir app verify:opencode-audio-trace    # self-test audio trace guard for generated-game audits
 pnpm --dir app verify:live-game-audit         # self-test the next live game-quality audit gate
 pnpm --dir app verify:live-game-audit:report  # fails until all live prompt runs have evidence files

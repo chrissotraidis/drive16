@@ -98,6 +98,14 @@ const genreEvidencePhrases = {
     "line clear or stacking present",
     "game-over possible",
   ],
+  asteroids: [
+    "ship, asteroids, and shots visible",
+    "rotation or thrust changes ship",
+    "firing creates moving projectile",
+    "asteroids move or wrap",
+    "collisions/destruction affect state",
+    "restart after death/game-over works",
+  ],
 };
 
 function parseArgs(argv) {
@@ -105,6 +113,7 @@ function parseArgs(argv) {
     prompt: "snake-basic",
     model: process.env.DRIVE16_LIVE_AUDIT_MODEL || "",
     runAgent: false,
+    resumeRun: "",
     runId: "",
     runsRoot: defaultRunsRoot,
     timeoutSeconds: 2400,
@@ -120,6 +129,8 @@ function parseArgs(argv) {
       args.model = argv[++index];
     } else if (arg === "--run-agent") {
       args.runAgent = true;
+    } else if (arg === "--resume-run") {
+      args.resumeRun = argv[++index];
     } else if (arg === "--run-id") {
       args.runId = argv[++index];
     } else if (arg === "--runs-root") {
@@ -150,6 +161,7 @@ Asteroids audit; it does not mark the final report passed by itself.
 Options:
   --prompt <id>           snake-basic, pong-basic, tetris-basic, or asteroids-basic.
   --run-agent             Actually run opencode after preparing the packet.
+  --resume-run <run-id>   Continue an existing failed run without deleting its project or trace.
   --model <model>         OpenCode model, for example openrouter/deepseek/deepseek-chat-v3.1.
                           Defaults to DRIVE16_LIVE_AUDIT_MODEL.
   --run-id <id>           Custom run folder suffix.
@@ -308,6 +320,19 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
   ].join("\n");
 }
 
+function resumePromptText({ prompt, projectPath, runPath, readiness, firstBuildSeed }) {
+  return [
+    promptText({ prompt, projectPath, readiness, firstBuildSeed }),
+    "",
+    "Continuation requirements:",
+    `- This is a repair continuation for the existing run at ${runPath}. Do not replace the project or discard working gameplay.`,
+    `- Read ${path.join(runPath, "run-record.json")} and repair every recorded issue before finishing.`,
+    "- Preserve the existing ROM functionality, then rerun the missing emulator evidence calls.",
+    "- Audio is required for this audit. Do not claim the user requested no audio; add a small Genesis-safe music or SFX resource when needed, rebuild, and capture non-silent audio evidence.",
+    "- Update GAME.md, ASSETS.md, and PLAYTEST.md so their claims match the fresh build and evidence.",
+  ].join("\n");
+}
+
 async function maybeCopyFrame(runPath, notBeforeMs) {
   if (!existsSync(emulatorFramePath)) return "";
   const frameInfo = await stat(emulatorFramePath);
@@ -437,6 +462,7 @@ async function writeRunRecord({
   auditPath,
   traceAuditPath,
   elapsedSeconds,
+  firstBuildSeed,
 }) {
   const romPath = path.join(projectPath, "out", "rom.bin");
   const playtestPath = path.join(projectPath, "PLAYTEST.md");
@@ -487,6 +513,7 @@ async function writeRunRecord({
     status: runPassed ? "pass" : "fail",
     elapsedSeconds,
     modelId: model || null,
+    sourceSeeded: Boolean(firstBuildSeed),
     projectPath: relative(projectPath),
     romPath: relative(romPath),
     checks,
@@ -507,6 +534,7 @@ async function writeRunRecord({
       buildLogPath: relative(buildLogPath),
       traceAuditPath: relative(traceAuditPath),
       agentStatusPath: relative(agentStatusPath),
+      runPlanPath: relative(path.join(runPath, "run-plan.json")),
       screenshotPath: screenshotPath ? relative(screenshotPath) : relative(path.join(runPath, "evidence", "last-frame.png")),
     },
     issues: runPassed
@@ -520,7 +548,7 @@ async function writeRunRecord({
   return out;
 }
 
-async function runAgent({ promptPath, runPath, model, timeoutSeconds }) {
+async function runAgent({ promptPath, runPath, model, timeoutSeconds, appendTrace = false }) {
   if (!model) {
     throw new Error(
       "No model configured. Pass --model openrouter/<model> or set DRIVE16_LIVE_AUDIT_MODEL.",
@@ -543,8 +571,9 @@ async function runAgent({ promptPath, runPath, model, timeoutSeconds }) {
   ];
   const stdoutPath = path.join(runPath, "opencode-run.jsonl");
   const stderrPath = path.join(runPath, "opencode-run.stderr");
-  const stdoutStream = createWriteStream(stdoutPath, { flags: "w" });
-  const stderrStream = createWriteStream(stderrPath, { flags: "w" });
+  const flags = appendTrace ? "a" : "w";
+  const stdoutStream = createWriteStream(stdoutPath, { flags });
+  const stderrStream = createWriteStream(stderrPath, { flags });
   const child = spawn("opencode", command, {
     cwd: rootDir,
     env: process.env,
@@ -625,18 +654,33 @@ async function main() {
 
   const readiness = await refreshReadiness();
   const mode = readiness.readyForGeneratedSpriteAudit ? "generated-sprite" : "primitive";
-  const runId = args.runId || `${prompt.id}-${mode}-${timestamp()}`;
+  const runId = args.resumeRun || args.runId || `${prompt.id}-${mode}-${timestamp()}`;
   const runPath = path.join(args.runsRoot, runId);
   const projectPath = path.join(runPath, "project");
   const startedAtMs = Date.now();
-  await mkdir(runPath, { recursive: true });
-  await prepareProject(projectPath);
-  const firstBuildSeed = await applyFirstBuildSeed(prompt, projectPath);
+  const resuming = Boolean(args.resumeRun);
+  let firstBuildSeed = null;
+  if (resuming) {
+    if (!existsSync(projectPath)) {
+      throw new Error(`Cannot resume missing run project: ${relative(projectPath)}`);
+    }
+    const existingPlan = await readJsonIfExists(path.join(runPath, "run-plan.json"));
+    firstBuildSeed = existingPlan.firstBuildSeed ?? null;
+  } else {
+    await mkdir(runPath, { recursive: true });
+    await prepareProject(projectPath);
+    firstBuildSeed = await applyFirstBuildSeed(prompt, projectPath);
+  }
 
-  const promptPath = path.join(runPath, "prompt.md");
-  await writeFile(promptPath, promptText({ prompt, projectPath, readiness, firstBuildSeed }));
+  const runTimestamp = timestamp();
+  const promptPath = path.join(runPath, resuming ? `resume-prompt-${runTimestamp}.md` : "prompt.md");
+  const preparedPrompt = resuming
+    ? resumePromptText({ prompt, projectPath, runPath, readiness, firstBuildSeed })
+    : promptText({ prompt, projectPath, readiness, firstBuildSeed });
+  await writeFile(promptPath, preparedPrompt);
+  const planPath = path.join(runPath, resuming ? `resume-plan-${runTimestamp}.json` : "run-plan.json");
   await writeFile(
-    path.join(runPath, "run-plan.json"),
+    planPath,
     `${JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
@@ -649,6 +693,7 @@ async function main() {
         promptPath: relative(promptPath),
         readinessPath: relative(readinessPath),
         firstBuildSeed,
+        resuming,
       },
       null,
       2,
@@ -662,15 +707,23 @@ async function main() {
       runPath,
       model: args.model,
       timeoutSeconds: args.timeoutSeconds,
+      appendTrace: resuming,
     });
   }
 
-  const screenshotPath = args.runAgent ? await maybeCopyFrame(runPath, startedAtMs) : "";
+  const existingScreenshotPath = path.join(runPath, "evidence", "last-frame.png");
+  const freshScreenshotPath = args.runAgent ? await maybeCopyFrame(runPath, startedAtMs) : "";
+  const screenshotPath = freshScreenshotPath || (existsSync(existingScreenshotPath) ? existingScreenshotPath : "");
   const auditPath = await runProjectMemoryAudit(projectPath, runPath);
   const traceAuditPath = await runTraceAudit(runPath, {
     allowSeededSource: Boolean(firstBuildSeed),
   });
-  const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
+  const previousRecord = resuming
+    ? await readJsonIfExists(path.join(runPath, "run-record.json"))
+    : {};
+  const elapsedSeconds =
+    (Number(previousRecord.elapsedSeconds) || 0) +
+    Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
   const recordPath = await writeRunRecord({
     prompt,
     projectPath,
@@ -681,6 +734,7 @@ async function main() {
     auditPath,
     traceAuditPath,
     elapsedSeconds,
+    firstBuildSeed,
   });
 
   console.log(`Live audit prompt packet: ${relative(runPath)}`);

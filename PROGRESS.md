@@ -9,6 +9,28 @@ logging, per-project memory notes, honest asset disclosure, and playable
 evidence before a build is called done. Release hardening is paused until this
 gate is credible.
 
+## Live-audit contract completed (2026-07-09)
+
+- Checkpointed the reliability pass in commit `9ead63d` before starting UX
+  changes.
+- Promoted clean DeepSeek V3.1 primitive/fallback runs for Snake, Pong,
+  Tetris, and Asteroids into `artifacts/phase9/live-game-audit/report.json`.
+- `pnpm --dir app verify:live-game-audit:report` passes with compile, screen,
+  directional input, restart, non-silent audio, asset ledger, genre, project
+  memory, fresh-ROM, trace, and evidence-file checks for all four prompts.
+- Added in-place failed-run continuation so a repair preserves the original
+  project and OpenCode trace instead of resetting evidence.
+- Added atomic run promotion: the report template is replaced only after the
+  complete four-run verifier passes.
+- Seeded runs now carry their original run plan as required provenance; the
+  final verifier permits a missing source edit only when that seed evidence is
+  present and matches the prompt.
+- Fixed an audio-negation false positive where `no errors` on a build line
+  could be paired with `captured` on a screenshot line and incorrectly reject
+  later non-silent audio proof.
+- Model bakeoff remains deliberately paused while the first-run experience and
+  generated-game quality bar are improved.
+
 ## Next robustness goals (2026-07-08)
 
 Goal 1 - Make project state trustworthy.

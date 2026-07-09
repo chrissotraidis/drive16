@@ -1,5 +1,35 @@
 # Drive16 Worklog
 
+## 2026-07-09 - ITERATION 115 - reliability checkpoint and four-prompt live audit
+
+Did:
+
+- Reviewed and committed the builder reliability/playability pass as
+  `9ead63d` after native tests, frontend build, browser smoke, contract tests,
+  and verifier self-tests passed.
+- Completed the missing Asteroids audit through a failed first run and an
+  in-place repair continuation that preserved its working project and trace.
+- Added non-silent MML/VGM audio to the Asteroids run, rebuilt the ROM, and
+  recorded fresh screen, input, restart, and audio evidence.
+- Fixed the project-memory audio negation matcher so unrelated `no errors`
+  copy cannot negate a later captured/non-silent audio record.
+- Added explicit seeded-source provenance and required the original run plan
+  before the final report verifier may waive a source edit.
+- Added atomic promotion for one passing Snake, Pong, Tetris, and Asteroids run
+  into the main live-audit report.
+
+Evidence:
+
+- `pnpm --dir app verify:live-game-audit:report` passed with four runs.
+- Promoted runs have no listed issues and every required check is true.
+- Audio evidence fixtures still reject missing, uncaptured, and self-omitted
+  sound while accepting the Asteroids non-silent proof wording.
+
+Next:
+
+- Improve the first-run workspace and simplify common versus advanced
+  settings before beginning the cross-model bakeoff.
+
 ## 2026-07-05 - ITERATION 114 - one chat path in the desktop app, project structure formalized
 
 Did:

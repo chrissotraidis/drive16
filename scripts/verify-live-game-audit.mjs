@@ -55,6 +55,7 @@ const requiredEvidence = [
   "playtestPath",
   "projectMemoryAuditPath",
   "buildLogPath",
+  "runPlanPath",
   "screenshotPath",
 ];
 
@@ -185,6 +186,7 @@ function validateRun(run, report, promptIds, { requireFiles }) {
   );
   captureIssue(issues, () => assert(typeof run.projectPath === "string" && run.projectPath, `${runLabel} needs projectPath.`));
   captureIssue(issues, () => assert(typeof run.romPath === "string" && run.romPath, `${runLabel} needs romPath.`));
+  captureIssue(issues, () => assert(typeof run.sourceSeeded === "boolean", `${runLabel} sourceSeeded must be boolean.`));
   if (requireFiles) {
     captureIssue(issues, () => assert(relativeOrAbsoluteExists(run.projectPath), `${runLabel} projectPath does not exist: ${run.projectPath}`));
     captureIssue(issues, () => assert(relativeOrAbsoluteExists(run.romPath), `${runLabel} romPath does not exist: ${run.romPath}`));
@@ -249,12 +251,22 @@ function validateRun(run, report, promptIds, { requireFiles }) {
     }
     if (requireFiles) {
       captureIssue(issues, () => {
+        if (!run.sourceSeeded) return;
+        const plan = JSON.parse(readFileSync(resolveRelativeOrAbsolute(evidence.runPlanPath), "utf8"));
+        assert(plan.prompt?.id === run.promptId, `${runLabel} seeded run plan belongs to a different prompt.`);
+        assert(
+          typeof plan.firstBuildSeed?.source === "string" && plan.firstBuildSeed.source,
+          `${runLabel} sourceSeeded requires firstBuildSeed.source in evidence.runPlanPath.`,
+        );
+      });
+      captureIssue(issues, () => {
         const tracePath = resolveRelativeOrAbsolute(evidence.buildLogPath);
         const traceText = readFileSync(tracePath, "utf8");
         const traceResult = validateOpenCodeAudioTrace(traceText, {
           label: `${runLabel} evidence.buildLogPath`,
           expectAudio: run.enhancements?.audio === "captured",
           expectGameProgress: true,
+          allowSeededSource: run.sourceSeeded,
         });
         assert(
           traceResult.issues.length === 0,
@@ -413,6 +425,7 @@ function fixtureRun(prompt, root) {
     playtestPath: path.join(root, prompt.id, "PLAYTEST.md"),
     projectMemoryAuditPath: path.join(root, prompt.id, "audit.json"),
     buildLogPath: path.join(root, prompt.id, "build-log.jsonl"),
+    runPlanPath: path.join(root, prompt.id, "run-plan.json"),
     screenshotPath: path.join(root, prompt.id, "screen.png"),
   };
   return {
@@ -420,6 +433,7 @@ function fixtureRun(prompt, root) {
     genre: prompt.genre,
     status: "pass",
     elapsedSeconds: 420,
+    sourceSeeded: false,
     projectPath: path.join(root, prompt.id),
     romPath: path.join(root, prompt.id, "out", "rom.bin"),
     checks: Object.fromEntries(requiredChecks.map((check) => [check, true])),
@@ -438,7 +452,11 @@ async function writeFixtureEvidence(run) {
     await mkdir(path.dirname(evidencePath), { recursive: true });
     await writeFile(
       evidencePath,
-      field === "buildLogPath" ? `${goodOpenCodeGameTraceFixture()}\n` : "fixture\n",
+      field === "buildLogPath"
+        ? `${goodOpenCodeGameTraceFixture()}\n`
+        : field === "runPlanPath"
+          ? `${JSON.stringify({ prompt: { id: run.promptId }, firstBuildSeed: null }, null, 2)}\n`
+          : "fixture\n",
     );
   }
   await writeFixtureProjectFiles(run);

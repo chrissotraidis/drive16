@@ -89,6 +89,11 @@ const assetsWithExplicitNoAudio = `# Asset Manifest
 const playtestWithGoodAudio = `${basePlaytest}- Audio: captured non-silent maxAbsSample=1200 from THEME_LOOP.
 `;
 
+const playtestWithNoErrorsBeforeGoodAudio = `${basePlaytest}- Build log: successful compilation, no errors.
+- Screenshot/frame capture: captured visible gameplay.
+- Audio test: non-silent background music verified via verify_audio.
+`;
+
 const playtestWithoutAudio = `${basePlaytest}- Audio: untested.
 `;
 
@@ -113,6 +118,13 @@ const scenarios = [
     game: baseGame,
     assets: assetsWithGoodAudio,
     playtest: playtestWithGoodAudio,
+  },
+  {
+    id: "good-audio-after-no-errors",
+    shouldPass: true,
+    game: baseGame,
+    assets: assetsWithGoodAudio,
+    playtest: playtestWithNoErrorsBeforeGoodAudio,
   },
   {
     id: "uncaptured-audio",

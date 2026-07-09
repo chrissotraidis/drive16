@@ -121,9 +121,17 @@ Toolchain and validation scripts live here.
   with `--run-agent`. During a real run it streams OpenCode stdout/stderr to
   `opencode-run.jsonl` and `opencode-run.stderr` immediately, with current
   process state in `opencode-run.status.json`, so a long model turn is
-  inspectable before it exits. Use `pnpm --dir app prepare:live-game-audit:prompt`
-  for a dry packet and `pnpm --dir app run:live-game-audit:prompt -- --prompt
-  snake-basic --model openrouter/<model>` for a real run.
+  inspectable before it exits. A failed run can be continued without deleting
+  its working project or trace by adding `--resume-run <run-id>`. Use `pnpm
+  --dir app prepare:live-game-audit:prompt` for a dry packet and `pnpm --dir
+  app run:live-game-audit:prompt -- --prompt snake-basic --model
+  openrouter/<model>` for a real run.
+- `promote-live-game-audit-runs.mjs`: selects one clean passing run for each
+  required prompt, verifies the complete report plus every evidence file, and
+  atomically replaces the empty `report.json` template only after that check
+  passes. Use `pnpm --dir app promote:live-game-audit -- --run
+  snake-basic=<run-id> --run pong-basic=<run-id> --run
+  tetris-basic=<run-id> --run asteroids-basic=<run-id>`.
 - `verify-opencode-audio-trace.mjs`: checks an OpenCode JSONL trace for the
   preferred `verify_audio` tool call, or the fallback `run_rom` with
   `dump_audio=true` followed by `capture_audio`. It catches the failed-loop

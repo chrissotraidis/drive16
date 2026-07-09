@@ -269,9 +269,9 @@ function hasCapturedAudioEvidence(text) {
 
 function audioEvidenceIsNegated(text) {
   const normalized = normalizeEvidenceText(text);
-  return /\b(no|not|without|missing|uncaptured|untested|pending|failed|(?<!non-)silent)\b[\s\S]{0,80}\b(audio evidence|audio|captured|non-silent|audible|maxabs(?:sample)?)\b/i.test(
-    normalized,
-  );
+  const negativeBeforeAudio = /\b(no|not|without|missing|uncaptured|untested|pending|failed|(?<!non-)silent)\b[^\n]{0,80}\b(audio evidence|audio|non-silent|audible|maxabs(?:sample)?)\b/i;
+  const audioBeforeNegative = /\b(audio evidence|audio)\b[^\n]{0,80}\b(not captured|uncaptured|untested|pending|failed|missing|(?<!non-)silent)\b/i;
+  return negativeBeforeAudio.test(normalized) || audioBeforeNegative.test(normalized);
 }
 
 function latestEvidenceText(playtestText) {

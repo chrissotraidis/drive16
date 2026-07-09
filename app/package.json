@@ -15,6 +15,7 @@
     "prepare:live-game-audit": "pnpm check:live-game-audit-readiness && node ../scripts/verify-live-game-audit.mjs --write-template",
     "prepare:live-game-audit:prompt": "node ../scripts/run-live-game-audit-prompt.mjs",
     "run:live-game-audit:prompt": "node ../scripts/run-live-game-audit-prompt.mjs --run-agent",
+    "promote:live-game-audit": "node ../scripts/promote-live-game-audit-runs.mjs",
     "verify:opencode-audio-trace": "node ../scripts/verify-opencode-audio-trace.mjs --self-test",
     "verify:live-game-audit": "node ../scripts/verify-live-game-audit.mjs --self-test",
     "verify:live-game-audit:report": "node ../scripts/verify-live-game-audit.mjs --require-complete --require-files",
