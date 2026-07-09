@@ -1,5 +1,31 @@
 # Drive16 Worklog
 
+## 2026-07-10 - ITERATION 120 - MIT and direct-download release closure
+
+Did:
+
+- Recorded the owner's MIT decision and added the standard MIT `LICENSE`.
+- Bundled that license into the packaged support runtime and made the release
+  smoke require it after an isolated first launch.
+- Recorded direct-download/source distribution as the macOS target, with no
+  App Store goal and no Developer ID/notarization gate for this release.
+- Kept the install truth explicit: the DMG is ad-hoc signed and an
+  internet-downloaded copy may require macOS **Open Anyway** on first launch.
+- Closed the release checklist against the already-passing isolated install,
+  writable runtime, active project, signature, and DMG integrity evidence.
+
+Evidence:
+
+- The rebuilt package contains `drive16-support/LICENSE`; its isolated runtime
+  copy is required by the release smoke.
+- Final DMG SHA-256:
+  `f8271b70dff77cd6659e7ba0d27f3f467cf2584d1b04439139d20934bfccc989`.
+
+Next:
+
+- Resume normal product iteration from the presentation-v2 and local-model
+  baselines; treat Apple notarization only as optional future install polish.
+
 ## 2026-07-10 - ITERATION 119 - presentation-v2 quality recovery
 
 Did:
@@ -52,10 +78,10 @@ Evidence:
 - `pnpm --dir app verify:release:macos` passed against the rebuilt DMG.
 - The `.app` passes `codesign --verify --deep --strict` before and after the
   DMG copy.
-- The isolated first launch created all eight support entries and
+- The isolated first launch created all packaged support entries and
   `artifacts/phase3/active-project/Makefile` under its clean app-data runtime.
 - DMG SHA-256:
-  `1380d02fc78f3e2a50c05a304b3e5d7cefc79c4cab11f72bc558db158d649cf7`.
+  `f8271b70dff77cd6659e7ba0d27f3f467cf2584d1b04439139d20934bfccc989`.
 
 Note:
 

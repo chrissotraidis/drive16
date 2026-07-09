@@ -1,15 +1,15 @@
 # Drive16 Progress
 
-Current phase: Ad-hoc-signed local release verified; owner-controlled release gates
-remain.
+Current phase: Direct-download release baseline complete; broader product
+iteration remains.
 
 The builder reliability, four-prompt functional audit, first-run UX, stricter
-presentation baseline, and three-model comparison are complete. A release-mode macOS `.app` now runs
-from bundled support files copied into Application Support, with an explicit
-CSP and a user-supplied Play-core policy. Remaining release work requires owner
-input or credentials: confirm the proposed MIT license, sign/notarize with an
-Apple Developer ID, and perform the final clean-account install smoke on that
-notarized artifact.
+presentation baseline, and three-model comparison are complete. A release-mode
+macOS `.app` now runs from bundled support files copied into Application
+Support, with an explicit CSP and a user-supplied Play-core policy. The owner
+confirmed MIT and chose direct download rather than App Store or Apple-notarized
+distribution. The current ad-hoc-signed DMG is therefore the completed release
+baseline; downloaded copies may require macOS **Open Anyway** on first launch.
 
 ## Local model and packaging proof (2026-07-09)
 
@@ -38,7 +38,8 @@ notarized artifact.
 - The packaged native window, OpenCode bridge, first-run workspace, settings,
   and Advanced setup list were inspected successfully.
 - The whole `.app` is now ad-hoc signed instead of using `--no-sign`, so strict
-  bundle verification includes the 247 packaged resource files.
+  bundle verification includes all packaged resources, including the MIT
+  license file.
 - `pnpm --dir app verify:release:macos` verifies the DMG checksum, copies the
   app to a canonical isolated install path, launches with an empty home, and
   proves the writable runtime plus active project are created.
@@ -530,10 +531,10 @@ Current recovery evidence from this pass:
 - [x] Structure formalized: `docs/project-structure.md`, starter template
   ships `res/` scaffold, project menu shows the Workspace folder, agent
   skill carries identity/capabilities and a no-tools-for-greetings rule.
-- [~] Track E (rest) - app-data paths, Tauri bundling, CSP, and the user-core
-  policy are implemented and the ad-hoc local package passes an isolated
-  install smoke. LICENSE confirmation plus Developer ID signing/notarization
-  remain owner-controlled.
+- [x] Track E (rest) - app-data paths, Tauri bundling, CSP, the user-core
+  policy, MIT licensing, and ad-hoc direct-download packaging are implemented;
+  the isolated install smoke passes. Apple notarization is optional future
+  Gatekeeper polish.
 
 Older phase history follows below.
 
@@ -563,8 +564,7 @@ Older phase history follows below.
 - [x] Phase 8 next-agent handoff recorded in
   `docs/phase8-next-agent-handoff.md`; it is now historical and superseded by
   the 2026-07-05 overhaul state.
-- [ ] Human decision: confirm the project license before adding a `LICENSE`
-  file.
+- [x] Human confirmed MIT and the repository now includes `LICENSE`.
 
 ## Phase 8 UI Repair Checklist
 
@@ -752,16 +752,15 @@ Evidence is recorded in:
 - `docs/phase6-controller-foundation.md`
 - `docs/phase6-verification-loop.md`
 
-## Next Up
+## Release-hardening result
 
-Start with release hardening, keeping the reliability checks as regression
-smoke:
+Release hardening is complete for the selected direct-download scope:
 
-1. Move repo-locked runtime paths to app-data storage and bundled resources.
-2. Re-enable and verify Tauri bundling for an installable macOS app.
-3. Add a real CSP without breaking local Play/core loading.
-4. Confirm the license and public interactive-core policy.
-5. Keep the new logging around OpenCode auth, session creation, prompt finish,
+1. Runtime paths use app-data storage and bundled resources.
+2. Tauri bundling produces a verified ad-hoc-signed macOS DMG.
+3. An explicit CSP preserves local Play/core loading.
+4. MIT and the user-supplied public interactive-core policy are confirmed.
+5. Keep the logging around OpenCode auth, session creation, prompt finish,
    tool activity, ROM detection, and failure duration.
 
 ## Completed Phase 6 Work

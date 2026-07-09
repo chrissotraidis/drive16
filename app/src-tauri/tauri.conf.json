@@ -34,6 +34,7 @@
       "../../mcp-servers/": "drive16-support/mcp-servers",
       "../../patches/": "drive16-support/patches",
       "../../scripts/": "drive16-support/scripts",
+      "../../LICENSE": "drive16-support/LICENSE",
       "../../opencode.json": "drive16-support/opencode.json"
     },
     "icon": [

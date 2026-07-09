@@ -5,7 +5,7 @@ use std::{
 };
 use tauri::Manager;
 
-const SUPPORT_ENTRIES: [&str; 8] = [
+const SUPPORT_ENTRIES: [&str; 9] = [
     "agent",
     "assets",
     "corpus",
@@ -13,6 +13,7 @@ const SUPPORT_ENTRIES: [&str; 8] = [
     "mcp-servers",
     "patches",
     "scripts",
+    "LICENSE",
     "opencode.json",
 ];
 
@@ -133,6 +134,7 @@ mod tests {
     fn source_root_contains_runtime_contract() {
         let root = source_repo_root();
         assert!(root.join("opencode.json").is_file());
+        assert!(root.join("LICENSE").is_file());
         assert!(root.join("examples/app-starter-blank/Makefile").is_file());
         assert!(root.join("scripts/build-sgdk.sh").is_file());
     }

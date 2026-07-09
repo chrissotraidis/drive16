@@ -1,5 +1,28 @@
 # Drive16 Decisions
 
+## 2026-07-10 - MIT license and direct-download macOS distribution
+
+Context:
+
+The release bundle, isolated install smoke, CSP, app-data runtime, and
+user-supplied Play-core policy pass locally. The remaining recorded questions
+were the proposed MIT license and whether Apple distribution credentials were
+part of the release target.
+
+Decision:
+
+Release Drive16's app code under MIT. Distribute macOS builds from source or as
+an ad-hoc-signed direct download; Drive16 does not target the App Store. Apple
+Developer ID signing and notarization are optional future Gatekeeper polish,
+not a requirement for this release baseline.
+
+Consequence:
+
+The repository includes `LICENSE`, package metadata says MIT, and the current
+DMG can be described as a verified ad-hoc-signed direct-download release. It
+must not be described as Apple notarized, and internet-downloaded copies may
+require the user's **Open Anyway** approval on first launch.
+
 ## 2026-07-05 - Overhaul supersedes the Phase 8 UI-repair track
 
 Context:

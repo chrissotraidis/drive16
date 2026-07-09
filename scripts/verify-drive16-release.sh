@@ -67,7 +67,7 @@ for _ in {1..120}; do
   sleep 0.1
 done
 
-for entry in agent assets corpus examples mcp-servers patches scripts opencode.json; do
+for entry in agent assets corpus examples mcp-servers patches scripts LICENSE opencode.json; do
   if [[ ! -e "$RUNTIME_ROOT/$entry" ]]; then
     printf 'Clean runtime is missing: %s\n' "$entry" >&2
     exit 1

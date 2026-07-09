@@ -40,8 +40,8 @@ that the generated game is good or playable.
 | Presentation baseline | Snake, Pong, Tetris, and Asteroids now build with custom tile art, composed panels, stronger palettes, and verified non-silent audio |
 | Model bakeoff | Three models × four prompts complete and rescored under presentation v2: all 12 historical outputs need visual repair, so DeepSeek is only the operational default |
 | Ollama as the agent brain | Working locally; Qwen passed the full Snake build/runtime/audio/project-memory gate, while DeepSeek remains the stronger default |
-| Distributable .app/.dmg | Ad-hoc-signed local `.app` and `.dmg` pass strict signature, disk-image, isolated install, writable-runtime, and first-project checks; Developer ID signing/notarization and owner license approval remain |
-| LICENSE file | Pending owner confirmation (MIT proposed) |
+| Distributable .app/.dmg | Ad-hoc-signed direct-download `.app` and `.dmg` pass strict signature, disk-image, isolated install, writable-runtime, and first-project checks; this project does not target the App Store or Apple-notarized distribution |
+| LICENSE file | MIT |
 
 Recent history: the app was overhauled on 2026-07-05 — the agent loop was
 wired for real (previously only one hardcoded prompt built anything), the UI
@@ -205,7 +205,7 @@ Key documents:
 - `docs/presentation-quality.md` — the v2 visual baseline and proof metrics
 - `docs/project-structure.md` — how a game lives on disk
 - `PROGRESS.md` — current ledger; `WORKLOG.md` — iteration journal
-- `DECISIONS.md` — recorded decisions (license proposal, emulator choices)
+- `DECISIONS.md` — recorded decisions (MIT, distribution, emulator choices)
 - `drive16-architecture.md` — full architecture reference
 - `docs/phase*-*.md` — historical evidence packets from phases 0–8
 
@@ -220,17 +220,22 @@ you to log into a consumer AI subscription.
 No commercial ROMs, no disassemblies, no API keys, no model weights, and no
 build artifacts in git. Copyleft components (ComfyUI, ctrmml, BlastEm if
 used) run as separate processes and are never linked into the app binary.
-Genteel (MIT) is the verification emulator. The app code is intended to be
-MIT; the LICENSE file lands once the owner confirms (`DECISIONS.md`).
+Genteel (MIT) is the verification emulator. Drive16's app code is released
+under the repository's MIT `LICENSE` (`DECISIONS.md`).
+
+The macOS DMG is ad-hoc signed, not Apple notarized. A copy downloaded from the
+internet may therefore require **Open Anyway** in macOS Privacy & Security on
+first launch. Developer ID signing/notarization can remove that Gatekeeper
+friction later without changing the project's no-App-Store distribution plan.
 
 ## Roadmap
 
-1. **Packaging** — sign and notarize the now-working release `.app`, then ship
-   a `.dmg` after the owner confirms the app license.
+1. **Packaging** — keep the verified direct-download `.dmg` reproducible;
+   Apple notarization is optional future install polish, not an App Store goal.
 2. **Multi-project workspaces** — named projects you can switch between,
    beyond the single active workspace + snapshots.
 3. **Local-model quality** — extend the passing Qwen proof across the remaining
    audit prompts and keep improving completion discipline.
 4. **Play-core policy** — bundle or fetch a licensed Genesis core instead of
    the development CDN fallback.
-5. **LICENSE + CSP + release hardening.**
+5. **Release hardening** — continue clean-machine and broader prompt testing.

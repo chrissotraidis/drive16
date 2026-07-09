@@ -2,8 +2,7 @@
 
 Date: 2026-07-05
 Status: functional reliability, first-run, presentation-v2 baseline, model
-comparison, and ad-hoc local packaging are verified; public signing and license
-approval remain
+comparison, MIT licensing, and ad-hoc direct-download packaging are verified
 
 This plan came from a full four-track audit (agent pipeline, UI, native
 backend/emulator, asset-generation pipelines). It replaces the Phase 8
@@ -25,8 +24,9 @@ audits:
 
 - Track E now has writable app-data runtime paths, bundled support resources,
   an explicit CSP, a user-supplied release core policy, ad-hoc whole-bundle
-  signing, DMG integrity checks, and an isolated first-launch smoke. MIT license
-  approval and Apple Developer ID signing/notarization remain owner gates.
+  signing, DMG integrity checks, an isolated first-launch smoke, and an MIT
+  `LICENSE`. The owner chose direct download rather than App Store or
+  Apple-notarized distribution; notarization is optional future install polish.
 
 - The July 7 native evidence proved important plumbing, but user testing of a
   generated Snake ROM showed the product can still build a ROM while hiding
@@ -62,8 +62,8 @@ audits:
   pass.
 - Track E is technically hardened for a local release: Docker/Genteel timeouts,
   import caps, app-data paths, bundling, CSP, and public interactive-core policy
-  are implemented. `LICENSE`, Developer ID signing, and notarization remain
-  owner-controlled.
+  are implemented. The MIT license and direct-download distribution posture are
+  now owner-confirmed.
 
 The audit below describes the pre-overhaul app. Do not read statements such as
 "the shipped app does not have an agent", "audio gated", or "image generation
@@ -258,7 +258,7 @@ smoke while improving asset review UI and ComfyUI lifecycle help.
    re-enable Tauri bundling; make a packaged .app work.
 2. Timeouts on Docker builds, Genteel runs, ComfyUI generation; size caps on
    ROM/core imports; graceful errors when Docker/Genteel are missing.
-3. Add LICENSE (MIT per DECISIONS.md, pending owner confirmation), set a
+3. Add LICENSE (MIT per DECISIONS.md), set a
    real CSP, decide core-distribution policy.
 4. Prune: archive the 31 one-off validation scripts out of the top-level
    flow, collapse the phase-doc sprawl into docs/ архив, keep a single
@@ -278,13 +278,15 @@ with only Docker + an OpenRouter key.
 Tracks A and C are parallelizable. D depends on A. E is last but its small
 items (timeouts, size caps) can ride along anytime.
 
-## Remaining decisions for the owner
+## Owner decisions recorded
 
-1. Confirm MIT license so `LICENSE` can land.
-2. Decide public interactive-core policy for release distribution.
-3. Decide the CSP posture for the Tauri app while preserving local Play/core
-   loading.
-4. Decide whether Ollama should become a real build-agent path after
-   OpenRouter is stable.
-5. Decide whether ComfyUI stays as the long-term sprite engine after more
-   local-user setup evidence.
+1. MIT license confirmed; `LICENSE` landed on 2026-07-10.
+2. macOS distribution is ad-hoc-signed direct download/source, not App Store.
+3. Release builds use a user-supplied interactive core rather than silently
+   fetching the development CDN fallback.
+4. The packaged app uses the explicit local-service-aware CSP now in
+   `tauri.conf.json`.
+5. Ollama is a real local build-agent path; OpenRouter remains available.
+
+Whether ComfyUI remains the long-term sprite engine is a future product choice,
+not a release blocker.

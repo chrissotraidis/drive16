@@ -30,18 +30,21 @@ Date: 2026-07-10
 
 - App bundle: `app/src-tauri/target/release/bundle/macos/Drive16.app`
 - DMG: `app/src-tauri/target/release/bundle/dmg/Drive16_0.1.0_aarch64.dmg`
-- DMG SHA-256: `1380d02fc78f3e2a50c05a304b3e5d7cefc79c4cab11f72bc558db158d649cf7`
+- DMG SHA-256: `f8271b70dff77cd6659e7ba0d27f3f467cf2584d1b04439139d20934bfccc989`
 - Packaged resources: `Drive16.app/Contents/Resources/drive16-support/`
 - Writable runtime: `~/Library/Application Support/dev.drive16.desktop/runtime/`
 - Local Qwen pass: `artifacts/phase9/model-bakeoff/runs/local-qwen-snake-audit-tool-proof/run-record.json`
 
-## Owner-controlled release gates
+## Distribution decision
 
-- Confirm the proposed MIT license before adding `LICENSE`.
-- Provide an Apple Developer ID identity and notarization credentials.
-- Sign/notarize the app and rebuild the DMG with the release identity.
-- Test install, first launch, user-supplied core setup, and one real game build
-  from a clean macOS account or machine.
+- The owner confirmed the MIT license; the repository includes `LICENSE`.
+- Drive16 targets source and direct-download distribution, not the App Store.
+- The current DMG is intentionally ad-hoc signed rather than Apple notarized.
+- A quarantined internet download may require **Open Anyway** in macOS Privacy
+  & Security on first launch. Developer ID signing/notarization remains optional
+  future install polish for direct downloads, not a release gate.
+- A broader clean-machine game-build pass remains useful follow-up evidence,
+  but the isolated empty-home install/runtime smoke already passes.
 
-Until those gates are complete, describe the current artifact as a verified
-ad-hoc-signed local release bundle, not a public release.
+Describe the current artifact as a verified ad-hoc-signed direct-download
+release. Do not describe it as Apple notarized or App Store distributed.
