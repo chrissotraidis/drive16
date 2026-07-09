@@ -18,7 +18,7 @@ Drive16:  (writes C, composes an FM song, builds, verifies)  →  the game
           appears on the right, playable
 ```
 
-## Current status (2026-07-09)
+## Current status (2026-07-10)
 
 The desktop shell and local tool loop are real, but the builder is still in a
 reliability/playability hardening phase. A ROM existing is not treated as proof
@@ -39,7 +39,7 @@ that the generated game is good or playable.
 | Live game-quality audit | Complete for DeepSeek V3.1 primitive/fallback runs across Snake, Pong, Tetris, and Asteroids |
 | Model bakeoff | Complete across DeepSeek V3.1, local Qwen 3.6 35B Coder, and local GPT-OSS 120B on the same four prompts |
 | Ollama as the agent brain | Working locally; Qwen passed the full Snake build/runtime/audio/project-memory gate, while DeepSeek remains the stronger default |
-| Distributable .app/.dmg | Unsigned release `.app` and `.dmg` build successfully; the app runs from bundled support files copied into Application Support, while signing/notarization and owner license approval remain |
+| Distributable .app/.dmg | Ad-hoc-signed local `.app` and `.dmg` pass strict signature, disk-image, isolated install, writable-runtime, and first-project checks; Developer ID signing/notarization and owner license approval remain |
 | LICENSE file | Pending owner confirmation (MIT proposed) |
 
 Recent history: the app was overhauled on 2026-07-05 — the agent loop was
@@ -165,7 +165,8 @@ pnpm --dir app verify:live-game-audit         # self-test the next live game-qua
 pnpm --dir app verify:live-game-audit:report  # fails until all live prompt runs have evidence files
 pnpm --dir app prepare:model-bakeoff          # requires the completed live audit report first
 pnpm --dir app verify:model-bakeoff:report    # fails until all model/prompt evidence files exist
-pnpm --dir app tauri build --bundles app      # release-mode macOS .app with bundled support runtime
+pnpm --dir app release:macos                  # ad-hoc-signed local .app/.dmg + isolated install smoke
+pnpm --dir app verify:release:macos           # verify existing release artifacts without rebuilding
 cargo test --manifest-path app/src-tauri/Cargo.toml   # native tests
 node scripts/verify-phase6-browser-smoke.mjs  # Playwright UI smoke (dev server must run)
 scripts/verify-phase6-loop.sh --browser       # full loop harness

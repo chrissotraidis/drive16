@@ -1,6 +1,6 @@
 # Drive16 Progress
 
-Current phase: Unsigned release bundle verified; owner-controlled release gates
+Current phase: Ad-hoc-signed local release verified; owner-controlled release gates
 remain.
 
 The builder reliability, four-prompt live audit, first-run UX, game-quality
@@ -8,7 +8,8 @@ contract, and model bakeoff are complete. A release-mode macOS `.app` now runs
 from bundled support files copied into Application Support, with an explicit
 CSP and a user-supplied Play-core policy. Remaining release work requires owner
 input or credentials: confirm the proposed MIT license, sign/notarize with an
-Apple Developer ID, and perform a clean-machine install smoke.
+Apple Developer ID, and perform the final clean-account install smoke on that
+notarized artifact.
 
 ## Local model and packaging proof (2026-07-09)
 
@@ -30,6 +31,11 @@ Apple Developer ID, and perform a clean-machine install smoke.
   packaged UI reports that a user-supplied core is required.
 - The packaged native window, OpenCode bridge, first-run workspace, settings,
   and Advanced setup list were inspected successfully.
+- The whole `.app` is now ad-hoc signed instead of using `--no-sign`, so strict
+  bundle verification includes the 247 packaged resource files.
+- `pnpm --dir app verify:release:macos` verifies the DMG checksum, copies the
+  app to a canonical isolated install path, launches with an empty home, and
+  proves the writable runtime plus active project are created.
 
 ## Live-audit contract completed (2026-07-09)
 

@@ -65,7 +65,11 @@ fn source_repo_root() -> PathBuf {
 }
 
 fn install_packaged_runtime(app: &tauri::App) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let bundled_root = app.path().resource_dir()?.join("drive16-support");
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("Could not resolve the packaged resource directory: {error}"))?;
+    let bundled_root = resource_dir.join("drive16-support");
     if !bundled_root.join("opencode.json").is_file() {
         return Err(format!(
             "Drive16 support files are missing from {}",
@@ -74,7 +78,11 @@ fn install_packaged_runtime(app: &tauri::App) -> Result<PathBuf, Box<dyn std::er
         .into());
     }
 
-    let runtime_root = app.path().app_data_dir()?.join("runtime");
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve the Drive16 app-data directory: {error}"))?;
+    let runtime_root = app_data_dir.join("runtime");
     let staging_root = runtime_root.join(".support-staging");
     fs::create_dir_all(&runtime_root)?;
     if staging_root.exists() {

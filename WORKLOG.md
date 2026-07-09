@@ -1,5 +1,41 @@
 # Drive16 Worklog
 
+## 2026-07-10 - ITERATION 118 - signed local package and clean-install smoke
+
+Did:
+
+- Replaced the misleading `--no-sign` package path with Tauri's ad-hoc signing
+  identity for local Apple Silicon artifacts.
+- Added one release command that builds the `.app` and `.dmg`, then runs the
+  release smoke automatically.
+- Added an isolated DMG smoke that verifies the disk image and strict bundle
+  signature, copies the app outside the repository, launches with an empty
+  home, and checks the writable support runtime plus active project.
+- Added precise packaged resource/app-data path errors at native startup.
+
+Evidence:
+
+- `pnpm --dir app verify:release:macos` passed against the rebuilt DMG.
+- The `.app` passes `codesign --verify --deep --strict` before and after the
+  DMG copy.
+- The isolated first launch created all eight support entries and
+  `artifacts/phase3/active-project/Makefile` under its clean app-data runtime.
+- DMG SHA-256:
+  `ed26497c3405f175c7c6d3e3ae9b02fd8b5f3c9daf1461a3532ecd02cde3595b`.
+
+Note:
+
+- Two macOS crash dialogs during development were caused by an invalid smoke
+  location under `/tmp`, which is a symlink on macOS. Tauri intentionally
+  rejects symlinked executable ancestors. The corrected smoke uses canonical
+  `/private/tmp` and passes; the live browser app was not involved.
+
+Next:
+
+- Confirm the proposed MIT license and provide the Apple Developer ID plus
+  notarization credentials, then rebuild and repeat the smoke on the final
+  public artifact from a clean account or machine.
+
 ## 2026-07-09 - ITERATION 117 - local model closure and packaged runtime
 
 Did:

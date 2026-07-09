@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
     "launch:native": "../scripts/launch-drive16-native.sh",
+    "release:macos": "../scripts/build-drive16-release.sh",
     "preview": "vite preview --host 127.0.0.1 --port 1420",
     "tauri": "tauri",
     "verify:agent-contract": "node ../scripts/verify-agent-contract.mjs",
@@ -23,6 +24,7 @@
     "promote:model-bakeoff": "node ../scripts/promote-model-bakeoff-runs.mjs",
     "verify:model-bakeoff": "node ../scripts/verify-model-bakeoff-report.mjs --self-test",
     "verify:model-bakeoff:report": "node ../scripts/verify-model-bakeoff-report.mjs --require-complete --require-files",
+    "verify:release:macos": "../scripts/verify-drive16-release.sh",
     "verify:phase6": "../scripts/verify-phase6-loop.sh",
     "verify:phase6:browser": "node ../scripts/verify-phase6-browser-smoke.mjs --url http://127.0.0.1:1420/",
     "check:interactive-core": "node ../scripts/check-interactive-play-core.mjs"

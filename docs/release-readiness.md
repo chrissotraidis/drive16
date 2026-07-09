@@ -1,10 +1,12 @@
 # Drive16 Release Readiness
 
-Date: 2026-07-09
+Date: 2026-07-10
 
 ## Verified locally
 
 - Tauri release bundling is enabled.
+- The local package is ad-hoc signed as a complete bundle; strict verification
+  covers its executable, Info.plist, and packaged resources.
 - The release `.app` embeds the Drive16 agent, assets, corpus, starter projects,
   MCP servers, patches, scripts, and OpenCode configuration.
 - On first release launch, support files are copied to the app-data runtime and
@@ -20,12 +22,15 @@ Date: 2026-07-09
   connection diagnostics inside Advanced setup.
 - Native tests, frontend build, browser smoke, agent contract, project-memory
   gates, SGDK MCP validation, and the model-bakeoff report pass.
+- The DMG verification smoke installs into a canonical isolated location,
+  launches with an empty home, and proves both the writable runtime and active
+  starter project are created.
 
 ## Evidence paths
 
 - App bundle: `app/src-tauri/target/release/bundle/macos/Drive16.app`
 - DMG: `app/src-tauri/target/release/bundle/dmg/Drive16_0.1.0_aarch64.dmg`
-- DMG SHA-256: `aa428967ae93347e6d9cf25a622d27a0a1bc264eeca58694d883dababfdfe944`
+- DMG SHA-256: `ed26497c3405f175c7c6d3e3ae9b02fd8b5f3c9daf1461a3532ecd02cde3595b`
 - Packaged resources: `Drive16.app/Contents/Resources/drive16-support/`
 - Writable runtime: `~/Library/Application Support/dev.drive16.desktop/runtime/`
 - Local Qwen pass: `artifacts/phase9/model-bakeoff/runs/local-qwen-snake-audit-tool-proof/run-record.json`
@@ -39,4 +44,4 @@ Date: 2026-07-09
   from a clean macOS account or machine.
 
 Until those gates are complete, describe the current artifact as a verified
-unsigned local release bundle, not a public release.
+ad-hoc-signed local release bundle, not a public release.

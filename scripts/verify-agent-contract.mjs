@@ -870,8 +870,10 @@ assert(
 );
 for (const expected of [
   "install_packaged_runtime",
-  'app.path().resource_dir()?.join("drive16-support")',
-  'app.path().app_data_dir()?.join("runtime")',
+  ".resource_dir()",
+  'resource_dir.join("drive16-support")',
+  ".app_data_dir()",
+  'app_data_dir.join("runtime")',
   'env::var_os("DRIVE16_REPO_ROOT")',
   '"opencode.json"',
 ]) {
