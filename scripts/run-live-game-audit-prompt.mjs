@@ -21,6 +21,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
 const defaultRunsRoot = path.join(rootDir, "artifacts", "phase9", "live-game-audit", "runs");
 const readinessPath = path.join(rootDir, "artifacts", "phase9", "live-game-audit", "readiness.json");
+const emulatorInputScriptPath = path.join(rootDir, "artifacts", "phase1", "emulator", "input-script.csv");
 const starterProjectPath = path.join(rootDir, "examples", "app-starter-blank");
 const snakeBasicSkeletonPath = path.join(rootDir, "examples", "game-skeletons", "snake-basic");
 const pongBasicSkeletonPath = path.join(rootDir, "examples", "game-skeletons", "pong-basic");
@@ -308,7 +309,7 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
     "- Use only SGDK APIs that are present in the starter or local examples, or query drive16-rag before using them.",
     "- Do not use VDP_drawRect, srand, or C library rand(); for blocky graphics, load solid 8x8 tiles and draw cells with VDP_fillTileMapRect.",
     "- Build after the final code/resource edit; an older out/rom.bin is stale evidence.",
-    "- Immediately after a successful build_rom, do not inspect or rewrite docs; run_rom, capture_frame, send_input with lowercase p1_buttons such as [\"right\"], run_rom with use_input_script true, capture_frame again, send_input with p1_buttons [\"start\"] when restart applies, then verify_audio if sound is expected.",
+    "- Immediately after a successful build_rom, do not inspect or rewrite docs; run_rom, capture_frame, send_input with reset true and lowercase p1_buttons such as [\"right\"], then make a separate send_input call with p1_buttons [\"start\"] when restart applies, run_rom with use_input_script true, capture_frame again, then verify_audio if sound is expected.",
     "- Every final gameplay capture must come from a run_rom call of at least 180 frames; short reset captures can catch an unfinished tile queue and are not valid visual evidence.",
     "- Valid send_input button names are lowercase: left, right, up, down, start, a, b, c, x, y, z, mode. Do not use SGDK constants like BUTTON_RIGHT.",
     "- Run the ROM, capture a frame, test input, test restart/start behavior when relevant, and verify audio or record why audio was explicitly disabled.",
@@ -323,6 +324,7 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
     "- In ASSETS.md, primitive text/tile rows should use the code path or drawing function in Symbol / File, such as `src/main.c draw_piece()`, not only a shared character like `#`.",
     "- If one primitive glyph or helper is reused across multiple roles, explicitly say the shared primitive reuse is intentional in each affected row.",
     "- In ASSETS.md, every music/sound row must record the resource symbol/file and the phrase captured non-silent audio evidence when verify_audio succeeds.",
+    "- After updating all three project-memory files, call drive16-sgdk-build.audit_project_memory with expect_gate pass. Repair its exact issues and audit once more before finishing; if it still fails, keep the gate failed.",
     "- If Known Issues lists limitations, do not write Next Intended Change: none.",
     "- Do not call the game done or playable unless compile, screen, input, restart/basic gameplay, asset ledger, and audio evidence pass.",
     "",
@@ -826,6 +828,9 @@ async function main() {
 
   let agentExit = 0;
   if (args.runAgent) {
+    // Emulator input is global to the local MCP process. Start every audit with
+    // a clean sequence so a prior game's Start press cannot become new evidence.
+    await rm(emulatorInputScriptPath, { force: true });
     agentExit = await runAgent({
       promptPath,
       runPath,

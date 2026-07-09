@@ -102,6 +102,9 @@ const playtestWithNoErrorsBeforeGoodAudio = `${basePlaytest}- Build log: success
 - Audio test: non-silent background music verified via verify_audio.
 `;
 
+const playtestWithCamelCaseAudio = `${basePlaytest}- Audio test: verify_audio returned nonSilent=true with maxAbsSample=10922.
+`;
+
 const playtestWithoutAudio = `${basePlaytest}- Audio: untested.
 `;
 
@@ -133,6 +136,13 @@ const scenarios = [
     game: baseGame,
     assets: assetsWithGoodAudio,
     playtest: playtestWithNoErrorsBeforeGoodAudio,
+  },
+  {
+    id: "good-camel-case-audio",
+    shouldPass: true,
+    game: baseGame,
+    assets: assetsWithGoodAudio,
+    playtest: playtestWithCamelCaseAudio,
   },
   {
     id: "uncaptured-audio",

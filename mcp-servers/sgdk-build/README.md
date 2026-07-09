@@ -15,6 +15,9 @@ It exposes:
 - `clean(project_path)`: runs the SGDK `clean` target through the same pinned
   Docker image.
 - `read_build_log()`: returns the latest captured build or clean log.
+- `audit_project_memory(project_path, expect_gate = "pass")`: checks
+  `GAME.md`, `ASSETS.md`, and `PLAYTEST.md` against the current ROM and returns
+  exact evidence issues for the builder to repair before claiming completion.
 
 Build logs are written to `artifacts/phase1/sgdk-build/last-build.log`, with
 metadata in `artifacts/phase1/sgdk-build/last-build.json`.

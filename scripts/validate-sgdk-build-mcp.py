@@ -81,7 +81,7 @@ def main() -> int:
 
         tools = call(process, 2, "tools/list")["tools"]
         tool_names = {tool["name"] for tool in tools}
-        expected = {"build_rom", "clean", "read_build_log"}
+        expected = {"build_rom", "clean", "read_build_log", "audit_project_memory"}
         missing = expected - tool_names
         if missing:
             raise RuntimeError(f"Missing tools: {sorted(missing)}")

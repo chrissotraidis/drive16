@@ -7,7 +7,7 @@
     "bakeoff": {
       "description": "Bounded Drive16 model comparison runs",
       "mode": "primary",
-      "steps": 16,
+      "steps": 20,
       "max_tokens": 8000,
       "maxOutputTokens": 8000,
       "temperature": 0,

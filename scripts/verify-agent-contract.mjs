@@ -197,6 +197,10 @@ const emulatorServerSource = await readFile(
   path.join(rootDir, "mcp-servers", "emulator", "server.py"),
   "utf8",
 );
+const sgdkBuildServerSource = await readFile(
+  path.join(rootDir, "mcp-servers", "sgdk-build", "server.py"),
+  "utf8",
+);
 const comfyUiSource = await readFile(
   path.join(rootDir, "app", "src-tauri", "src", "comfyui.rs"),
   "utf8",
@@ -238,6 +242,11 @@ for (const expected of [
   "Do not assume ComfyUI can produce a complete sprite sheet",
   "generate and validate separate role-specific sprites",
   "Complete generated games include simple music or SFX",
+  "drive16-sgdk-build.audit_project_memory",
+  'expect_gate: "pass"',
+  "repair those exact documentation claims",
+  "send_input` with `reset: true`",
+  "a separate `send_input` with `start`",
   "Build the core playable game before optional music",
   "Music is a bounded enhancement, not a",
   "Before the first `compile_music` call",
@@ -274,6 +283,19 @@ for (const expected of [
   assert(
     normalizedBuilderSkill.includes(expected),
     `Builder skill is missing contract text: ${expected}`,
+  );
+}
+
+for (const expected of [
+  '"name": "audit_project_memory"',
+  '"expect_gate"',
+  "PROJECT_MEMORY_AUDIT_SCRIPT",
+  '"--expect-gate"',
+  '"ok": report.get("status") == "passed"',
+]) {
+  assert(
+    sgdkBuildServerSource.includes(expected),
+    `SGDK build MCP is missing project-memory audit support: ${expected}`,
   );
 }
 
@@ -341,6 +363,7 @@ for (const expected of [
   "does not record captured audio evidence",
   "function hasCapturedAudioEvidence",
   "function audioEvidenceIsNegated",
+  'replace(/\\bnonSilent\\b/gi, "non-silent")',
   "function hasAssetPlan",
   "function assetRoleIsVague",
   "function generatedAssetRecordsPrompt",
@@ -409,6 +432,7 @@ for (const expected of [
 for (const expected of [
   "missing-audio",
   "good-audio",
+  "good-camel-case-audio",
   "uncaptured-audio",
   "explicit-no-audio",
   "self-omitted-audio",
@@ -500,6 +524,9 @@ for (const expected of [
   "firstBuildSeed",
   "--allow-seeded-source",
   "examples/game-skeletons/snake-basic",
+  "emulatorInputScriptPath",
+  "send_input with reset true",
+  "await rm(emulatorInputScriptPath, { force: true })",
 ]) {
   assert(
     liveGameAuditPromptRunnerSource.includes(expected),

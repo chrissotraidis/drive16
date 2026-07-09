@@ -88,8 +88,8 @@ TOOLS: list[dict[str, Any]] = [
                 },
                 "use_input_script": {
                     "type": "boolean",
-                    "description": "Use the pending input script from send_input. Defaults to false for audio-only checks.",
-                    "default": True,
+                    "description": "Use the pending input script from send_input. Defaults to false.",
+                    "default": False,
                 },
                 "stream_frames": {
                     "type": "boolean",
@@ -156,7 +156,10 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "send_input",
         "title": "Send Input",
-        "description": "Write a sparse Genteel input-script event for the next run_rom call.",
+        "description": (
+            "Write a sparse Genteel input-script event for the next run_rom call. "
+            "Set reset=true on the first event of each verification sequence so inputs from an earlier ROM cannot leak in."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {

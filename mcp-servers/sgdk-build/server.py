@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -16,6 +17,7 @@ PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOLS = {PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_SCRIPT = REPO_ROOT / "scripts" / "build-sgdk.sh"
+PROJECT_MEMORY_AUDIT_SCRIPT = REPO_ROOT / "scripts" / "verify-project-memory.mjs"
 LOG_DIR = REPO_ROOT / "artifacts" / "phase1" / "sgdk-build"
 LOG_FILE = LOG_DIR / "last-build.log"
 STATE_FILE = LOG_DIR / "last-build.json"
@@ -69,6 +71,31 @@ TOOLS: list[dict[str, Any]] = [
         "description": "Return the latest captured SGDK build or clean log.",
         "inputSchema": {
             "type": "object",
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "audit_project_memory",
+        "title": "Audit Drive16 Project Memory",
+        "description": (
+            "Check GAME.md, ASSETS.md, and PLAYTEST.md against the current ROM and return "
+            "specific issues to repair before calling the game complete."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {
+                    "type": "string",
+                    "description": "Repo-relative or absolute Drive16 project path.",
+                },
+                "expect_gate": {
+                    "type": "string",
+                    "enum": ["any", "pass", "fail", "unknown"],
+                    "description": "Expected PLAYTEST.md gate. Use pass before reporting completion.",
+                    "default": "pass",
+                },
+            },
+            "required": ["project_path"],
             "additionalProperties": False,
         },
     },
@@ -176,6 +203,48 @@ def run_sgdk(project_path: Path, target: str, action: str) -> dict[str, Any]:
     return tool_result(payload, is_error=process.returncode != 0)
 
 
+def audit_project_memory(project_path: Path, expect_gate: str) -> dict[str, Any]:
+    if not PROJECT_MEMORY_AUDIT_SCRIPT.is_file():
+        raise ToolExecutionError(f"Project-memory verifier is missing: {PROJECT_MEMORY_AUDIT_SCRIPT}")
+    if expect_gate not in {"any", "pass", "fail", "unknown"}:
+        raise ToolExecutionError("expect_gate must be any, pass, fail, or unknown.")
+
+    audit_dir = REPO_ROOT / "artifacts" / "phase9" / "project-memory-audit" / "mcp"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    project_id = hashlib.sha256(str(project_path).encode("utf-8")).hexdigest()[:12]
+    report_path = audit_dir / f"{project_id}.json"
+    process = subprocess.run(
+        [
+            "node",
+            str(PROJECT_MEMORY_AUDIT_SCRIPT),
+            "--project",
+            str(project_path),
+            "--expect-gate",
+            expect_gate,
+            "--out",
+            str(report_path),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if not report_path.is_file():
+        detail = tail(f"{process.stdout}\n{process.stderr}".strip())
+        raise ToolExecutionError(detail or "Project-memory audit did not produce a report.")
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    payload = {
+        **report,
+        "ok": report.get("status") == "passed",
+        "reportPath": str(report_path),
+    }
+    # A failed audit is actionable feedback, not a broken tool call. Returning
+    # a normal result lets the builder repair the listed issues and audit again.
+    return tool_result(payload)
+
+
 def call_tool(name: str, arguments: Any) -> dict[str, Any]:
     args = arguments if isinstance(arguments, dict) else {}
     if name == "build_rom":
@@ -196,6 +265,12 @@ def call_tool(name: str, arguments: Any) -> dict[str, Any]:
             state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
         payload = {**state, "log": LOG_FILE.read_text(encoding="utf-8")}
         return tool_result(payload, is_error=not bool(state.get("ok", True)))
+    if name == "audit_project_memory":
+        project_path = resolve_project_path(args.get("project_path"))
+        expect_gate = args.get("expect_gate", "pass")
+        if not isinstance(expect_gate, str):
+            raise ToolExecutionError("expect_gate must be a string.")
+        return audit_project_memory(project_path, expect_gate)
     raise KeyError(name)
 
 

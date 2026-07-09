@@ -156,7 +156,9 @@ function generatedAssetRecordsUse(row) {
 }
 
 function normalizeEvidenceText(text) {
-  return text.replace(/[\u2010-\u2015\u2212]/g, "-");
+  return text
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\bnonSilent\b/gi, "non-silent");
 }
 
 const genreAuditRules = [

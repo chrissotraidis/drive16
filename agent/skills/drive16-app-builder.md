@@ -118,10 +118,11 @@ not use repo-root relative globs like `res/*` for audit projects.
    `drive16-emulator` tool: `run_rom` on `out/rom.bin`, then `capture_frame`
    to look at the screen. Use `send_input` to test controls.
    Immediately after `build_rom` succeeds, do not inspect or rewrite docs:
-   `run_rom`, `capture_frame`, `send_input` with lowercase button names such
-   as `right`, `run_rom` with `use_input_script: true`, `capture_frame` again,
-   `send_input` with `start` when restart applies, then `verify_audio` if sound
-   is expected. Valid button names are lowercase: `left`, `right`, `up`,
+   `run_rom`, `capture_frame`, `send_input` with `reset: true` and lowercase
+   button names such as `right`, then a separate `send_input` with `start`
+   when restart applies, `run_rom` with `use_input_script: true`,
+   `capture_frame` again, then `verify_audio` if sound is expected. Valid
+   button names are lowercase: `left`, `right`, `up`,
    `down`, `start`, `a`, `b`, `c`, `x`, `y`, `z`, and `mode`.
 6. When the game includes music or sound effects, or when the `Drive16
    settings:` block says MML music is enabled for a complete-game prompt, call
@@ -156,6 +157,10 @@ turn is:
    verify audio when expected.
 4. Only after that evidence exists, update `GAME.md`, `ASSETS.md`, and
    `PLAYTEST.md` with the current state.
+5. Call `drive16-sgdk-build.audit_project_memory` with `expect_gate: "pass"`.
+   If it returns issues, repair those exact documentation claims and audit once
+   more. If the second audit still fails, keep the gate failed and report the
+   remaining issue instead of claiming completion.
 
 Never use `GAME.md` to claim `out/rom.bin` is built unless `build_rom` succeeded
 after the final source/resource edit. Never write `Known Issues: none` unless
