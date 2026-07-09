@@ -36,8 +36,9 @@ that the generated game is good or playable.
 | AI sprites through ComfyUI | Tooling exists; Settings can check/launch local ComfyUI, but the agent must disclose fallback art when unavailable |
 | Asset and sound disclosure | Working: `ASSETS.md` is the enforced role ledger and the project menu previews its rows |
 | Playability verification | Working for the primitive/fallback audit: screen, input, restart, audio, genre, freshness, and project-memory evidence are required |
-| Live game-quality audit | Complete for DeepSeek V3.1 primitive/fallback runs across Snake, Pong, Tetris, and Asteroids |
-| Model bakeoff | Complete across DeepSeek V3.1, local Qwen 3.6 35B Coder, and local GPT-OSS 120B on the same four prompts |
+| Live game-quality audit | Functional four-prompt audit complete; its sparse historical frames are now rejected by presentation contract v2 |
+| Presentation baseline | Snake, Pong, Tetris, and Asteroids now build with custom tile art, composed panels, stronger palettes, and verified non-silent audio |
+| Model bakeoff | Three models × four prompts complete and rescored under presentation v2: all 12 historical outputs need visual repair, so DeepSeek is only the operational default |
 | Ollama as the agent brain | Working locally; Qwen passed the full Snake build/runtime/audio/project-memory gate, while DeepSeek remains the stronger default |
 | Distributable .app/.dmg | Ad-hoc-signed local `.app` and `.dmg` pass strict signature, disk-image, isolated install, writable-runtime, and first-project checks; Developer ID signing/notarization and owner license approval remain |
 | LICENSE file | Pending owner confirmation (MIT proposed) |
@@ -165,6 +166,7 @@ pnpm --dir app verify:live-game-audit         # self-test the next live game-qua
 pnpm --dir app verify:live-game-audit:report  # fails until all live prompt runs have evidence files
 pnpm --dir app prepare:model-bakeoff          # requires the completed live audit report first
 pnpm --dir app verify:model-bakeoff:report    # fails until all model/prompt evidence files exist
+pnpm --dir app verify:presentation-baseline  # build/capture/audio-check all four richer genre skeletons
 pnpm --dir app release:macos                  # ad-hoc-signed local .app/.dmg + isolated install smoke
 pnpm --dir app verify:release:macos           # verify existing release artifacts without rebuilding
 cargo test --manifest-path app/src-tauri/Cargo.toml   # native tests
@@ -200,6 +202,7 @@ patches/              Genteel frame-streaming patch
 Key documents:
 
 - `docs/overhaul-plan.md` — the 2026-07-05 audit and the five-track plan
+- `docs/presentation-quality.md` — the v2 visual baseline and proof metrics
 - `docs/project-structure.md` — how a game lives on disk
 - `PROGRESS.md` — current ledger; `WORKLOG.md` — iteration journal
 - `DECISIONS.md` — recorded decisions (license proposal, emulator choices)

@@ -220,6 +220,18 @@ const runtimeSource = await readFile(
   path.join(rootDir, "app", "src-tauri", "src", "runtime.rs"),
   "utf8",
 );
+const screenshotQualitySource = await readFile(
+  path.join(rootDir, "scripts", "validate-game-screenshot.py"),
+  "utf8",
+);
+const presentationBaselineSource = await readFile(
+  path.join(rootDir, "scripts", "verify-presentation-quality-baseline.sh"),
+  "utf8",
+);
+const skeletonInteractionSource = await readFile(
+  path.join(rootDir, "scripts", "verify-skeleton-interaction.py"),
+  "utf8",
+);
 const builderSkill = await readFile(
   path.join(rootDir, "agent", "skills", "drive16-app-builder.md"),
   "utf8",
@@ -286,6 +298,8 @@ for (const expected of [
   "examples/game-skeletons/snake-basic/",
   "examples/game-skeletons/asteroids-basic/",
   "exact `## Quality Review` section",
+  "A sparse text-glyph prototype is not the default presentation bar",
+  "Run the screenshot quality audit after the final visual edit",
 ]) {
   assert(
     normalizedBuilderSkill.includes(expected),
@@ -650,6 +664,10 @@ for (const expected of [
   "function relativeOrAbsoluteExists",
   "evidence.playtestPath does not exist",
   "evidence.auditReportPath does not exist",
+  "evidence.screenshotPath does not exist",
+  "evidence.screenQualityPath does not exist",
+  "screenshot-quality contract version 2",
+  "presentation score contradicts its screenshot-quality report",
   "Model bakeoff report is missing",
   "prepare:model-bakeoff only after the completed live audit passes",
   "Missing run for ${model.id} / ${prompt.id}; all models must use the same required prompts.",
@@ -659,6 +677,40 @@ for (const expected of [
   assert(
     modelBakeoffVerifierSource.includes(expected),
     `Model bakeoff verifier is missing evidence guard: ${expected}`,
+  );
+}
+
+for (const expected of [
+  '"contractVersion": 2',
+  "flat prototype palette",
+  "more than 84% of the frame",
+  "Sparse prototype screenshot fixture was not rejected",
+]) {
+  assert(
+    screenshotQualitySource.includes(expected),
+    `Screenshot quality validator is missing presentation-v2 guard: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "artifacts/phase9/presentation-baseline",
+  "--audio-report",
+  "Presentation baseline passed for Snake, Pong, Tetris, and Asteroids.",
+]) {
+  assert(
+    presentationBaselineSource.includes(expected),
+    `Presentation baseline verifier is missing: ${expected}`,
+  );
+}
+
+for (const expected of [
+  '"inputChangedFrame"',
+  '"restartMatchedFreshState"',
+  '(120, ["start"])',
+]) {
+  assert(
+    skeletonInteractionSource.includes(expected),
+    `Skeleton interaction verifier is missing: ${expected}`,
   );
 }
 

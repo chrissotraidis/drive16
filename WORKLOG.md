@@ -1,5 +1,39 @@
 # Drive16 Worklog
 
+## 2026-07-10 - ITERATION 119 - presentation-v2 quality recovery
+
+Did:
+
+- Visually inspected the four promoted game frames and rejected the earlier
+  conclusion that their green evidence records proved acceptable presentation.
+- Rebuilt all four deterministic genre skeletons with custom 8x8 tile art,
+  composed playfield panels, richer palette hierarchy, and distinct object
+  silhouettes while preserving their established gameplay loops.
+- Tightened the screenshot gate to reject flat palettes, mostly single-color
+  scenes, sparse game art, and corrupt high-frequency output.
+- Added one deterministic baseline command that builds, captures, visually
+  audits, and verifies non-silent audio for all four games.
+- Rescored all 12 existing model-bakeoff screenshots under presentation
+  contract v2 without making any new model calls.
+
+Evidence:
+
+- `pnpm --dir app verify:presentation-baseline` passed for Snake, Pong,
+  Tetris, and Asteroids.
+- The new baselines show 8-10 visible colors, 33.9%-57.4% dominant-color
+  coverage, 33.5%-44.5% foreground coverage, and non-silent audio.
+- Deterministic input scripts visibly change every game frame, and a Start
+  reset returns each game to within 0%-0.7% pixel difference of the equivalent
+  fresh state after the same follow-up time.
+- The same validator rejects all four older promoted text-grid frames.
+- `pnpm --dir app verify:model-bakeoff:report` passes with 0/12 historical
+  presentation passes explicitly recorded instead of a false visual winner.
+
+Next:
+
+- Rebuild the packaged app so it embeds the upgraded skeletons, then retain
+  the MIT decision and Apple signing/notarization as the final owner gates.
+
 ## 2026-07-10 - ITERATION 118 - signed local package and clean-install smoke
 
 Did:
@@ -21,7 +55,7 @@ Evidence:
 - The isolated first launch created all eight support entries and
   `artifacts/phase3/active-project/Makefile` under its clean app-data runtime.
 - DMG SHA-256:
-  `ed26497c3405f175c7c6d3e3ae9b02fd8b5f3c9daf1461a3532ecd02cde3595b`.
+  `1380d02fc78f3e2a50c05a304b3e5d7cefc79c4cab11f72bc558db158d649cf7`.
 
 Note:
 

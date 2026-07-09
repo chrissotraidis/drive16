@@ -177,6 +177,10 @@ playable, verify the relevant checklist and record it in `PLAYTEST.md`:
 - Movement is visible after input.
 - Controls map to the intended actions.
 - The first screen and active play state are readable.
+- The active playfield has deliberate visual structure: use custom tiles,
+  panels, borders, palette contrast, and clear object silhouettes. A sparse
+  text-glyph prototype is not the default presentation bar unless the user
+  explicitly asks for a text-only style.
 - Start and restart behavior work when the game uses Start.
 - Score or state counters start at the intended value.
 - The game does not instantly fail, soft-lock, or hide the player.
@@ -226,6 +230,9 @@ with specific observations for `Screen composition`, `Player feedback`,
 `Restart clarity`, `Audio response`, and `Style coherence`. Do not pass a game
 with pending fields or generic claims such as "looks good"; record what is
 visible or audible and call out any limitation that still matters.
+Run the screenshot quality audit after the final visual edit. It rejects flat
+palettes, mostly empty/single-color scenes, and corrupt high-frequency output;
+do not try to satisfy it with decorative noise. Fix the composition itself.
 
 If any item is not verified or fails, say so plainly: "The ROM builds, but I
 do not consider it playable yet because..." Then fix it if possible before

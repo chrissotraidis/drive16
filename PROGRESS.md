@@ -3,8 +3,8 @@
 Current phase: Ad-hoc-signed local release verified; owner-controlled release gates
 remain.
 
-The builder reliability, four-prompt live audit, first-run UX, game-quality
-contract, and model bakeoff are complete. A release-mode macOS `.app` now runs
+The builder reliability, four-prompt functional audit, first-run UX, stricter
+presentation baseline, and three-model comparison are complete. A release-mode macOS `.app` now runs
 from bundled support files copied into Application Support, with an explicit
 CSP and a user-supplied Play-core policy. Remaining release work requires owner
 input or credentials: confirm the proposed MIT license, sign/notarize with an
@@ -22,7 +22,13 @@ notarized artifact.
   build, screen, directional input, restart, audio, assets, genre rules,
   project memory, trace, agent completion, and fresh evidence.
 - The three-model/four-prompt bakeoff remains verified. DeepSeek is the quality
-  default; Qwen is the zero-cost local fallback.
+  operational default; Qwen is the zero-cost local fallback. After rescoring
+  every historical screenshot under presentation contract v2, all 12 outputs
+  need visual repair, so the report no longer overstates a visual winner.
+- Replaced the sparse text-grid genre skeletons with custom 8x8 tile art,
+  composed playfield panels, stronger palette hierarchy, and distinct object
+  silhouettes. All four baselines build, pass v2 screenshot checks, and emit
+  verified non-silent audio without any new model calls.
 - Tauri bundling is enabled. The release `.app` embeds the 3.7 MB Drive16
   support runtime, copies it to
   `~/Library/Application Support/dev.drive16.desktop/runtime`, and initializes
@@ -56,8 +62,9 @@ notarized artifact.
 - Fixed an audio-negation false positive where `no errors` on a build line
   could be paired with `captured` on a screenshot line and incorrectly reject
   later non-silent audio proof.
-- Model bakeoff remains deliberately paused while the first-run experience and
-  generated-game quality bar are improved.
+- The model bakeoff was run only after the first-run and evidence contracts
+  stabilized. Its historical screenshots are now explicitly rescored under
+  presentation v2 rather than grandfathered as visually complete.
 
 ## First-run and operational UI update (2026-07-09)
 
@@ -523,8 +530,10 @@ Current recovery evidence from this pass:
 - [x] Structure formalized: `docs/project-structure.md`, starter template
   ships `res/` scaffold, project menu shows the Workspace folder, agent
   skill carries identity/capabilities and a no-tools-for-greetings rule.
-- [ ] Track E (rest) - packaging: app-data paths, enable Tauri bundling,
-  LICENSE, CSP, core distribution policy.
+- [~] Track E (rest) - app-data paths, Tauri bundling, CSP, and the user-core
+  policy are implemented and the ad-hoc local package passes an isolated
+  install smoke. LICENSE confirmation plus Developer ID signing/notarization
+  remain owner-controlled.
 
 Older phase history follows below.
 

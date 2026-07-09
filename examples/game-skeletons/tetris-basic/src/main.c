@@ -7,6 +7,18 @@
 #define FIELD_H 18
 #define DROP_FRAMES 28
 #define FAST_DROP_FRAMES 5
+#define TILE_SOLID TILE_USER_INDEX
+#define TILE_INSET (TILE_USER_INDEX + 1)
+#define TILE_GRID (TILE_USER_INDEX + 2)
+
+static const u32 presentation_tiles[24] = {
+    0x11111111, 0x11111111, 0x11111111, 0x11111111,
+    0x11111111, 0x11111111, 0x11111111, 0x11111111,
+    0x11111111, 0x12222221, 0x12333321, 0x12333321,
+    0x12333321, 0x12333321, 0x12222221, 0x11111111,
+    0x11111111, 0x22222222, 0x11111111, 0x22222222,
+    0x11111111, 0x22222222, 0x11111111, 0x22222222,
+};
 
 static u8 board[FIELD_H][FIELD_W];
 static s16 piece_x;
@@ -19,6 +31,7 @@ static u8 score;
 static u16 frame_counter;
 static u16 previous_joy;
 static bool game_over;
+static bool presentation_ready;
 
 static const u8 piece_sequence[] = {2, 0, 1, 3, 2, 1, 0, 3};
 
@@ -30,6 +43,22 @@ static void draw_abs(s16 x, s16 y, const char *text)
 static void draw_field(s16 x, s16 y, const char *text)
 {
     draw_abs(FIELD_X + x, FIELD_Y + y, text);
+}
+
+static u16 art_tile(u16 palette, u16 tile)
+{
+    return TILE_ATTR_FULL(palette, FALSE, FALSE, FALSE, tile);
+}
+
+static void draw_field_tile(s16 x, s16 y, u16 palette, u16 tile)
+{
+    VDP_setTileMapXY(BG_A, art_tile(palette, tile), (u16)(FIELD_X + x), (u16)(FIELD_Y + y));
+}
+
+static u16 piece_palette(u8 type)
+{
+    static const u16 palettes[] = {PAL1, PAL2, PAL3, PAL2};
+    return palettes[type & 3];
 }
 
 static bool piece_cell(u8 type, u8 rot, s16 x, s16 y)
@@ -116,7 +145,7 @@ static void draw_stats(void)
     line_text[7] = (char)('0' + (lines % 10));
     score_text[6] = (char)('0' + ((score / 10) % 10));
     score_text[7] = (char)('0' + (score % 10));
-    draw_abs(2, 2, "DRIVE16 TETRIS");
+    draw_abs(2, 2, "DRIVE16 // TETRIS");
     draw_abs(24, 6, line_text);
     draw_abs(24, 8, score_text);
     draw_abs(24, 11, "UP/A ROTATE");
@@ -124,21 +153,44 @@ static void draw_stats(void)
     draw_abs(24, 15, "START RESET");
 }
 
+static void draw_next_piece(void)
+{
+    const u8 next_type = piece_sequence[piece_index % (sizeof(piece_sequence) / sizeof(piece_sequence[0]))];
+    draw_abs(24, 18, "NEXT");
+    for (s16 y = 0; y < 4; y++)
+    {
+        for (s16 x = 0; x < 4; x++)
+        {
+            if (piece_cell(next_type, 0, x, y))
+            {
+                VDP_setTileMapXY(BG_A, art_tile(piece_palette(next_type), TILE_INSET), (u16)(25 + x), (u16)(20 + y));
+            }
+        }
+    }
+}
+
 static void render(void)
 {
-    VDP_clearPlane(BG_A, TRUE);
+    if (!presentation_ready)
+    {
+        VDP_clearPlane(BG_A, TRUE);
+        VDP_clearPlane(BG_B, TRUE);
+        VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 0, 40, 4);
+        VDP_fillTileMapRect(BG_B, art_tile(PAL1, TILE_GRID), FIELD_X + 1, FIELD_Y + 1, FIELD_W, FIELD_H);
+        VDP_fillTileMapRect(BG_B, art_tile(PAL1, TILE_GRID), 23, 5, 15, 20);
+        presentation_ready = TRUE;
+    }
+    else
+    {
+        VDP_fillTileMapRect(BG_A, 0, FIELD_X + 1, FIELD_Y + 1, FIELD_W, FIELD_H);
+        VDP_fillTileMapRect(BG_A, 0, 23, 5, 15, 20);
+    }
     draw_stats();
 
-    for (s16 x = 0; x < FIELD_W + 2; x++)
-    {
-        draw_field(x, 0, "#");
-        draw_field(x, FIELD_H + 1, "#");
-    }
-    for (s16 y = 1; y <= FIELD_H; y++)
-    {
-        draw_field(0, y, "#");
-        draw_field(FIELD_W + 1, y, "#");
-    }
+    VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_X, FIELD_Y, FIELD_W + 2, 1);
+    VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_X, FIELD_Y + FIELD_H + 1, FIELD_W + 2, 1);
+    VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_X, FIELD_Y + 1, 1, FIELD_H);
+    VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_X + FIELD_W + 1, FIELD_Y + 1, 1, FIELD_H);
 
     for (s16 y = 0; y < FIELD_H; y++)
     {
@@ -146,7 +198,7 @@ static void render(void)
         {
             if (board[y][x])
             {
-                draw_field(x + 1, y + 1, "X");
+                draw_field_tile(x + 1, y + 1, piece_palette(board[y][x] - 1), TILE_INSET);
             }
         }
     }
@@ -163,7 +215,7 @@ static void render(void)
             const s16 gy = piece_y + y;
             if (gx >= 0 && gx < FIELD_W && gy >= 0 && gy < FIELD_H)
             {
-                draw_field(gx + 1, gy + 1, "O");
+                draw_field_tile(gx + 1, gy + 1, piece_palette(piece_type), TILE_INSET);
             }
         }
     }
@@ -173,6 +225,7 @@ static void render(void)
         draw_field(2, 8, "GAME OVER");
         draw_field(1, 10, "PRESS START");
     }
+    draw_next_piece();
 }
 
 static void clear_lines(void)
@@ -246,7 +299,7 @@ static void lock_piece(void)
             const s16 gy = piece_y + y;
             if (gx >= 0 && gx < FIELD_W && gy >= 0 && gy < FIELD_H)
             {
-                board[gy][gx] = 1;
+                board[gy][gx] = piece_type + 1;
             }
         }
     }
@@ -333,7 +386,21 @@ int main(bool hardReset)
 
     VDP_setScreenWidth320();
     PAL_setColor(0, RGB24_TO_VDPCOLOR(0x281038));
+    PAL_setColor(17, RGB24_TO_VDPCOLOR(0x5A2A84));
+    PAL_setColor(18, RGB24_TO_VDPCOLOR(0x311A52));
+    PAL_setColor(19, RGB24_TO_VDPCOLOR(0xB96AF0));
+    PAL_setColor(31, RGB24_TO_VDPCOLOR(0xE6B7FF));
+    PAL_setColor(33, RGB24_TO_VDPCOLOR(0xE05A55));
+    PAL_setColor(34, RGB24_TO_VDPCOLOR(0x8C2F4B));
+    PAL_setColor(35, RGB24_TO_VDPCOLOR(0xFFB35A));
+    PAL_setColor(47, RGB24_TO_VDPCOLOR(0xFFF0A8));
+    PAL_setColor(49, RGB24_TO_VDPCOLOR(0x2C84A6));
+    PAL_setColor(50, RGB24_TO_VDPCOLOR(0x164B70));
+    PAL_setColor(51, RGB24_TO_VDPCOLOR(0x62D7E8));
+    PAL_setColor(63, RGB24_TO_VDPCOLOR(0xF4FCFF));
     VDP_setBackgroundColor(0);
+    VDP_loadTileData(presentation_tiles, TILE_SOLID, 3, CPU);
+    VDP_setTextPalette(PAL3);
     JOY_init();
     XGM_startPlay(tetris_loop);
 

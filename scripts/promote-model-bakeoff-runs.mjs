@@ -108,6 +108,17 @@ async function buildRun(model, promptId) {
   const assetsPath = resolveEvidence(record.evidence.assetsPath);
   const auditPath = resolveEvidence(record.evidence.projectMemoryAuditPath);
   const tracePath = resolveEvidence(record.evidence.buildLogPath);
+  const screenshotPath = resolveEvidence(record.evidence.screenshotPath);
+  const screenQualityPath = path.join(path.dirname(recordPath), "screen-quality-v2.json");
+  try {
+    await execFileAsync(
+      "python3",
+      ["scripts/validate-game-screenshot.py", screenshotPath, "--out", screenQualityPath],
+      { cwd: rootDir },
+    );
+  } catch (error) {
+    if (error?.code !== 1) throw error;
+  }
   const [playtestText, assetsText, auditText, traceText] = await Promise.all([
     readFile(playtestPath, "utf8"),
     readFile(assetsPath, "utf8"),
@@ -115,6 +126,7 @@ async function buildRun(model, promptId) {
     readFile(tracePath, "utf8"),
   ]);
   const audit = JSON.parse(auditText);
+  const screenQuality = JSON.parse(await readFile(screenQualityPath, "utf8"));
   const trace = analyzeOpenCodeAudioTrace(traceText);
   const issues = record.issues ?? [];
 
@@ -125,15 +137,22 @@ async function buildRun(model, promptId) {
     toolUse: toolUseScore(trace),
     assetUse: assetUseScore(audit, assetsText),
     playability: playability(record),
+    presentation: screenQuality.status === "passed" ? "pass" : "needs-repair",
     honesty: honestyScore(record, playtestText, agentText(traceText)),
     timeSeconds: record.elapsedSeconds,
     costUsd: Number(traceCost(traceText).toFixed(6)),
     evidence: {
       playtestPath: relative(playtestPath),
       auditReportPath: relative(auditPath),
-      notes: issues.length > 0
-        ? `${model.runMode}: ${issues.join(" ")}`
-        : `${model.runMode}: all live-audit checks passed.`,
+      screenshotPath: relative(screenshotPath),
+      screenQualityPath: relative(screenQualityPath),
+      notes: `${
+        issues.length > 0
+          ? `${model.runMode}: ${issues.join(" ")}`
+          : `${model.runMode}: all live-audit checks passed.`
+      } Presentation v2: ${
+        screenQuality.status === "passed" ? "passed." : screenQuality.issues.join(" ")
+      }`,
     },
   };
 }
@@ -155,6 +174,7 @@ async function main() {
       runs.push(await buildRun(model, promptId));
     }
   }
+  const presentationPasses = runs.filter((run) => run.presentation === "pass").length;
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -173,9 +193,27 @@ async function main() {
       { id: "asteroids-basic", text: "Build a simple working Genesis-style Asteroids game." },
     ],
     runs,
-    methodology: selection.methodology,
+    presentationSummary: {
+      contractVersion: 2,
+      passed: presentationPasses,
+      needsRepair: runs.length - presentationPasses,
+      note: "Existing model outputs were rescored without new model calls.",
+    },
+    methodology: {
+      ...selection.methodology,
+      presentationContract:
+        "Every existing screenshot was rescored with screenshot-quality contract v2 after the deterministic genre skeletons were upgraded. This is a historical-output rescore, not a fresh generation run.",
+    },
     operationalFallback: selection.operationalFallback,
-    recommendedDefault: selection.recommendedDefault,
+    recommendedDefault: selection.recommendedDefault
+      ? {
+          ...selection.recommendedDefault,
+          reason:
+            presentationPasses === 0
+              ? "DeepSeek remains the strongest tested model for functional completion, tool discipline, and documentation honesty. No historical model output passes presentation contract v2, so this recommendation is operational rather than a visual-quality sign-off."
+              : selection.recommendedDefault.reason,
+        }
+      : null,
   };
 
   await mkdir(path.dirname(args.report), { recursive: true });

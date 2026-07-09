@@ -30,7 +30,7 @@ Date: 2026-07-10
 
 - App bundle: `app/src-tauri/target/release/bundle/macos/Drive16.app`
 - DMG: `app/src-tauri/target/release/bundle/dmg/Drive16_0.1.0_aarch64.dmg`
-- DMG SHA-256: `ed26497c3405f175c7c6d3e3ae9b02fd8b5f3c9daf1461a3532ecd02cde3595b`
+- DMG SHA-256: `1380d02fc78f3e2a50c05a304b3e5d7cefc79c4cab11f72bc558db158d649cf7`
 - Packaged resources: `Drive16.app/Contents/Resources/drive16-support/`
 - Writable runtime: `~/Library/Application Support/dev.drive16.desktop/runtime/`
 - Local Qwen pass: `artifacts/phase9/model-bakeoff/runs/local-qwen-snake-audit-tool-proof/run-record.json`

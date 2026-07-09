@@ -8,6 +8,33 @@
 #define MAX_ASTEROIDS 6
 #define MAX_BULLETS 5
 #define STEP_FRAMES 10
+#define TILE_SOLID TILE_USER_INDEX
+#define TILE_STAR (TILE_USER_INDEX + 1)
+#define TILE_ROCK (TILE_USER_INDEX + 2)
+#define TILE_BULLET (TILE_USER_INDEX + 3)
+#define TILE_SHIP_UP (TILE_USER_INDEX + 4)
+#define TILE_SHIP_RIGHT (TILE_USER_INDEX + 5)
+#define TILE_SHIP_DOWN (TILE_USER_INDEX + 6)
+#define TILE_SHIP_LEFT (TILE_USER_INDEX + 7)
+
+static const u32 presentation_tiles[64] = {
+    0x11111111, 0x11111111, 0x11111111, 0x11111111,
+    0x11111111, 0x11111111, 0x11111111, 0x11111111,
+    0x10000000, 0x00000000, 0x00000000, 0x00001000,
+    0x00000000, 0x00000000, 0x00100000, 0x00000000,
+    0x00111100, 0x01222210, 0x12233221, 0x12322321,
+    0x12233221, 0x01222210, 0x00111100, 0x00000000,
+    0x00011000, 0x00122100, 0x01233210, 0x12333321,
+    0x01233210, 0x00122100, 0x00011000, 0x00000000,
+    0x00011000, 0x00122100, 0x01233210, 0x12333321,
+    0x00033000, 0x00033000, 0x00033000, 0x00000000,
+    0x00010000, 0x00012000, 0x33312300, 0x33333321,
+    0x33312300, 0x00012000, 0x00010000, 0x00000000,
+    0x00033000, 0x00033000, 0x00033000, 0x12333321,
+    0x01233210, 0x00122100, 0x00011000, 0x00000000,
+    0x00001000, 0x00021000, 0x00321333, 0x12333333,
+    0x00321333, 0x00021000, 0x00001000, 0x00000000,
+};
 
 typedef struct
 {
@@ -27,8 +54,12 @@ static u16 score;
 static u8 lives;
 static u8 direction;
 static bool game_over;
+static bool presentation_ready;
 
 static void draw_game(void);
+static void erase_objects(void);
+static void draw_status(void);
+static void draw_objects(void);
 
 static const s16 asteroid_starts[MAX_ASTEROIDS][4] = {
     {5, 7, 1, 0},
@@ -43,6 +74,21 @@ static void draw_with_palette(u16 palette, s16 x, s16 y, const char *text)
 {
     VDP_setTextPalette(palette);
     VDP_drawText(text, (u16)x, (u16)y);
+}
+
+static u16 art_tile(u16 palette, u16 tile)
+{
+    return TILE_ATTR_FULL(palette, FALSE, FALSE, FALSE, tile);
+}
+
+static void draw_art(s16 x, s16 y, u16 palette, u16 tile)
+{
+    VDP_setTileMapXY(BG_A, art_tile(palette, tile), (u16)x, (u16)y);
+}
+
+static void clear_art(s16 x, s16 y)
+{
+    VDP_setTileMapXY(BG_A, 0, (u16)x, (u16)y);
 }
 
 static void wrap(GameObject *object)
@@ -104,8 +150,10 @@ static void read_input(void)
 
     if ((joy & BUTTON_START) && !(previous_joy & BUTTON_START))
     {
+        erase_objects();
         reset_game();
-        draw_game();
+        draw_status();
+        draw_objects();
     }
     if (!game_over)
     {
@@ -191,26 +239,20 @@ static void draw_status(void)
 
 static void erase_objects(void)
 {
-    draw_with_palette(0, ship.x - 1, ship.y, "   ");
+    clear_art(ship.x, ship.y);
     for (u8 i = 0; i < MAX_ASTEROIDS; i++)
-        if (asteroids[i].active) draw_with_palette(0, asteroids[i].x, asteroids[i].y, "  ");
+        if (asteroids[i].active) clear_art(asteroids[i].x, asteroids[i].y);
     for (u8 i = 0; i < MAX_BULLETS; i++)
-        if (bullets[i].active) draw_with_palette(0, bullets[i].x, bullets[i].y, " ");
+        if (bullets[i].active) clear_art(bullets[i].x, bullets[i].y);
 }
 
 static void draw_objects(void)
 {
-    static const char *ship_glyphs[] = {"<^>", "[>]", "<v>", "[<]"};
-
-    draw_with_palette(1, 7, 10, ".");
-    draw_with_palette(1, 14, 16, ".");
-    draw_with_palette(1, 28, 12, ".");
-    draw_with_palette(1, 33, 18, ".");
     for (u8 i = 0; i < MAX_ASTEROIDS; i++)
-        if (asteroids[i].active) draw_with_palette(1, asteroids[i].x, asteroids[i].y, "OO");
+        if (asteroids[i].active) draw_art(asteroids[i].x, asteroids[i].y, PAL1, TILE_ROCK);
     for (u8 i = 0; i < MAX_BULLETS; i++)
-        if (bullets[i].active) draw_with_palette(2, bullets[i].x, bullets[i].y, "*");
-    draw_with_palette(3, ship.x - 1, ship.y, ship_glyphs[direction]);
+        if (bullets[i].active) draw_art(bullets[i].x, bullets[i].y, PAL2, TILE_BULLET);
+    draw_art(ship.x, ship.y, PAL3, (u16)(TILE_SHIP_UP + direction));
 
     if (game_over)
     {
@@ -221,22 +263,32 @@ static void draw_objects(void)
 
 static void draw_game(void)
 {
-    VDP_clearPlane(BG_A, TRUE);
-    draw_with_palette(0, 0, 0, "        ");
-    draw_with_palette(0, 11, 1, "DRIVE16 ASTEROIDS");
-
-    for (s16 x = FIELD_LEFT; x <= FIELD_RIGHT; x++)
+    if (!presentation_ready)
     {
-        draw_with_palette(1, x, FIELD_TOP, "-");
-        draw_with_palette(1, x, FIELD_BOTTOM, "-");
-    }
-    for (s16 y = FIELD_TOP + 1; y < FIELD_BOTTOM; y++)
-    {
-        draw_with_palette(1, FIELD_LEFT, y, "|");
-        draw_with_palette(1, FIELD_RIGHT, y, "|");
-    }
+        VDP_clearPlane(BG_A, TRUE);
+        VDP_clearPlane(BG_B, TRUE);
+        VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 0, 40, 4);
+        VDP_fillTileMapRect(BG_B, art_tile(PAL1, TILE_STAR), FIELD_LEFT + 1, FIELD_TOP + 1,
+                            FIELD_RIGHT - FIELD_LEFT - 1, FIELD_BOTTOM - FIELD_TOP - 1);
+        draw_with_palette(PAL3, 10, 1, "DRIVE16 // ASTEROIDS");
 
-    draw_with_palette(0, 3, 26, "LEFT/RIGHT TURN  UP THRUST  A FIRE");
+        VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_LEFT, FIELD_TOP,
+                            FIELD_RIGHT - FIELD_LEFT + 1, 1);
+        VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_LEFT, FIELD_BOTTOM,
+                            FIELD_RIGHT - FIELD_LEFT + 1, 1);
+        VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_LEFT, FIELD_TOP + 1,
+                            1, FIELD_BOTTOM - FIELD_TOP - 1);
+        VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), FIELD_RIGHT, FIELD_TOP + 1,
+                            1, FIELD_BOTTOM - FIELD_TOP - 1);
+
+        VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 25, 40, 4);
+        draw_with_palette(PAL3, 3, 26, "LEFT/RIGHT TURN  UP THRUST  A FIRE");
+        presentation_ready = TRUE;
+    }
+    else
+    {
+        erase_objects();
+    }
     draw_status();
     draw_objects();
 }
@@ -246,11 +298,21 @@ int main(bool hardReset)
     (void)hardReset;
     VDP_setScreenWidth320();
     PAL_setColor(0, RGB24_TO_VDPCOLOR(0x081020));
-    PAL_setColor(15, RGB24_TO_VDPCOLOR(0xF4F0DA));
-    PAL_setColor(31, RGB24_TO_VDPCOLOR(0x8D95A8));
-    PAL_setColor(47, RGB24_TO_VDPCOLOR(0xFFB24A));
-    PAL_setColor(63, RGB24_TO_VDPCOLOR(0x63D7FF));
+    PAL_setColor(17, RGB24_TO_VDPCOLOR(0x66738C));
+    PAL_setColor(18, RGB24_TO_VDPCOLOR(0x303A52));
+    PAL_setColor(19, RGB24_TO_VDPCOLOR(0xAAB2C6));
+    PAL_setColor(31, RGB24_TO_VDPCOLOR(0xE8EDF7));
+    PAL_setColor(33, RGB24_TO_VDPCOLOR(0xFF9E3D));
+    PAL_setColor(34, RGB24_TO_VDPCOLOR(0xB84A3A));
+    PAL_setColor(35, RGB24_TO_VDPCOLOR(0xFFF0A8));
+    PAL_setColor(47, RGB24_TO_VDPCOLOR(0xFFF0A8));
+    PAL_setColor(49, RGB24_TO_VDPCOLOR(0x45C6D8));
+    PAL_setColor(50, RGB24_TO_VDPCOLOR(0x176784));
+    PAL_setColor(51, RGB24_TO_VDPCOLOR(0xD2FCFF));
+    PAL_setColor(63, RGB24_TO_VDPCOLOR(0xF4FCFF));
     VDP_setBackgroundColor(0);
+    VDP_loadTileData(presentation_tiles, TILE_SOLID, 8, CPU);
+    VDP_setTextPalette(PAL3);
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
     XGM_startPlay(asteroids_music);

@@ -55,10 +55,17 @@ def analyze_pixels(width: int, height: int, pixels: list[tuple[int, int, int, in
     issues: list[str] = []
     if width < 256 or height < 192:
         issues.append(f"Screenshot is too small for gameplay review: {width}x{height}.")
-    if len(colors) < 3:
-        issues.append("Screenshot has fewer than three visible colors.")
-    if foreground_ratio < 0.03:
-        issues.append("Screenshot is effectively blank.")
+    dominant_ratio = dominant_count / len(rgb)
+    if len(colors) < 7:
+        issues.append(
+            "Screenshot uses fewer than seven visible colors and still reads as a flat prototype palette."
+        )
+    if foreground_ratio < 0.06:
+        issues.append("Screenshot is effectively blank or lacks enough visible game art.")
+    if dominant_ratio > 0.84:
+        issues.append(
+            "One color covers more than 84% of the frame; add a composed playfield, panels, or richer scene structure."
+        )
     for index, ratio in enumerate(third_ratios, start=1):
         if ratio < 0.015:
             issues.append(f"Screen composition leaves vertical third {index} without meaningful content.")
@@ -70,6 +77,7 @@ def analyze_pixels(width: int, height: int, pixels: list[tuple[int, int, int, in
         issues.append("Screenshot repeats one identical row across nearly half the frame.")
 
     return {
+        "contractVersion": 2,
         "status": "passed" if not issues else "failed",
         "issues": issues,
         "metrics": {
@@ -77,7 +85,7 @@ def analyze_pixels(width: int, height: int, pixels: list[tuple[int, int, int, in
             "height": height,
             "visibleColors": len(colors),
             "dominantColor": "#{:02x}{:02x}{:02x}".format(*dominant_color),
-            "dominantRatio": round(dominant_count / len(rgb), 6),
+            "dominantRatio": round(dominant_ratio, 6),
             "foregroundRatio": round(foreground_ratio, 6),
             "foregroundByVerticalThird": [round(value, 6) for value in third_ratios],
             "uniqueRows": len(row_counts),
@@ -91,16 +99,42 @@ def run_self_test() -> None:
     width, height = 320, 240
     background = (8, 10, 20, 255)
     good = [background] * (width * height)
+    panel = (20, 34, 58, 255)
+    for y in range(22, 218):
+        for x in range(32, 288):
+            good[y * width + x] = panel
+    accents = [
+        (230, 220, 180, 255),
+        (80, 190, 130, 255),
+        (60, 150, 220, 255),
+        (240, 120, 80, 255),
+        (180, 90, 220, 255),
+        (250, 190, 70, 255),
+    ]
     for y in range(height):
         left = 24 + (y % 17)
         for x in range(left, min(width, left + 28)):
-            good[y * width + x] = (230, 220, 180, 255)
+            good[y * width + x] = accents[y % len(accents)]
     for y in range(16, 224, 32):
         for x in range(48, 272):
-            good[y * width + x] = (80, 190, 130, 255)
+            good[y * width + x] = accents[(y // 32) % len(accents)]
     good_report = analyze_pixels(width, height, good)
     if good_report["status"] != "passed":
         raise AssertionError(f"Good screenshot fixture failed: {good_report['issues']}")
+
+    prototype = [background] * (width * height)
+    prototype_colors = [(230, 230, 230, 255), (90, 120, 180, 255), (220, 140, 70, 255)]
+    for y in range(20, 220, 24):
+        color = prototype_colors[(y // 24) % len(prototype_colors)]
+        for x in range(48, 272):
+            if x % 12 < 2:
+                prototype[y * width + x] = color
+    prototype_report = analyze_pixels(width, height, prototype)
+    if prototype_report["status"] != "failed" or not any(
+        "flat prototype palette" in issue or "84%" in issue
+        for issue in prototype_report["issues"]
+    ):
+        raise AssertionError("Sparse prototype screenshot fixture was not rejected.")
 
     corrupt = []
     for y in range(height):

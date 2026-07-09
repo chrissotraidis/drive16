@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,7 @@ def main() -> int:
     parser.add_argument("rom", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--frames", type=int, default=180)
+    parser.add_argument("--audio-report", type=Path)
     args = parser.parse_args()
     if args.frames < 120:
         parser.error("--frames must be at least 120 for a stable final capture")
@@ -66,6 +68,24 @@ def main() -> int:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, args.output)
         print(args.output)
+        if args.audio_report:
+            try:
+                rom_path = str(args.rom.resolve().relative_to(ROOT))
+            except ValueError as error:
+                raise RuntimeError("Audio verification requires a repo-local ROM.") from error
+            audio = client.tool_call(
+                process,
+                4,
+                "verify_audio",
+                {
+                    "rom_path": rom_path,
+                    "frames": max(args.frames, 300),
+                    "use_input_script": False,
+                },
+            )
+            args.audio_report.parent.mkdir(parents=True, exist_ok=True)
+            args.audio_report.write_text(json.dumps(audio, indent=2) + "\n", encoding="utf-8")
+            print(args.audio_report)
         return 0
     finally:
         if process.stdin:

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,14 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
 const defaultReportPath = path.join(rootDir, "artifacts", "phase9", "model-bakeoff", "report.json");
 const requiredPromptIds = ["snake-basic", "pong-basic", "tetris-basic", "asteroids-basic"];
-const requiredScoreFields = ["compileSuccess", "toolUse", "assetUse", "playability", "honesty"];
+const requiredScoreFields = [
+  "compileSuccess",
+  "toolUse",
+  "assetUse",
+  "playability",
+  "presentation",
+  "honesty",
+];
 const requiredPlumbingGates = [
   "opencodePortRecovery",
   "comfyUiManagedDependency",
@@ -90,6 +97,13 @@ function validateScore(value, field, runLabel) {
     );
     return;
   }
+  if (field === "presentation") {
+    assert(
+      ["pass", "needs-repair", "fail"].includes(value),
+      `${runLabel} presentation must be pass, needs-repair, or fail.`,
+    );
+    return;
+  }
   assert(
     Number.isInteger(value) && value >= 0 && value <= 5,
     `${runLabel} ${field} must be an integer score from 0 to 5.`,
@@ -99,6 +113,10 @@ function validateScore(value, field, runLabel) {
 function relativeOrAbsoluteExists(filePath) {
   const resolved = path.isAbsolute(filePath) ? filePath : path.join(rootDir, filePath);
   return existsSync(resolved);
+}
+
+function resolveRelativeOrAbsolute(filePath) {
+  return path.isAbsolute(filePath) ? filePath : path.join(rootDir, filePath);
 }
 
 function validateReport(report, options = {}) {
@@ -181,6 +199,14 @@ function validateReport(report, options = {}) {
         `${runLabel} needs evidence.auditReportPath.`,
       );
       assert(
+        typeof run.evidence.screenshotPath === "string" && run.evidence.screenshotPath,
+        `${runLabel} needs evidence.screenshotPath.`,
+      );
+      assert(
+        typeof run.evidence.screenQualityPath === "string" && run.evidence.screenQualityPath,
+        `${runLabel} needs evidence.screenQualityPath.`,
+      );
+      assert(
         typeof run.evidence.notes === "string" && run.evidence.notes,
         `${runLabel} needs evidence.notes.`,
       );
@@ -192,6 +218,26 @@ function validateReport(report, options = {}) {
         assert(
           relativeOrAbsoluteExists(run.evidence.auditReportPath),
           `${runLabel} evidence.auditReportPath does not exist: ${run.evidence.auditReportPath}`,
+        );
+        assert(
+          relativeOrAbsoluteExists(run.evidence.screenshotPath),
+          `${runLabel} evidence.screenshotPath does not exist: ${run.evidence.screenshotPath}`,
+        );
+        assert(
+          relativeOrAbsoluteExists(run.evidence.screenQualityPath),
+          `${runLabel} evidence.screenQualityPath does not exist: ${run.evidence.screenQualityPath}`,
+        );
+        const quality = JSON.parse(
+          readFileSync(resolveRelativeOrAbsolute(run.evidence.screenQualityPath), "utf8"),
+        );
+        assert(
+          quality.contractVersion === 2,
+          `${runLabel} must be rescored with screenshot-quality contract version 2.`,
+        );
+        assert(
+          (quality.status === "passed" && run.presentation === "pass") ||
+            (quality.status === "failed" && run.presentation !== "pass"),
+          `${runLabel} presentation score contradicts its screenshot-quality report.`,
         );
       }
     });
@@ -262,12 +308,15 @@ function completeFixtureReport() {
       toolUse: 4 - Math.min(modelIndex, 1),
       assetUse: 3,
       playability: promptIndex === 0 ? "pass" : "needs-repair",
+      presentation: promptIndex === 0 ? "pass" : "needs-repair",
       honesty: 5,
       timeSeconds: 300 + modelIndex * 30 + promptIndex,
       costUsd: Number((0.03 + modelIndex * 0.02 + promptIndex * 0.005).toFixed(4)),
       evidence: {
         playtestPath: `artifacts/phase9/model-bakeoff/${model.id}/${prompt.id}/PLAYTEST.md`,
         auditReportPath: `artifacts/phase9/model-bakeoff/${model.id}/${prompt.id}/audit.json`,
+        screenshotPath: `artifacts/phase9/model-bakeoff/${model.id}/${prompt.id}/screen.png`,
+        screenQualityPath: `artifacts/phase9/model-bakeoff/${model.id}/${prompt.id}/screen-quality.json`,
         notes: "Fixture evidence path for validator self-test.",
       },
     })),

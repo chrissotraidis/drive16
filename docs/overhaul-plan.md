@@ -1,8 +1,9 @@
 # Drive16 Overhaul Plan
 
 Date: 2026-07-05
-Status: builder reliability/playability gate reopened after Snake testing;
-release hardening is next only after that gate is credible
+Status: functional reliability, first-run, presentation-v2 baseline, model
+comparison, and ad-hoc local packaging are verified; public signing and license
+approval remain
 
 This plan came from a full four-track audit (agent pipeline, UI, native
 backend/emulator, asset-generation pipelines). It replaces the Phase 8
@@ -12,8 +13,20 @@ use.
 
 ## Current implementation status
 
-Updated 2026-07-07 after reliability recovery testing and the Snake proof-case
-review:
+Updated 2026-07-10 after the final reliability, presentation, and packaging
+audits:
+
+- The deterministic Snake, Pong, Tetris, and Asteroids skeletons now use custom
+  tile art and composed playfield panels instead of sparse text glyphs. All
+  four build, pass screenshot-quality contract v2, and emit non-silent audio.
+  The 12 historical model outputs were rescored under v2; none pass the new
+  presentation bar, so their comparison is operational rather than a visual
+  sign-off.
+
+- Track E now has writable app-data runtime paths, bundled support resources,
+  an explicit CSP, a user-supplied release core policy, ad-hoc whole-bundle
+  signing, DMG integrity checks, and an isolated first-launch smoke. MIT license
+  approval and Apple Developer ID signing/notarization remain owner gates.
 
 - The July 7 native evidence proved important plumbing, but user testing of a
   generated Snake ROM showed the product can still build a ROM while hiding
@@ -47,9 +60,10 @@ review:
   `scripts/launch-phase4-comfyui-api.sh` running, readiness, direct sprite
   generation, the generated-assets proof, and native chat sprite generation all
   pass.
-- Track E is only partial: Docker/Genteel timeouts and ROM/core import size
-  caps exist, but app-data paths, real bundling, `LICENSE`, CSP, and public
-  interactive-core policy are still open.
+- Track E is technically hardened for a local release: Docker/Genteel timeouts,
+  import caps, app-data paths, bundling, CSP, and public interactive-core policy
+  are implemented. `LICENSE`, Developer ID signing, and notarization remain
+  owner-controlled.
 
 The audit below describes the pre-overhaul app. Do not read statements such as
 "the shipped app does not have an agent", "audio gated", or "image generation
