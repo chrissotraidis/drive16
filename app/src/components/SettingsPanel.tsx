@@ -100,6 +100,7 @@ export function SettingsPanel({
   onComfyUiEndpointChange,
   onComfyUiLoraChange,
   onEnhancementChange,
+  onLaunchComfyUi,
   onModelChange,
   onOllamaEndpointChange,
   onOllamaModelChange,
@@ -135,6 +136,7 @@ export function SettingsPanel({
   onComfyUiEndpointChange: (value: string) => void;
   onComfyUiLoraChange: (value: string) => void;
   onEnhancementChange: (key: keyof EnhancementSettings, enabled: boolean) => void;
+  onLaunchComfyUi: () => void;
   onModelChange: (value: string) => void;
   onOllamaEndpointChange: (value: string) => void;
   onOllamaModelChange: (value: string) => void;
@@ -147,7 +149,8 @@ export function SettingsPanel({
   onTestConnection: () => void;
 }) {
   const testing = connection.state === "testing";
-  const testingComfyUi = comfyUiConnection.state === "testing";
+  const busyComfyUi =
+    comfyUiConnection.state === "testing" || comfyUiConnection.state === "starting";
   const spriteReadiness = spriteEnhancementReadiness(
     enhancements.spriteGeneration,
     comfyUiConnection,
@@ -352,14 +355,24 @@ export function SettingsPanel({
                         value={comfyUiEndpoint}
                       />
                       <button
+                        aria-label="Launch ComfyUI"
+                        data-testid="launch-comfyui"
+                        disabled={busyComfyUi}
+                        onClick={onLaunchComfyUi}
+                        type="button"
+                      >
+                        <TerminalSquare size={15} />
+                        {comfyUiConnection.state === "starting" ? "Starting" : "Launch"}
+                      </button>
+                      <button
                         aria-label="Test ComfyUI"
                         data-testid="test-comfyui"
-                        disabled={testingComfyUi}
+                        disabled={busyComfyUi}
                         onClick={onTestComfyUiConnection}
                         type="button"
                       >
                         <ShieldCheck size={15} />
-                        {testingComfyUi ? "Checking" : "Test"}
+                        {comfyUiConnection.state === "testing" ? "Checking" : "Test"}
                       </button>
                     </div>
                   </label>
@@ -541,6 +554,14 @@ function spriteEnhancementReadiness(
     };
   }
 
+  if (connection.state === "starting") {
+    return {
+      state: "running",
+      label: "Starting",
+      detail: connection.detail,
+    };
+  }
+
   if (connection.state === "ready") {
     return {
       state: "ready",
@@ -549,11 +570,47 @@ function spriteEnhancementReadiness(
     };
   }
 
+  const missingChecks = missingComfyUiChecks(connection);
+  const missingModel = missingChecks.includes("Checkpoint");
+  const missingLora = missingChecks.includes("LoRA");
+  const apiDown =
+    missingChecks.includes("API") || /not running|failed to fetch|connection refused/i.test(connection.detail);
+
   if (connection.state === "missing") {
+    if (apiDown) {
+      return {
+        state: "failed",
+        label: "Not running",
+        detail: connection.detail,
+      };
+    }
+
     return {
       state: "failed",
       label: "Failed",
       detail: connection.detail,
+    };
+  }
+
+  if (missingModel || missingLora) {
+    const label =
+      missingModel && missingLora
+        ? "Missing model + LoRA"
+        : missingModel
+          ? "Missing model"
+          : "Missing LoRA";
+    const detail = missingChecks
+      .filter((name) => name === "Checkpoint" || name === "LoRA")
+      .map((name) => {
+        const check = connection.checks.find((item) => item.name === name);
+        return check ? `${name}: ${check.detail}` : name;
+      })
+      .join("; ");
+
+    return {
+      state: "needsSetup",
+      label,
+      detail: detail || connection.detail,
     };
   }
 
@@ -565,6 +622,12 @@ function spriteEnhancementReadiness(
         ? "Set the endpoint, then run Test."
         : connection.detail,
   };
+}
+
+function missingComfyUiChecks(connection: ComfyUiStatus) {
+  return connection.checks
+    .filter((check) => check.state !== "ready")
+    .map((check) => check.name);
 }
 
 function musicEnhancementReadiness(enabled: boolean): EnhancementReadiness {

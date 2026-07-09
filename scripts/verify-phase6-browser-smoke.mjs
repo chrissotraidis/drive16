@@ -486,7 +486,11 @@ async function main() {
     if (!/Set Up Play|Replace Play Core/i.test(states.projectMenu)) {
       throw new Error("Project menu is missing the Play core setup action.");
     }
+    if (!/Asset roles|ASSETS\.md/i.test(states.projectMenu)) {
+      throw new Error("Project menu is missing the ASSETS.md role ledger preview.");
+    }
     await page.getByTestId("project-summary").waitFor();
+    await page.getByTestId("project-asset-roles").waitFor();
     await screenshot(page, args.outDir, screenshots, "02-project-menu.png");
 
     await page.getByTestId("menu-new-project").click();
@@ -538,7 +542,7 @@ async function main() {
     states.importFeedback = await visibleText(page, "rom-action-feedback");
     states.importTruthSurface = await playerTruthSurface(page);
     assertStoppedVolumeControl(states.importTruthSurface, "Imported ROM");
-    if (!/Needs Check|Checking/i.test(states.importTruthSurface.runStatus)) {
+    if (!/Needs Repair|Checking/i.test(states.importTruthSurface.runStatus)) {
       throw new Error(
         `Imported ROM should not show top-level Ready before playability evidence passes: ${states.importTruthSurface.runStatus}`,
       );
@@ -548,9 +552,9 @@ async function main() {
         `Imported ROM did not leave the player in a ROM-capable state: ${states.importTruthSurface.playButtonText}`,
       );
     }
-    if (!states.importTruthSurface.evidenceText.includes("Gate: incomplete")) {
+    if (!states.importTruthSurface.evidenceText.includes("Gate: needs repair")) {
       throw new Error(
-        `Imported ROM should show an incomplete playability gate until input/audio pass: ${states.importTruthSurface.evidenceText}`,
+        `Imported ROM should show a needs-repair playability gate until input/audio pass: ${states.importTruthSurface.evidenceText}`,
       );
     }
     if (!states.importTruthSurface.evidenceText.includes("Screen: frame captured")) {

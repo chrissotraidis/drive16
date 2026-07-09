@@ -33,6 +33,7 @@ type NostalgistLaunchOptions = Parameters<typeof Nostalgist.launch>[0];
 
 export const defaultPlayerVolume = 0;
 const retroarchVolumeCommandSteps = 80;
+const retroarchMutedVolume = -80;
 
 const inputButtonMap: Record<PlayerInputActionId, string> = {
   "dpad.left": "left",
@@ -87,10 +88,10 @@ export async function launchNostalgistMegadrivePlayer({
     element: canvas,
     retroarchConfig: {
       audio_enable: true,
-      audio_mute_enable: true,
-      audio_mixer_mute_enable: true,
-      audio_volume: -80,
-      audio_mixer_volume: -80,
+      audio_mute_enable: false,
+      audio_mixer_mute_enable: false,
+      audio_volume: retroarchMutedVolume,
+      audio_mixer_volume: retroarchMutedVolume,
     },
     rom: {
       fileContent,
@@ -98,7 +99,7 @@ export async function launchNostalgistMegadrivePlayer({
     },
   });
 
-  return {
+  const runtime: NostalgistPlayerRuntime = {
     instance,
     core: GENESIS_PLUS_GX_CORE,
     coreSource: core ? "user" : "dev-cdn",
@@ -108,6 +109,9 @@ export async function launchNostalgistMegadrivePlayer({
     volume: defaultPlayerVolume,
     volumeSteps: 0,
   };
+
+  forceMinimumRetroarchVolume(runtime);
+  return runtime;
 }
 
 // The RetroArch Emscripten build routes audio through OpenAL; browsers keep
@@ -133,7 +137,7 @@ export function nostalgistAudioState(runtime: NostalgistPlayerRuntime): PlayerAu
   }
   if (ctx.state === "suspended") return "needs-gesture";
   if (ctx.state !== "running") return "unavailable";
-  return runtime.muted ? "muted" : "audible";
+  return runtime.muted || runtime.volume === 0 ? "muted" : "audible";
 }
 
 export async function resumeNostalgistAudio(
@@ -165,10 +169,7 @@ export async function setNostalgistVolume(
   const nextVolume = clampPlayerVolume(volume);
 
   if (nextVolume === 0) {
-    if (!runtime.muted) {
-      runtime.instance.sendCommand("MUTE");
-    }
-    sendRepeatedCommand(runtime, "VOLUME_DOWN", retroarchVolumeCommandSteps);
+    forceMinimumRetroarchVolume(runtime);
     runtime.muted = true;
     runtime.volume = 0;
     runtime.volumeSteps = 0;
@@ -194,11 +195,14 @@ export async function setNostalgistVolume(
 
   runtime.volume = nextVolume;
   runtime.volumeSteps = nextSteps;
-  if (runtime.muted) {
-    runtime.instance.sendCommand("MUTE");
-    runtime.muted = false;
-  }
+  runtime.muted = false;
   return nostalgistAudioState(runtime);
+}
+
+function forceMinimumRetroarchVolume(runtime: NostalgistPlayerRuntime) {
+  // Treat the app volume slider as the source of truth. RetroArch's MUTE command
+  // is a toggle, so repeated safety calls use volume-down commands instead.
+  sendRepeatedCommand(runtime, "VOLUME_DOWN", retroarchVolumeCommandSteps);
 }
 
 function sendRepeatedCommand(

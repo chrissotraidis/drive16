@@ -20,8 +20,9 @@ until the user intentionally raises the in-app volume slider. Muting a live
 session also resets the app volume back to `0%`.
 
 The generated-MML proof path still uses emulator audio dumping as the hard
-evidence. A non-silent `capture_audio` result proves generated music better
-than the speaker button alone.
+evidence. A non-silent `verify_audio` result, or the fallback
+`run_rom(dump_audio=true)` plus `capture_audio` sequence, proves generated
+music better than the speaker button alone.
 
 ## Remaining Work
 

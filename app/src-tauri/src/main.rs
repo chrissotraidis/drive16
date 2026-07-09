@@ -53,6 +53,11 @@ async fn send_opencode_message(
 }
 
 #[tauri::command]
+fn drain_opencode_background_errors() -> Vec<opencode::OpenCodeBackgroundError> {
+    opencode::drain_background_errors()
+}
+
+#[tauri::command]
 async fn set_opencode_auth(
     request: opencode::OpenCodeAuthRequest,
 ) -> Result<opencode::OpenCodeAuthResult, String> {
@@ -66,6 +71,15 @@ async fn ensure_active_project() -> Result<project::ActiveProjectResult, String>
     tauri::async_runtime::spawn_blocking(project::ensure_active_project)
         .await
         .map_err(|error| format!("Active project task failed: {}", error))?
+}
+
+#[tauri::command]
+async fn seed_active_project_for_prompt(
+    prompt: String,
+) -> Result<project::PromptSeedResult, String> {
+    tauri::async_runtime::spawn_blocking(move || project::seed_active_project_for_prompt(prompt))
+        .await
+        .map_err(|error| format!("Active project seed failed: {}", error))?
 }
 
 #[tauri::command]
@@ -222,6 +236,24 @@ async fn check_comfyui_endpoint(
 }
 
 #[tauri::command]
+async fn launch_comfyui_endpoint(
+    request: comfyui::ComfyUiEndpointRequest,
+) -> comfyui::ComfyUiEndpointStatus {
+    tauri::async_runtime::spawn_blocking(move || comfyui::launch_endpoint(request))
+        .await
+        .unwrap_or_else(|error| comfyui::ComfyUiEndpointStatus {
+            generated_at: "0".to_string(),
+            state: "missing".to_string(),
+            detail: format!("ComfyUI launch task failed: {}", error),
+            base_url: String::new(),
+            system_stats_url: String::new(),
+            version: None,
+            devices: 0,
+            checks: Vec::new(),
+        })
+}
+
+#[tauri::command]
 async fn check_ollama_endpoint(
     request: ollama::OllamaEndpointRequest,
 ) -> ollama::OllamaEndpointStatus {
@@ -246,8 +278,10 @@ fn main() {
             launch_rom_path,
             connect_opencode,
             send_opencode_message,
+            drain_opencode_background_errors,
             set_opencode_auth,
             ensure_active_project,
+            seed_active_project_for_prompt,
             reset_active_project,
             audit_active_project_memory,
             load_project_summary,
@@ -267,6 +301,7 @@ fn main() {
             run_v1_prompt,
             run_phase4_music_prompt,
             check_comfyui_endpoint,
+            launch_comfyui_endpoint,
             check_ollama_endpoint
         ])
         .run(tauri::generate_context!())

@@ -632,6 +632,15 @@ p {
   flex: 0 0 auto;
 }
 
+.agent-activity b {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .agent-activity span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1626,6 +1635,81 @@ p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.asset-role-list {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.asset-role-row {
+  display: grid;
+  grid-template-columns: 20px 30px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.asset-role-row strong {
+  display: block;
+  color: var(--muted-2);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-role-row small {
+  display: block;
+  color: var(--quiet);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-role-state {
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+}
+
+.asset-role-thumb {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #060403;
+}
+
+.asset-role-thumb-empty {
+  background:
+    linear-gradient(135deg, transparent 47%, var(--line) 48%, var(--line) 52%, transparent 53%),
+    var(--panel);
+}
+
+.asset-role-state.ready svg {
+  color: var(--ok);
+}
+
+.asset-role-state.warning svg {
+  color: var(--accent-2);
+}
+
+.asset-role-state.missing svg {
+  color: var(--danger);
+}
+
+.asset-role-empty {
+  margin: 0;
+  color: var(--quiet);
+  font-size: 12.5px;
 }
 
 /* -------------------------------------------------------------- responsive */

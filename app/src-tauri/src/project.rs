@@ -9,6 +9,9 @@ use std::{
 
 const STARTER_PROJECT: &str = "examples/app-starter-blank";
 const STARTER_ROM: &str = "examples/app-starter-blank/out/rom.bin";
+const SNAKE_BASIC_SKELETON: &str = "examples/game-skeletons/snake-basic";
+const PONG_BASIC_SKELETON: &str = "examples/game-skeletons/pong-basic";
+const TETRIS_BASIC_SKELETON: &str = "examples/game-skeletons/tetris-basic";
 const ACTIVE_PROJECT_DIRECTORY: &str = "artifacts/phase3/active-project";
 const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
 const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
@@ -25,6 +28,7 @@ const INTERACTIVE_CORE_STORAGE_EXTENSIONS: [&str; 2] = [".js", ".wasm"];
 // of MB. Anything past these caps is a wrong file, not a big game.
 const MAX_ROM_IMPORT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_CORE_FILE_BYTES: usize = 96 * 1024 * 1024;
+const MAX_ASSET_PREVIEW_BYTES: u64 = 512 * 1024;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +41,7 @@ pub struct ProjectSummary {
     pub rom_status: String,
     pub rom_detail: String,
     pub files: Vec<ProjectFileEntry>,
+    pub asset_roles: Vec<ProjectAssetRole>,
 }
 
 #[derive(Debug, Serialize)]
@@ -45,6 +50,18 @@ pub struct ProjectFileEntry {
     pub label: String,
     pub path: String,
     pub state: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectAssetRole {
+    pub role: String,
+    pub source: String,
+    pub symbol: String,
+    pub status: String,
+    pub notes: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_data_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -79,6 +96,18 @@ pub struct ActiveProjectResult {
     pub rom_path: String,
     pub rom_exists: bool,
     pub created: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromptSeedResult {
+    pub generated_at: String,
+    pub status: String,
+    pub detail: String,
+    pub project_path: String,
+    pub rom_path: String,
+    pub applied: bool,
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -247,6 +276,10 @@ pub fn ensure_active_project() -> Result<ActiveProjectResult, String> {
     ensure_active_project_for_repo(repo_root())
 }
 
+pub fn seed_active_project_for_prompt(prompt: String) -> Result<PromptSeedResult, String> {
+    seed_active_project_for_prompt_in_repo(repo_root(), &prompt)
+}
+
 // New Project: throw away the working copy and start from the template.
 pub fn reset_active_project() -> Result<ActiveProjectResult, String> {
     let root = repo_root();
@@ -259,8 +292,96 @@ pub fn reset_active_project() -> Result<ActiveProjectResult, String> {
                 error
             )
         })?;
-    }
+    };
     ensure_active_project_for_repo(root)
+}
+
+fn seed_active_project_for_prompt_in_repo(
+    repo_root: PathBuf,
+    prompt: &str,
+) -> Result<PromptSeedResult, String> {
+    let active = repo_root.join(ACTIVE_PROJECT_DIRECTORY);
+    let rom_path = active.join("out").join("rom.bin");
+    let project_path = repo_relative(&repo_root, &active);
+    let rom_path_label = repo_relative(&repo_root, &rom_path);
+
+    let seed = if looks_like_simple_snake_request(prompt) {
+        Some((
+            "Snake",
+            SNAKE_BASIC_SKELETON,
+            "Loaded the simple Snake starter code and audio loop into the blank project",
+        ))
+    } else if looks_like_simple_pong_request(prompt) {
+        Some((
+            "Pong",
+            PONG_BASIC_SKELETON,
+            "Loaded the simple Pong starter code and audio loop into the blank project",
+        ))
+    } else if looks_like_simple_tetris_request(prompt) {
+        Some((
+            "Tetris",
+            TETRIS_BASIC_SKELETON,
+            "Loaded the simple Tetris starter code and audio loop into the blank project",
+        ))
+    } else {
+        None
+    };
+
+    let Some((seed_label, seed_source, seed_detail)) = seed else {
+        return Ok(PromptSeedResult {
+            generated_at: unix_timestamp(),
+            status: "skipped".to_string(),
+            detail: "No starter seed matched this prompt".to_string(),
+            project_path,
+            rom_path: rom_path_label,
+            applied: false,
+            source: None,
+        });
+    };
+
+    ensure_active_project_for_repo(repo_root.clone())?;
+
+    let main_path = active.join("src").join("main.c");
+    let current = fs::read_to_string(&main_path).map_err(|error| {
+        format!(
+            "Could not read active project source {}: {}",
+            main_path.display(),
+            error
+        )
+    })?;
+    if !looks_like_blank_starter_main(&current) {
+        return Ok(PromptSeedResult {
+            generated_at: unix_timestamp(),
+            status: "skipped".to_string(),
+            detail: "Active project already has game code; starter seed not applied".to_string(),
+            project_path,
+            rom_path: rom_path_label,
+            applied: false,
+            source: None,
+        });
+    }
+
+    let skeleton_path = repo_root.join(seed_source);
+    if !skeleton_path.is_dir() {
+        return Err(format!(
+            "{} starter seed is missing: {}",
+            seed_label,
+            skeleton_path.display()
+        ));
+    }
+
+    copy_project_tree(&skeleton_path, &active)?;
+    remove_project_build_output(&active)?;
+
+    Ok(PromptSeedResult {
+        generated_at: unix_timestamp(),
+        status: "seeded".to_string(),
+        detail: seed_detail.to_string(),
+        project_path,
+        rom_path: rom_path_label,
+        applied: true,
+        source: Some(seed_source.to_string()),
+    })
 }
 
 pub fn audit_active_project_memory() -> ProjectMemoryAuditResult {
@@ -318,12 +439,20 @@ fn audit_project_memory_for_repo(repo_root: PathBuf) -> ProjectMemoryAuditResult
     let mut files = Vec::new();
     let mut missing = false;
     let mut warnings = Vec::new();
+    let mut game_text = String::new();
+    let mut assets_text = String::new();
     let mut playtest_text = String::new();
 
     for file_name in PROJECT_MEMORY_FILES {
         let file_path = active.join(file_name);
         match fs::read_to_string(&file_path) {
             Ok(text) => {
+                if file_name == "GAME.md" {
+                    game_text = text.clone();
+                }
+                if file_name == "ASSETS.md" {
+                    assets_text = text.clone();
+                }
                 if file_name == "PLAYTEST.md" {
                     playtest_text = text.clone();
                 }
@@ -361,6 +490,20 @@ fn audit_project_memory_for_repo(repo_root: PathBuf) -> ProjectMemoryAuditResult
     }
 
     let gate = playability_gate_status(&playtest_text);
+    warnings.extend(project_memory_truth_warnings(
+        &active,
+        &gate,
+        &game_text,
+        &assets_text,
+        &playtest_text,
+    ));
+    if gate == "pass" {
+        warnings.extend(project_memory_pass_warnings(
+            &game_text,
+            &assets_text,
+            &playtest_text,
+        ));
+    }
     let status = if missing {
         "missing"
     } else if gate == "pass" && warnings.is_empty() {
@@ -394,6 +537,197 @@ fn looks_like_asset_role_ledger(text: &str) -> bool {
     text.contains("| Role | Source | Symbol / File | Status | Notes |")
 }
 
+fn asset_roles_for_project(repo_root: &Path, project_path: &Path) -> Vec<ProjectAssetRole> {
+    fs::read_to_string(project_path.join("ASSETS.md"))
+        .map(|text| {
+            parse_asset_role_table(&text)
+                .into_iter()
+                .map(|mut asset| {
+                    asset.preview_data_url =
+                        asset_preview_data_url(repo_root, project_path, &asset.symbol);
+                    asset
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_asset_role_table(text: &str) -> Vec<ProjectAssetRole> {
+    text.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if !trimmed.starts_with('|') || !trimmed.ends_with('|') {
+                return None;
+            }
+
+            let columns: Vec<String> = trimmed
+                .trim_matches('|')
+                .split('|')
+                .map(|column| column.trim().to_string())
+                .collect();
+            if columns.len() < 5 {
+                return None;
+            }
+
+            let role = columns[0].trim();
+            if role.eq_ignore_ascii_case("role") || role.chars().all(|character| character == '-') {
+                return None;
+            }
+
+            Some(ProjectAssetRole {
+                role: columns[0].clone(),
+                source: columns[1].clone(),
+                symbol: columns[2].clone(),
+                status: columns[3].clone(),
+                notes: columns[4..].join(" | "),
+                preview_data_url: None,
+            })
+        })
+        .collect()
+}
+
+fn asset_preview_data_url(repo_root: &Path, project_path: &Path, symbol: &str) -> Option<String> {
+    let symbol_path = clean_asset_symbol_path(symbol)?;
+    if !symbol_path.to_ascii_lowercase().ends_with(".png") {
+        return None;
+    }
+
+    let symbol_path = Path::new(&symbol_path);
+    let mut candidates = Vec::new();
+    if symbol_path.is_absolute() {
+        candidates.push(symbol_path.to_path_buf());
+    } else {
+        candidates.push(project_path.join(symbol_path));
+        candidates.push(repo_root.join(symbol_path));
+    }
+
+    let canonical_repo = repo_root.canonicalize().ok()?;
+    for candidate in candidates {
+        let Ok(canonical_candidate) = candidate.canonicalize() else {
+            continue;
+        };
+        if !canonical_candidate.starts_with(&canonical_repo) {
+            continue;
+        }
+
+        let Ok(metadata) = fs::metadata(&canonical_candidate) else {
+            continue;
+        };
+        if !metadata.is_file() || metadata.len() > MAX_ASSET_PREVIEW_BYTES {
+            continue;
+        }
+
+        let Ok(bytes) = fs::read(&canonical_candidate) else {
+            continue;
+        };
+        if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            continue;
+        }
+
+        return Some(format!(
+            "data:image/png;base64,{}",
+            general_purpose::STANDARD.encode(bytes)
+        ));
+    }
+
+    None
+}
+
+fn clean_asset_symbol_path(symbol: &str) -> Option<String> {
+    let trimmed = symbol.trim();
+    if trimmed.is_empty() || trimmed.contains("://") {
+        return None;
+    }
+
+    if let Some(start) = trimmed.find('`') {
+        let rest = &trimmed[start + 1..];
+        if let Some(end) = rest.find('`') {
+            let code_path = rest[..end].trim();
+            if !code_path.is_empty() {
+                return Some(code_path.to_string());
+            }
+        }
+    }
+
+    if let Some(open) = trimmed.rfind("](") {
+        if trimmed.ends_with(')') {
+            let markdown_path = trimmed[open + 2..trimmed.len() - 1].trim();
+            if !markdown_path.is_empty() {
+                return Some(markdown_path.to_string());
+            }
+        }
+    }
+
+    let unquoted = trimmed
+        .trim_matches('`')
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim();
+    if unquoted.is_empty() {
+        None
+    } else {
+        Some(unquoted.to_string())
+    }
+}
+
+fn project_name_for_project(project_path: &Path) -> String {
+    let text = match fs::read_to_string(project_path.join("GAME.md")) {
+        Ok(text) => text,
+        Err(_) => return "Starter Project".to_string(),
+    };
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("blank drive16 starter project") {
+        return "Starter Project".to_string();
+    }
+
+    for (needle, name) in [
+        ("space invaders", "Space Invaders"),
+        ("asteroids", "Asteroids"),
+        ("asteroid", "Asteroids"),
+        ("breakout", "Breakout"),
+        ("tetris", "Tetris"),
+        ("snake", "Snake"),
+        ("pong", "Pong"),
+        ("platformer", "Platformer"),
+    ] {
+        if lower.contains(needle) {
+            return name.to_string();
+        }
+    }
+
+    let mut in_concept = false;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.eq_ignore_ascii_case("## Concept") {
+            in_concept = true;
+            continue;
+        }
+        if in_concept && trimmed.starts_with("## ") {
+            break;
+        }
+        if in_concept && !trimmed.is_empty() && !trimmed.starts_with('#') {
+            return concise_project_name(trimmed);
+        }
+    }
+
+    "Active Project".to_string()
+}
+
+fn concise_project_name(text: &str) -> String {
+    let cleaned = text
+        .trim_start_matches(['-', '*', ' '])
+        .trim()
+        .trim_end_matches('.');
+    let first_sentence = cleaned.split(['.', ':']).next().unwrap_or(cleaned).trim();
+    if first_sentence.chars().count() <= 36 {
+        return first_sentence.to_string();
+    }
+
+    let mut name = first_sentence.chars().take(33).collect::<String>();
+    name.push_str("...");
+    name
+}
+
 fn playability_gate_status(text: &str) -> String {
     let mut gate = "unknown";
     for line in text.lines() {
@@ -408,6 +742,186 @@ fn playability_gate_status(text: &str) -> String {
         }
     }
     gate.to_string()
+}
+
+fn project_memory_pass_warnings(
+    game_text: &str,
+    assets_text: &str,
+    playtest_text: &str,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let evidence = markdown_section(playtest_text, "Evidence");
+    let evidence_lower = evidence.to_ascii_lowercase();
+
+    if evidence.trim().is_empty() {
+        warnings.push("PLAYTEST.md pass is missing an Evidence section".to_string());
+    }
+
+    if evidence_has_unfinished_marker(&evidence_lower) {
+        warnings.push("PLAYTEST.md pass still has pending or untested evidence".to_string());
+    }
+
+    let combined_text = format!("{}\n{}", game_text, playtest_text);
+    let genre = detected_game_genre(&combined_text);
+    if genre != "unknown"
+        && (!evidence_lower.contains("genre checks:")
+            || !evidence_lower.contains(genre)
+            || evidence_lower.contains("genre checks: pending"))
+    {
+        warnings.push(format!(
+            "PLAYTEST.md pass is missing {} genre evidence",
+            genre
+        ));
+    }
+
+    if !has_captured_or_omitted_audio(assets_text, playtest_text) {
+        warnings.push(
+            "PLAYTEST.md pass does not record captured audio or an explicit no-audio request"
+                .to_string(),
+        );
+    }
+
+    warnings
+}
+
+fn project_memory_truth_warnings(
+    project_path: &Path,
+    gate: &str,
+    game_text: &str,
+    assets_text: &str,
+    playtest_text: &str,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let game_lower = game_text.to_ascii_lowercase();
+    let combined = format!("{}\n{}\n{}", game_text, assets_text, playtest_text);
+    let combined_lower = combined.to_ascii_lowercase();
+    let rom_exists = project_path.join("out/rom.bin").is_file();
+
+    if !rom_exists
+        && game_lower.lines().any(|line| {
+            line.contains("out/rom.bin")
+                && (line.contains("built")
+                    || line.contains("compiled")
+                    || line.contains("ready")
+                    || line.contains("produced")
+                    || line.contains("fresh"))
+        })
+    {
+        warnings.push(
+            "GAME.md claims out/rom.bin is built, but out/rom.bin does not exist".to_string(),
+        );
+    }
+
+    if gate != "pass"
+        && game_lower.contains("known issues")
+        && (game_lower.contains("none yet") || game_lower.contains("no known issues"))
+    {
+        warnings.push(
+            "GAME.md claims there are no known issues while PLAYTEST.md does not pass".to_string(),
+        );
+    }
+
+    if audio_self_omitted_without_user_request(&combined_lower) {
+        warnings.push(
+            "Project memory claims audio was omitted without an explicit user no-audio request"
+                .to_string(),
+        );
+    }
+
+    warnings
+}
+
+fn markdown_section(text: &str, heading: &str) -> String {
+    let heading_marker = format!("## {}", heading).to_ascii_lowercase();
+    let mut in_section = false;
+    let mut section = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.to_ascii_lowercase() == heading_marker {
+            in_section = true;
+            continue;
+        }
+        if in_section && trimmed.starts_with("## ") {
+            break;
+        }
+        if in_section {
+            section.push(line);
+        }
+    }
+    section.join("\n")
+}
+
+fn evidence_has_unfinished_marker(evidence_lower: &str) -> bool {
+    evidence_lower.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.contains("pending")
+            || trimmed.contains("untested")
+            || trimmed.contains("unverified")
+            || trimmed.contains("inconclusive")
+    })
+}
+
+fn detected_game_genre(text: &str) -> &'static str {
+    let lower = text.to_ascii_lowercase();
+    for (needle, genre) in [
+        ("snake", "snake"),
+        ("pong", "pong"),
+        ("tetris", "tetris"),
+        ("asteroids", "asteroids"),
+        ("asteroid", "asteroids"),
+    ] {
+        if lower.contains(needle) {
+            return genre;
+        }
+    }
+    "unknown"
+}
+
+fn has_captured_or_omitted_audio(assets_text: &str, playtest_text: &str) -> bool {
+    let combined = format!("{}\n{}", assets_text, playtest_text).to_ascii_lowercase();
+    let captured = combined.contains("audio evidence: captured")
+        || combined.contains("audio: captured")
+        || combined.contains("audio captured")
+        || combined.contains("non-silent")
+        || combined.contains("maxabssample")
+        || combined.contains("max abs sample");
+    let omitted = audio_disabled_by_user_request(&combined);
+    captured || omitted
+}
+
+fn audio_disabled_by_user_request(text: &str) -> bool {
+    text.contains("no audio by request")
+        || text.contains("no sound by request")
+        || text.contains("no music by request")
+        || text.contains("without audio by request")
+        || text.contains("without sound by request")
+        || text.contains("without music by request")
+        || text.contains("audio disabled by request")
+        || text.contains("sound disabled by request")
+        || text.contains("music disabled by request")
+        || text.contains("audio omitted by request")
+        || text.contains("sound omitted by request")
+        || text.contains("music omitted by request")
+        || text.contains("user asked for no audio")
+        || text.contains("user asked for no sound")
+        || text.contains("user asked for no music")
+        || text.contains("user requested no audio")
+        || text.contains("user requested no sound")
+        || text.contains("user requested no music")
+        || text.contains("silent by request")
+}
+
+fn audio_self_omitted_without_user_request(text: &str) -> bool {
+    (text.contains("no music requested")
+        || text.contains("no sound requested")
+        || text.contains("no audio requested")
+        || text.contains("audio intentionally omitted")
+        || text.contains("music intentionally omitted")
+        || text.contains("sound intentionally omitted")
+        || text.contains("intentionally omitted for simple")
+        || text.contains("omitted for simple")
+        || text.contains("audio omitted"))
+        && !audio_disabled_by_user_request(text)
 }
 
 pub fn prepare_rom_import() -> Result<RomImportReadiness, String> {
@@ -450,10 +964,21 @@ pub fn read_interactive_core_files() -> Result<InteractiveCoreReadResult, String
 
 fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
     let paths = ProjectPaths::new(repo_root);
-    let rom_current = current_project_rom_exists(&paths.project_path, &paths.rom_path);
+    let active_project_path = paths.repo_root.join(ACTIVE_PROJECT_DIRECTORY);
+    let project_path = if active_project_path.is_dir() {
+        active_project_path
+    } else {
+        paths.project_path.clone()
+    };
+    let rom_path = if project_path.ends_with(ACTIVE_PROJECT_DIRECTORY) {
+        project_path.join("out/rom.bin")
+    } else {
+        paths.rom_path.clone()
+    };
+    let rom_current = current_project_rom_exists(&project_path, &rom_path);
     let rom_status = if rom_current {
         "ready"
-    } else if paths.rom_path.is_file() {
+    } else if rom_path.is_file() {
         "stale"
     } else {
         "missing"
@@ -461,28 +986,25 @@ fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
     let rom_detail = if rom_status == "stale" {
         "Source changed after the last ROM build".to_string()
     } else {
-        fs::metadata(&paths.rom_path)
+        fs::metadata(&rom_path)
             .map(|metadata| format!("{} bytes", metadata.len()))
             .unwrap_or_else(|_| "Build starter ROM before export".to_string())
     };
 
     ProjectSummary {
         generated_at: unix_timestamp(),
-        name: "Starter Project".to_string(),
-        project_path: repo_relative(&paths.repo_root, &paths.project_path),
-        rom_path: repo_relative(&paths.repo_root, &paths.rom_path),
+        name: project_name_for_project(&project_path),
+        project_path: repo_relative(&paths.repo_root, &project_path),
+        rom_path: repo_relative(&paths.repo_root, &rom_path),
         export_directory: repo_relative(&paths.repo_root, &paths.export_directory),
         rom_status: rom_status.to_string(),
         rom_detail,
+        asset_roles: asset_roles_for_project(&paths.repo_root, &project_path),
         files: vec![
+            file_entry(&paths.repo_root, project_path.join("src/main.c"), "Main C"),
             file_entry(
                 &paths.repo_root,
-                paths.project_path.join("src/main.c"),
-                "Main C",
-            ),
-            file_entry(
-                &paths.repo_root,
-                paths.project_path.join("res/resources.res"),
+                project_path.join("res/resources.res"),
                 "Resources",
             ),
             file_entry(
@@ -1238,6 +1760,37 @@ fn remove_project_build_output(project_path: &Path) -> Result<(), String> {
     })
 }
 
+fn looks_like_simple_snake_request(prompt: &str) -> bool {
+    looks_like_simple_game_request(prompt, "snake")
+}
+
+fn looks_like_simple_pong_request(prompt: &str) -> bool {
+    looks_like_simple_game_request(prompt, "pong")
+}
+
+fn looks_like_simple_tetris_request(prompt: &str) -> bool {
+    looks_like_simple_game_request(prompt, "tetris")
+}
+
+fn looks_like_simple_game_request(prompt: &str, genre: &str) -> bool {
+    let text = prompt.to_lowercase();
+    text.contains(genre)
+        && (text.contains("simple")
+            || text.contains("working")
+            || text.contains("build")
+            || text.contains("make")
+            || text.contains("game"))
+}
+
+fn looks_like_blank_starter_main(source: &str) -> bool {
+    source.lines().count() <= 40
+        && source.contains("VDP_setScreenWidth320")
+        && source.contains("VDP_clearPlane(BG_A")
+        && source.contains("while (TRUE)")
+        && !source.contains("JOY_readJoypad")
+        && !source.contains("DRIVE16 SNAKE")
+}
+
 fn ensure_project_memory_files(
     starter_project: &Path,
     active_project: &Path,
@@ -1280,15 +1833,22 @@ Use this file as the role ledger for the game. Every visible or audible game
 role should have exactly one truthful row, even when the role uses primitive
 tiles instead of a PNG.
 
+## Asset Plan
+
+- Pending: choose the gameplay roles before generating or wiring assets.
+
 | Role | Source | Symbol / File | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Game code primitives | None yet | `src/main.c` | Pending | Add rows as soon as a project uses primitive drawing, bundled assets, ComfyUI sprites, or MML music. |
+| Game code primitives | None yet | `src/main.c` | Pending | Add rows as soon as a project uses primitive drawing, bundled assets, ComfyUI sprites, or MML music; notes must include prompt, crop/slice, and whether it was used when applicable. |
 
 ## Role Source Rules
 
 - Simple geometric roles such as Pong paddles/balls, Snake body segments,
   Tetris blocks, borders, grids, and UI text should usually be SGDK
   primitives/tiles unless the user explicitly asks for styled generated art.
+- Primitive rectangles and grid cells should be tilemap cells: load solid 8x8
+  tiles with `VDP_loadTileData` and place them with `VDP_fillTileMapRect`.
+  Do not use `VDP_drawRect`.
 - ComfyUI currently generates one Genesis-safe 32x32 sprite PNG at a time.
   Treat each generated PNG as one role-specific SGDK `SPRITE`, not a reusable
   sprite sheet or generic decoration.
@@ -1296,6 +1856,13 @@ tiles instead of a PNG.
   crop/slice output, and final SGDK symbol in the role table.
 - Do not reuse one generated image for unrelated roles. A paddle is not a ball;
   a Snake head is not a wall; a Tetris block is not a title logo.
+- Primitive text/tile rows should use the code path or drawing function in
+  `Symbol / File`, such as `src/main.c draw_piece()`, not only a shared
+  character like `#`. If one primitive glyph or helper is reused across
+  multiple roles, say the shared primitive reuse is intentional in each
+  affected row.
+- Music and SFX rows must record compile status, the resource symbol/file, and
+  audio evidence as captured, silent, or untested.
 
 ## Asset Source Decision Log
 
@@ -1303,10 +1870,82 @@ tiles instead of a PNG.
 "#
         }
         "PLAYTEST.md" => {
-            "# Playtest Notes\n\n## Latest Result\n\nNo game-specific playtest has run yet.\n\nPlayability gate: FAIL.\n\nReason: no game has been implemented, built, screen-checked, input-tested, or audio-checked yet.\n\n## Evidence\n\n- Build log: pending\n- Screenshot/frame capture: pending\n- Input test: pending\n- Audio test: pending when sound is expected\n"
+            r#"# Playtest Notes
+
+## Latest Result
+
+No game-specific playtest has run yet.
+
+Playability gate: FAIL.
+
+Reason: no game has been implemented, built, screen-checked, input-tested, or
+audio-checked yet.
+
+## Required Gate Before Calling A Build Done
+
+- ROM builds successfully.
+- The first screen is visible and readable.
+- Player/object movement is visible when controls are pressed.
+- Start and reset behavior are checked when the game uses them.
+- Score or state counters start at the intended value.
+- The game does not immediately fail or become unplayable.
+- Asset usage is recorded in `ASSETS.md` as primitive tiles, bundled assets,
+  ComfyUI, or MML.
+- Passing games must record non-silent audio evidence, or explicitly say audio
+  was disabled/omitted by request.
+
+## Genre Acceptance Checklist
+
+Use the relevant row for the game being built. Mark unrelated rows as N/A.
+When `Playability gate: PASS`, the Evidence section must name each relevant
+genre check that was tested; `Genre checks: pending` is never compatible with a
+passing gate.
+
+| Genre | Minimum checks before PASS |
+| --- | --- |
+| Snake | Score starts at 0; snake and food are visible; D-pad movement is visible; food can be approached/eaten without instant fail; wall/self collision reaches a clear fail state; Start restarts after game over when present. |
+| Pong | Both paddles and ball are visible; at least one paddle responds to input; ball travels and bounces; scoring changes when the ball exits a side; serve/point restart is visible. |
+| Tetris | Playfield and score/line state are readable; a piece spawns visibly; left/right/down movement works; rotation works; pieces lock into the grid; line clear/stacking behavior is present; game-over is possible at the top. |
+| Asteroids | Ship, asteroids, and shots are visible; rotation/thrust changes the ship; firing creates a moving projectile; asteroids move or wrap; collisions/destruction affect score/state; restart works after death/game over. |
+
+## Evidence
+
+- Build log: pending
+- Screenshot/frame capture: pending
+- Input test: pending
+- Audio test: pending if the project includes music
+- Genre checks: pending
+"#
         }
         _ => {
-            "# Game Notes\n\n## Concept\n\nBlank Drive16 project.\n\n## Known Issues\n\n- No game-specific behavior has been implemented yet.\n"
+            r#"# Game Notes
+
+## Concept
+
+Blank Drive16 project.
+
+## SGDK Starter Notes
+
+- `VDP_drawText`, `VDP_clearPlane`, `VDP_loadTileData`, and
+  `VDP_fillTileMapRect` are safe starter APIs in this project.
+- Do not use `VDP_drawRect`, `srand`, or C library `rand()`.
+
+## First Build References
+
+- For a simple Snake request, `examples/game-skeletons/snake-basic/` is a
+  proven compact source and audio seed. Copy/adapt its `src/main.c` and `res/`
+  files, then build and test before polishing docs or art.
+- For a simple Pong request, `examples/game-skeletons/pong-basic/` is a
+  proven compact source and audio seed. Copy/adapt its `src/main.c` and `res/`
+  files, then build and test before polishing docs or art.
+- For a simple Tetris request, `examples/game-skeletons/tetris-basic/` is a
+  proven compact source and audio seed. Copy/adapt its `src/main.c` and `res/`
+  files, then build and test before polishing docs or art.
+
+## Known Issues
+
+- No game-specific behavior has been implemented yet.
+"#
         }
     }
 }
@@ -1535,6 +2174,239 @@ mod tests {
         assert_eq!(audit.gate, "fail");
         assert_eq!(audit.status, "warning");
         assert!(audit.detail.contains("Playability gate: FAIL"));
+    }
+
+    #[test]
+    fn project_memory_pass_rejects_pending_evidence() {
+        let temp_dir = temp_repo("memory-pass-pending");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(&active_project).unwrap();
+        fs::write(
+            active_project.join("GAME.md"),
+            "# Game Notes\n\n## Concept\n\nSimple Snake game.\n",
+        )
+        .unwrap();
+        fs::write(
+            active_project.join("ASSETS.md"),
+            r#"# Asset Manifest
+
+| Role | Source | Symbol / File | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Snake body | primitive tile | `src/main.c` | Used | primitive drawing used in ROM |
+"#,
+        )
+        .unwrap();
+        fs::write(
+            active_project.join("PLAYTEST.md"),
+            r#"# Playtest Notes
+
+Playability gate: PASS.
+
+## Evidence
+
+- Build log: pending
+- Screenshot/frame capture: pending
+- Input test: pending
+- Audio test: pending
+- Genre checks: pending
+"#,
+        )
+        .unwrap();
+
+        let audit = audit_project_memory_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(audit.gate, "pass");
+        assert_eq!(audit.status, "warning");
+        assert!(audit.detail.contains("pending or untested evidence"));
+        assert!(audit.detail.contains("snake genre evidence"));
+        assert!(audit.detail.contains("captured audio"));
+    }
+
+    #[test]
+    fn project_memory_pass_accepts_complete_native_evidence() {
+        let temp_dir = temp_repo("memory-pass-complete");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(&active_project).unwrap();
+        fs::write(
+            active_project.join("GAME.md"),
+            "# Game Notes\n\n## Concept\n\nSimple Snake game.\n",
+        )
+        .unwrap();
+        fs::write(
+            active_project.join("ASSETS.md"),
+            r#"# Asset Manifest
+
+| Role | Source | Symbol / File | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Snake body | primitive tile | `src/main.c` | Used | primitive drawing used in ROM |
+| Music | MML music | `res/theme.vgm` | Captured | audio evidence: captured; maxAbsSample=1200 |
+"#,
+        )
+        .unwrap();
+        fs::write(
+            active_project.join("PLAYTEST.md"),
+            r#"# Playtest Notes
+
+Playability gate: PASS.
+
+## Evidence
+
+- Build log: build_rom completed after source edits.
+- Screenshot/frame capture: visible snake, food, border, and score 0.
+- Input test: D-pad movement moved the snake right and down.
+- Audio test: non-silent audio captured with maxAbsSample=1200.
+- Genre checks: Snake score starts at 0; snake and food are visible; movement works; wall collision reaches game over; Start restarts.
+"#,
+        )
+        .unwrap();
+
+        let audit = audit_project_memory_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(audit.gate, "pass");
+        assert_eq!(audit.status, "ready");
+        assert!(audit.detail.contains("Playability gate: PASS"));
+    }
+
+    #[test]
+    fn project_memory_warns_on_premature_rom_and_self_omitted_audio_claims() {
+        let temp_dir = temp_repo("memory-premature-claims");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(&active_project).unwrap();
+        fs::write(
+            active_project.join("GAME.md"),
+            r#"# Game Notes
+
+## Current Build
+
+- ROM: `out/rom.bin` - Built ROM
+
+## Known Issues
+
+- None yet - initial implementation
+"#,
+        )
+        .unwrap();
+        fs::write(
+            active_project.join("ASSETS.md"),
+            r#"# Asset Manifest
+
+| Role | Source | Symbol / File | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Audio | None | none | Intentionally omitted | Audio intentionally omitted for simple implementation. |
+"#,
+        )
+        .unwrap();
+        fs::write(
+            active_project.join("PLAYTEST.md"),
+            r#"# Playtest Notes
+
+Playability gate: FAIL.
+
+## Evidence
+
+- Build log: pending
+"#,
+        )
+        .unwrap();
+
+        let audit = audit_project_memory_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(audit.gate, "fail");
+        assert_eq!(audit.status, "warning");
+        assert!(audit.detail.contains("out/rom.bin is built"));
+        assert!(audit.detail.contains("no known issues"));
+        assert!(audit
+            .detail
+            .contains("without an explicit user no-audio request"));
+    }
+
+    #[test]
+    fn project_summary_reads_asset_role_ledger() {
+        let temp_dir = temp_repo("asset-role-summary");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(active_project.join("src")).unwrap();
+        fs::write(
+            active_project.join("ASSETS.md"),
+            r#"# Asset Manifest
+
+| Role | Source | Symbol / File | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Player ship | ComfyUI sprite | `res/player_ship.png` | Used | prompt: blue ship; crop/slice: 32x32; used in ROM: yes |
+| Music | MML music | `res/theme.vgm` | Captured | audio evidence: captured |
+"#,
+        )
+        .unwrap();
+
+        let summary = project_summary_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(summary.asset_roles.len(), 2);
+        assert_eq!(summary.asset_roles[0].role, "Player ship");
+        assert_eq!(summary.asset_roles[0].source, "ComfyUI sprite");
+        assert!(summary.asset_roles[0].notes.contains("used in ROM: yes"));
+        assert!(summary.asset_roles[0].preview_data_url.is_none());
+        assert_eq!(summary.asset_roles[1].role, "Music");
+    }
+
+    #[test]
+    fn project_summary_embeds_repo_local_png_asset_previews() {
+        let temp_dir = temp_repo("asset-role-preview");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        let outside_png = temp_dir.with_extension("outside.png");
+        let png_bytes = general_purpose::STANDARD
+            .decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+            )
+            .unwrap();
+        fs::create_dir_all(active_project.join("res")).unwrap();
+        fs::write(active_project.join("res/player_ship.png"), &png_bytes).unwrap();
+        fs::write(&outside_png, &png_bytes).unwrap();
+        fs::write(
+            active_project.join("ASSETS.md"),
+            format!(
+                r#"# Asset Manifest
+
+| Role | Source | Symbol / File | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Player ship | ComfyUI sprite | `res/player_ship.png` | Used | prompt: blue ship; crop/slice: 32x32; used in ROM: yes |
+| Outside sprite | ComfyUI sprite | `{}` | Used | should not preview outside repo |
+"#,
+                outside_png.display()
+            ),
+        )
+        .unwrap();
+
+        let summary = project_summary_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+        let _ = fs::remove_file(outside_png);
+
+        assert_eq!(summary.asset_roles.len(), 2);
+        assert!(summary.asset_roles[0]
+            .preview_data_url
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with("data:image/png;base64,"));
+        assert!(summary.asset_roles[1].preview_data_url.is_none());
+    }
+
+    #[test]
+    fn project_summary_names_project_from_game_notes() {
+        let temp_dir = temp_repo("summary-name");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(&active_project).unwrap();
+        fs::write(
+            active_project.join("GAME.md"),
+            "# Game Notes\n\n## Concept\n\nA simple working Snake game for Genesis.\n",
+        )
+        .unwrap();
+
+        let summary = project_summary_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(summary.name, "Snake");
     }
 
     #[test]

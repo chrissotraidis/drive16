@@ -25,7 +25,7 @@ for term in \
   "SPR_addSprite" \
   "send_input" \
   "capture_frame" \
-  "capture_audio"; do
+  "verify_audio"; do
   require_term "$SKILL" "$term"
 done
 

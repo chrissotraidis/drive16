@@ -13,6 +13,7 @@ import {
   createAgentActivityRepairState,
   ensureActiveProject,
   resetActiveProject,
+  seedActiveProjectForPrompt,
   sendAgentPrompt,
   setAgentProviderKey,
   visibleAgentActivityEvents,
@@ -73,8 +74,9 @@ import {
 type BuildState = "idle" | "building" | "running" | "error";
 type TransportState = "running" | "paused";
 type ModelProvider = "openrouter" | "ollama";
-type ConnectionState = HealthState | "idle" | "testing";
+type ConnectionState = HealthState | "idle" | "testing" | "starting";
 type MessageSource = "proof" | "system" | "opencode" | "model";
+type AgentPhase = "idle" | "planning" | "editing" | "building" | "testing" | "done" | "failed";
 
 type Message = {
   id: number;
@@ -89,8 +91,16 @@ type PendingAgentRun = {
   startedAt: number;
   previousSession?: string;
   projectName: string;
+  sawSourceOrResourceEdit?: boolean;
+  sawBuildStarted?: boolean;
+  sawBuildFinished?: boolean;
+  sawBuildFailed?: boolean;
+  sawScreenCheck?: boolean;
+  sawInputTest?: boolean;
+  sawAudioCheck?: boolean;
   waitingTimer?: number;
   stallTimer?: number;
+  backgroundErrorTimer?: number;
 };
 
 type ConversationMode = {
@@ -147,6 +157,15 @@ type ProjectFileEntry = {
   state: HealthState;
 };
 
+type ProjectAssetRole = {
+  role: string;
+  source: string;
+  symbol: string;
+  status: string;
+  notes: string;
+  previewDataUrl?: string;
+};
+
 type ProjectSummary = {
   generatedAt: string;
   name: string;
@@ -156,6 +175,7 @@ type ProjectSummary = {
   romStatus: HealthState;
   romDetail: string;
   files: ProjectFileEntry[];
+  assetRoles: ProjectAssetRole[];
 };
 
 type RomExportResult = {
@@ -264,6 +284,11 @@ type ProjectActionNotice = {
   detail: string;
 };
 
+type RomPreviewLoadResult = {
+  ok: boolean;
+  detail: string;
+};
+
 type V1PromptResult = {
   status: HealthState;
   detail: string;
@@ -306,6 +331,11 @@ type OpenCodeSendResult = {
   detail: string;
   replyText?: string | null;
   finish?: string | null;
+};
+
+type OpenCodeBackgroundError = {
+  generatedAt: string;
+  detail: string;
 };
 
 type ProjectMemoryAuditResult = {
@@ -655,6 +685,15 @@ const previewProjectSummary: ProjectSummary = {
   exportDirectory: "artifacts/phase3/exports",
   romStatus: "missing",
   romDetail: "No ROM built yet",
+  assetRoles: [
+    {
+      role: "Game code primitives",
+      source: "None yet",
+      symbol: "src/main.c",
+      status: "Pending",
+      notes: "Choose gameplay roles before generating or wiring assets.",
+    },
+  ],
   files: [
     {
       label: "Main C",
@@ -792,6 +831,7 @@ function App() {
     time: "",
   });
   const [openCodeBusy, setOpenCodeBusy] = useState(false);
+  const [agentPhase, setAgentPhase] = useState<AgentPhase>("idle");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [emulatorFocused, setEmulatorFocused] = useState(false);
@@ -908,10 +948,21 @@ function App() {
             ),
           );
           setProjectSource("tauri");
+          void loadProjectSummary();
           if (project.romExists) {
-            setAgentRom({ path: project.romPath, stamp: Date.now() });
-            appendOpenCodeEvent("project.active.rom", project.romPath);
-            void launchRom(project.romPath, "Active project ROM ready.");
+            setStarterRom({
+              ...previewStarterRom,
+              detail: "Active project ROM available. Press Verify or Play ROM to load it.",
+              projectPath: project.projectPath,
+              romPath: project.romPath,
+            });
+            setStarterSource("preview");
+            setTransport("paused");
+            appendOpenCodeEvent(
+              "project.active.rom.available",
+              `${project.romPath}; not auto-loaded on refresh`,
+            );
+            noteAction("Active project ROM available. Press Verify or Play ROM to load it.");
           } else if (project.status === "stale") {
             appendOpenCodeEvent("project.active.stale", project.detail);
           }
@@ -995,6 +1046,7 @@ function App() {
           if (visibleActivity.eventType === "agent.finished") {
             void finishPendingAgentRun(visibleActivity.sessionId);
           } else {
+            recordPendingAgentMilestone(visibleActivity);
             recordPendingAgentProgress(visibleActivity.sessionId);
           }
         }
@@ -1156,7 +1208,12 @@ function App() {
     ],
   );
   const topBarStatus = useMemo(() => {
-    if (buildState === "building") return { state: "building", label: "Working" };
+    if (buildState === "building") {
+      return {
+        state: "building",
+        label: agentPhase === "idle" ? "Working" : agentPhaseLabel(agentPhase),
+      };
+    }
     if (buildState === "error") return { state: "error", label: "Error" };
     if (activeRomPlayable && playabilityGateState === "missing") {
       return { state: "error", label: "Gate Failed" };
@@ -1168,11 +1225,12 @@ function App() {
         playerScreenEvidence === "checking" ||
         playerInputEvidence === "testing" ||
         playerAudioEvidence === "checking";
-      return { state: "warning", label: checking ? "Checking" : "Needs Check" };
+      return { state: "warning", label: checking ? "Checking" : "Needs Repair" };
     }
     return { state: "running", label: "Ready" };
   }, [
     activeRomPlayable,
+    agentPhase,
     buildState,
     playabilityGateState,
     playerAudioEvidence,
@@ -1238,8 +1296,22 @@ function App() {
     if (starterBusy || buildState === "building") {
       return {
         state: "warning",
-        label: "Verifying ROM",
+        label: openCodeBusy && agentPhase !== "idle" ? agentPhaseLabel(agentPhase) : "Verifying ROM",
         detail: actionDetail,
+      };
+    }
+    if (activeRomPlayable && playabilityGateState === "warning") {
+      return {
+        state: "warning",
+        label: "Game needs repair",
+        detail: "The ROM runs, but screen, input, audio, or genre checks still need proof.",
+      };
+    }
+    if (activeRomPlayable && playabilityGateState === "missing") {
+      return {
+        state: "missing",
+        label: "Playability failed",
+        detail: "The ROM exists, but one or more required checks failed.",
       };
     }
     return {
@@ -1249,9 +1321,13 @@ function App() {
     };
   }, [
     actionDetail,
+    activeRomPlayable,
+    agentPhase,
     buildState,
     exportBusy,
     importBusy,
+    openCodeBusy,
+    playabilityGateState,
     playerState,
     projectActionNotice,
     saveBusy,
@@ -1489,6 +1565,7 @@ function App() {
           "system",
         ),
       ]);
+      setAgentPhase("failed");
       setBuildState("error");
       return false;
     }
@@ -1518,6 +1595,7 @@ function App() {
     }
 
     setBuildState("building");
+    setAgentPhase("planning");
     setPlayerScreenEvidence("none");
     setPlayerInputEvidence("none");
     setPlayerAudioEvidence("none");
@@ -1554,6 +1632,23 @@ function App() {
       setProjectSummary(projectSummaryFromActiveProject(project, projectName));
       setProjectSource("tauri");
       appendOpenCodeEvent("agent.workspace", project.projectPath);
+      try {
+        const seed = await seedActiveProjectForPrompt(trimmed);
+        if (seed.applied) {
+          appendOpenCodeEvent("agent.seeded", seed.source || seed.detail);
+          noteAction("Loaded simple starter code before the agent began building.");
+          setProjectSummary((current) => ({
+            ...current,
+            romStatus: "missing",
+            romDetail: "Starter code seeded; no ROM built yet",
+          }));
+        }
+      } catch (error) {
+        appendOpenCodeEvent(
+          "agent.seed.failed",
+          errorDetail(error, "Starter seed failed; continuing with the blank project"),
+        );
+      }
       const result = await sendAgentPrompt({
         // OpenCode session reuse currently makes later turns repeat the first
         // instruction. Keep continuity in the project workspace instead.
@@ -1564,10 +1659,15 @@ function App() {
           comfyUiEndpoint,
           comfyUiCheckpoint,
           comfyUiLora,
+          comfyUiState: comfyUiConnection.state,
+          comfyUiDetail: comfyUiConnection.detail,
         }),
         providerId: "openrouter",
         modelId: activeModel,
         background: true,
+        comfyUiEndpoint,
+        comfyUiCheckpoint,
+        comfyUiLora,
       });
       setOpenCodeSessionId(result.sessionId);
       startPendingAgentRun(result.sessionId, startedAt, previousSession, projectName);
@@ -1594,6 +1694,7 @@ function App() {
         "agent.failed",
         `${detail}; after ${formatDurationMs(Date.now() - startedAt)}`,
       );
+      setAgentPhase("failed");
       setBuildState("error");
       return false;
     } finally {
@@ -1624,10 +1725,33 @@ function App() {
     pending.stallTimer = window.setTimeout(() => {
       failPendingAgentRun(
         sessionId,
-        "The agent request was accepted, but OpenCode did not start assistant or tool activity.",
+        pendingAgentStallDetail(pending),
       );
     }, 120_000);
+    pending.backgroundErrorTimer = window.setInterval(() => {
+      void drainOpenCodeBackgroundErrors(sessionId);
+    }, 3_000);
     pendingAgentRunRef.current = pending;
+  }
+
+  async function drainOpenCodeBackgroundErrors(sessionId: string) {
+    const pending = pendingAgentRunRef.current;
+    if (!pending || pending.sessionId !== sessionId || !isTauriRuntime()) return;
+
+    try {
+      const errors = await invoke<OpenCodeBackgroundError[]>("drain_opencode_background_errors");
+      const latest = errors[errors.length - 1];
+      if (!latest) return;
+      failPendingAgentRun(
+        sessionId,
+        `OpenCode stopped the background request: ${latest.detail}`,
+      );
+    } catch (error) {
+      appendOpenCodeEvent(
+        "agent.background_error_check.failed",
+        errorDetail(error, "Could not read background agent errors"),
+      );
+    }
   }
 
   function recordPendingAgentProgress(sessionId: string | undefined) {
@@ -1645,9 +1769,82 @@ function App() {
     pending.stallTimer = window.setTimeout(() => {
       failPendingAgentRun(
         pending.sessionId,
-        "The agent stopped sending build activity before finishing.",
+        pendingAgentStallDetail(pending),
       );
     }, 180_000);
+  }
+
+  function recordPendingAgentMilestone(activity: {
+    eventType: string;
+    detail: string;
+    sessionId?: string;
+  }) {
+    const pending = pendingAgentRunRef.current;
+    if (!pending) return;
+    if (activity.sessionId && pending.sessionId !== activity.sessionId) return;
+
+    if (
+      activity.eventType === "agent.files.edited" &&
+      sourceOrResourcePathWasEdited(activity.detail)
+    ) {
+      pending.sawSourceOrResourceEdit = true;
+    }
+    if (
+      activity.eventType === "agent.build.started" ||
+      activity.eventType === "agent.build.retrying" ||
+      activity.eventType === "agent.build.fixing"
+    ) {
+      pending.sawBuildStarted = true;
+    }
+    if (
+      activity.eventType === "agent.build.finished" ||
+      activity.eventType === "agent.build.fixed"
+    ) {
+      pending.sawBuildStarted = true;
+      pending.sawBuildFinished = true;
+    }
+    if (activity.eventType === "agent.build.failed") {
+      pending.sawBuildStarted = true;
+      pending.sawBuildFailed = true;
+    }
+    if (activity.eventType === "agent.screenshot.checked") {
+      pending.sawScreenCheck = true;
+    }
+    if (activity.eventType === "agent.input.tested") {
+      pending.sawInputTest = true;
+    }
+    if (
+      activity.eventType === "agent.audio.checked" ||
+      activity.eventType === "agent.audio.failed"
+    ) {
+      pending.sawAudioCheck = true;
+    }
+  }
+
+  function pendingAgentStallDetail(pending: PendingAgentRun) {
+    if (pending.sawSourceOrResourceEdit && !pending.sawBuildStarted) {
+      return "The agent edited game source/resources but did not rebuild the ROM afterward.";
+    }
+    if (pending.sawBuildFailed && !pending.sawBuildFinished) {
+      return "The agent hit a build failure and did not complete the repair/rebuild loop.";
+    }
+    if (pending.sawBuildStarted && !pending.sawBuildFinished) {
+      return "The agent started a ROM build but did not finish it.";
+    }
+    if (pending.sawBuildFinished && !pending.sawScreenCheck) {
+      return "The agent built a ROM but did not capture a screen check afterward.";
+    }
+    if (pending.sawScreenCheck && !pending.sawInputTest) {
+      return "The agent checked the screen but did not run an input test afterward.";
+    }
+    if (pending.sawInputTest && !pending.sawAudioCheck) {
+      return "The agent tested input but did not verify audio or record why audio was skipped.";
+    }
+    return "The agent request was accepted, but OpenCode did not start or continue build activity.";
+  }
+
+  function sourceOrResourcePathWasEdited(detail: string) {
+    return /(?:^|[/:])(src|res)\/.+\.(c|h|s|res|png|vgm|wav|bin)\b/i.test(detail);
   }
 
   function failPendingAgentRun(sessionId: string, detail: string) {
@@ -1681,6 +1878,9 @@ function App() {
     }
     if (pending.stallTimer) {
       window.clearTimeout(pending.stallTimer);
+    }
+    if (pending.backgroundErrorTimer) {
+      window.clearInterval(pending.backgroundErrorTimer);
     }
   }
 
@@ -1743,8 +1943,13 @@ function App() {
           "agent.rom.built",
           `${after.romPath}; ${formatDurationMs(Date.now() - pending.startedAt)}`,
         );
-        void auditActiveProjectMemory();
-        setBuildState("running");
+        const previewResult = await launchRom(
+          after.romPath,
+          "Agent ROM preview captured. Playability still needs input/audio evidence.",
+        );
+        const memoryAudit = await auditActiveProjectMemory();
+        surfaceAgentCompletionAudit(memoryAudit, previewResult);
+        setBuildState(previewResult.ok ? "running" : "error");
       } else {
         const stale = after.status === "stale";
         const detail = `${after.detail}: ${after.romPath}`;
@@ -1811,6 +2016,8 @@ function App() {
     ) {
       return;
     }
+
+    applyAgentPhaseEvent(type);
 
     const id = openCodeEventIdRef.current;
     openCodeEventIdRef.current += 1;
@@ -1889,7 +2096,7 @@ function App() {
   }
 
   async function auditActiveProjectMemory() {
-    if (!isTauriRuntime()) return;
+    if (!isTauriRuntime()) return undefined;
 
     try {
       const audit = await invoke<ProjectMemoryAuditResult>("audit_active_project_memory");
@@ -1900,12 +2107,93 @@ function App() {
             ? "project.memory.missing"
             : "project.memory.warning";
       appendOpenCodeEvent(eventType, `${audit.gate.toUpperCase()}: ${audit.detail}`);
+      return audit;
     } catch (error) {
       appendOpenCodeEvent(
         "project.memory.failed",
         errorDetail(error, "Project memory audit failed"),
       );
+      return undefined;
     }
+  }
+
+  function surfaceAgentCompletionAudit(
+    audit: ProjectMemoryAuditResult | undefined,
+    previewResult?: RomPreviewLoadResult,
+  ) {
+    if (previewResult && !previewResult.ok) {
+      const detail = `ROM preview failed: ${previewResult.detail}`;
+      setMessages((current) => [
+        ...current,
+        makeMessage(
+          "agent",
+          `The ROM exists, but I’m not marking this game done. ${detail}`,
+          "system",
+        ),
+      ]);
+      setProjectActionNotice({
+        state: "missing",
+        label: "Preview failed",
+        detail,
+      });
+      appendOpenCodeEvent("agent.verification.failed", detail);
+      return;
+    }
+
+    if (!audit) {
+      const detail =
+        "Drive16 could not read GAME.md, ASSETS.md, and PLAYTEST.md after the ROM build.";
+      setMessages((current) => [
+        ...current,
+        makeMessage(
+          "agent",
+          `${detail} Treat the generated game as needing repair until the project-memory audit runs.`,
+          "system",
+        ),
+      ]);
+      setProjectActionNotice({
+        state: "warning",
+        label: "Playability unverified",
+        detail,
+      });
+      appendOpenCodeEvent("agent.verification.failed", detail);
+      return;
+    }
+
+    if (audit.status === "ready" && audit.gate === "pass") {
+      const detail =
+        "Project memory reports Playability gate: PASS. I’m loading the ROM so the player evidence can stay visible.";
+      setMessages((current) => [...current, makeMessage("agent", detail, "opencode")]);
+      setProjectActionNotice({
+        state: "ready",
+        label: "Gate passed",
+        detail: audit.detail,
+      });
+      appendOpenCodeEvent("agent.verification.passed", audit.detail);
+      return;
+    }
+
+    const gateLabel =
+      audit.gate === "fail"
+        ? "Playability gate: FAIL"
+        : audit.gate === "unknown"
+          ? "Playability gate missing"
+          : `Playability gate: ${audit.gate.toUpperCase()}`;
+    const detail = `${gateLabel}. ${audit.detail}`;
+    setMessages((current) => [
+      ...current,
+      makeMessage(
+        "agent",
+        `The ROM exists, but I’m not marking this game done. ${detail}`,
+        "system",
+      ),
+    ]);
+    setProjectActionNotice({
+      state: audit.status === "missing" ? "missing" : "warning",
+      label: audit.gate === "fail" ? "Game needs repair" : "Playability unverified",
+      detail,
+    });
+    appendOpenCodeEvent("agent.verification.failed", detail);
   }
 
   function markOpenCodeHeartbeat() {
@@ -1928,10 +2216,17 @@ function App() {
     setOpenCodeEvents([]);
     setOpenCodeRawEvents([]);
     setOpenCodeHeartbeat({ active: false, time: "" });
+    setAgentPhase("idle");
   }
 
   function noteAction(detail: string) {
     setActionDetail(detail);
+  }
+
+  function applyAgentPhaseEvent(eventType: string) {
+    const nextPhase = agentPhaseFromEvent(eventType);
+    if (!nextPhase) return;
+    setAgentPhase(nextPhase);
   }
 
   function appendOpenCodeEventFromData(data: string) {
@@ -2191,6 +2486,31 @@ function App() {
       exportDirectory: "artifacts/phase3/exports",
       romStatus: result.status,
       romDetail: result.detail,
+      assetRoles: [
+        {
+          role: "Player sprite",
+          source: assetMode === "generatedAssets" ? "ComfyUI sprite" : "Bundled asset",
+          symbol:
+            assetMode === "generatedAssets"
+              ? "artifacts/phase4/live-comfyui-sprite"
+              : "assets/core/player.png",
+          status: "Used",
+          notes:
+            assetMode === "generatedAssets"
+              ? "Generated sprite preview; prompt/crop details are recorded by the native build."
+              : "Core starter sprite used for preview.",
+        },
+        {
+          role: "Music loop",
+          source: assetMode !== "core" ? "MML music" : "Bundled asset",
+          symbol:
+            assetMode !== "core"
+              ? "artifacts/phase4/generated-music-prompt/project/res/generated_music.vgm"
+              : "assets/core/loop.vgm",
+          status: result.audioMaxAbs > 0 ? "Captured" : "Silent",
+          notes: `audio evidence: ${result.audioMaxAbs > 0 ? "captured" : "silent"}`,
+        },
+      ],
       files: [
         {
           label: "Main C",
@@ -2233,7 +2553,14 @@ function App() {
 
     try {
       const summary = await invoke<ProjectSummary>("load_project_summary");
-      setProjectSummary(summary);
+      const storedName = loadActiveProjectName(summary.name);
+      setProjectSummary({
+        ...summary,
+        name:
+          summary.name === "Starter Project" || summary.name === "Active Project"
+            ? storedName
+            : summary.name,
+      });
       setProjectSource("tauri");
     } catch (error) {
       setProjectSummary({
@@ -2725,6 +3052,81 @@ function App() {
     }
   }
 
+  async function launchComfyUiConnection() {
+    if (!enhancements.spriteGeneration) {
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "warning",
+        detail: "Enable AI sprites first",
+        checks: [],
+      }));
+      return;
+    }
+
+    const endpoint = comfyUiEndpoint.trim();
+    const checkpoint = comfyUiCheckpoint.trim() || defaultComfyUiCheckpoint;
+    const lora = comfyUiLora.trim() || defaultComfyUiLora;
+    if (!endpoint) {
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "missing",
+        detail: "ComfyUI endpoint required",
+        checks: [],
+      }));
+      return;
+    }
+
+    setComfyUiConnection((current) => ({
+      ...current,
+      state: "starting",
+      detail: "Launching ComfyUI",
+      checks: [
+        {
+          name: "API",
+          state: "warning",
+          detail: "Starting local ComfyUI process",
+        },
+      ],
+    }));
+    appendOpenCodeEvent("comfyui.starting", endpoint);
+
+    try {
+      const result = isTauriRuntime()
+        ? await invoke<ComfyUiEndpointStatus>("launch_comfyui_endpoint", {
+            request: { endpoint, checkpoint, lora },
+          })
+        : browserComfyUiEndpointStatus(endpoint);
+
+      setComfyUiConnection(result);
+      appendOpenCodeEvent(
+        result.state === "ready"
+          ? "comfyui.ready"
+          : result.state === "starting"
+            ? "comfyui.starting"
+            : result.state === "warning"
+              ? "comfyui.warning"
+              : "comfyui.missing",
+        result.detail,
+      );
+    } catch (error) {
+      const detail =
+        error instanceof Error ? `ComfyUI launch failed: ${error.message}` : "ComfyUI launch failed";
+      setComfyUiConnection((current) => ({
+        ...current,
+        state: "missing",
+        detail,
+        checks: [
+          {
+            name: "API",
+            state: "missing",
+            detail,
+          },
+        ],
+      }));
+      appendOpenCodeEvent("comfyui.failed", detail);
+    }
+  }
+
   function handleOpenRouterKeyChange(value: string) {
     setOpenRouterKey(value);
     saveOpenRouterKey(value);
@@ -2933,6 +3335,7 @@ function App() {
     setPlayerCanvasActive(false);
     setPlayerState("stopped");
     setPlayerAudio("unavailable");
+    setPlayerVolume(defaultPlayerVolume);
     setPlayerScreenEvidence("none");
     setPlayerInputEvidence("none");
     setPlayerAudioEvidence("none");
@@ -3900,7 +4303,10 @@ function App() {
     }
   }
 
-  async function launchRom(romPath?: string, doneMessage = "ROM preview ready.") {
+  async function launchRom(
+    romPath?: string,
+    doneMessage = "ROM preview ready.",
+  ): Promise<RomPreviewLoadResult> {
     setStarterBusy(true);
     setStarterSource("checking");
     setBuildState("building");
@@ -3917,7 +4323,10 @@ function App() {
       setBuildState("running");
       noteAction(`${doneMessage} Browser preview is using simulated frames.`);
       setStarterBusy(false);
-      return;
+      return {
+        ok: true,
+        detail: `${doneMessage} Browser preview is using simulated frames.`,
+      };
     }
 
     try {
@@ -3946,19 +4355,35 @@ function App() {
       }
       setBuildState("running");
       noteAction(doneMessage);
+      return {
+        ok: true,
+        detail: doneMessage,
+      };
     } catch (error) {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : "Starter ROM launch was not available";
       setStarterRom({
         ...previewStarterRom,
         status: "warning",
-        detail:
-          error instanceof Error
-            ? error.message
-            : "Starter ROM launch was not available",
+        detail,
         generatedAt: "error",
       });
       setStarterSource("error");
       setBuildState("error");
-      noteAction("Starter ROM could not launch.");
+      setPlayerScreenEvidence((current) =>
+        current === "visible" || current === "captured" ? current : "unverified",
+      );
+      setPlayerAudioEvidence((current) =>
+        current === "captured" || current === "silent" ? current : "failed",
+      );
+      appendOpenCodeEvent("preview.failed", detail);
+      noteAction(`ROM preview failed: ${detail}`);
+      return {
+        ok: false,
+        detail,
+      };
     } finally {
       setStarterBusy(false);
     }
@@ -4018,6 +4443,7 @@ function App() {
       <section className="workspace" aria-label="Drive16 workspace">
         <ChatRail
           activityNote={actionDetail}
+          agentPhaseLabel={agentPhase === "idle" ? "" : agentPhaseLabel(agentPhase)}
           buildEvents={openCodeEvents}
           heartbeat={openCodeHeartbeat}
           rawBuildEvents={openCodeRawEvents}
@@ -4129,6 +4555,9 @@ function App() {
           onComfyUiEndpointChange={handleComfyUiEndpointChange}
           onComfyUiLoraChange={handleComfyUiLoraChange}
           onEnhancementChange={handleEnhancementChange}
+          onLaunchComfyUi={() => {
+            void launchComfyUiConnection();
+          }}
           onModelChange={handleOpenRouterModelChange}
           onOllamaEndpointChange={handleOllamaEndpointChange}
           onOllamaModelChange={handleOllamaModelChange}
@@ -4256,6 +4685,83 @@ function formatLogTime(date = new Date()) {
 
 function isHeartbeatEvent(type: string, detail: string) {
   return type.toLowerCase().includes("heartbeat") || detail.toLowerCase().includes("heartbeat");
+}
+
+function agentPhaseLabel(phase: AgentPhase) {
+  const labels: Record<AgentPhase, string> = {
+    idle: "Ready",
+    planning: "Planning",
+    editing: "Editing",
+    building: "Building",
+    testing: "Testing",
+    done: "Done",
+    failed: "Failed",
+  };
+  return labels[phase];
+}
+
+function agentPhaseFromEvent(eventType: string): AgentPhase | undefined {
+  if (
+    eventType === "agent.failed" ||
+    eventType === "agent.stalled" ||
+    eventType === "agent.refresh.failed" ||
+    eventType === "project.memory.failed" ||
+    (eventType.startsWith("agent.") &&
+      (eventType.endsWith(".failed") ||
+        eventType.endsWith(".missing") ||
+        eventType.endsWith(".invalid")))
+  ) {
+    return "failed";
+  }
+
+  if (eventType === "agent.verification.passed") return "done";
+  if (eventType === "agent.finished") return "testing";
+
+  if (
+    eventType === "agent.plan" ||
+    eventType === "agent.started" ||
+    eventType === "agent.accepted" ||
+    eventType === "agent.workspace" ||
+    eventType === "agent.waiting" ||
+    eventType === "agent.no_progress" ||
+    eventType === "agent.questions"
+  ) {
+    return "planning";
+  }
+
+  if (
+    eventType.startsWith("agent.files.") ||
+    eventType.startsWith("agent.assets.") ||
+    eventType === "agent.reference" ||
+    eventType === "agent.tool.started" ||
+    eventType === "agent.tool.finished"
+  ) {
+    return "editing";
+  }
+
+  if (
+    eventType === "agent.build.started" ||
+    eventType === "agent.build.retrying" ||
+    eventType === "agent.build.fixing" ||
+    eventType === "agent.build.fixed" ||
+    eventType === "agent.build.finished" ||
+    eventType === "agent.build.log"
+  ) {
+    return "building";
+  }
+
+  if (
+    eventType.startsWith("agent.rom.") ||
+    eventType.startsWith("agent.screenshot.") ||
+    eventType.startsWith("agent.input.") ||
+    eventType.startsWith("agent.audio.") ||
+    eventType.startsWith("project.memory.") ||
+    eventType.startsWith("preview.audio.")
+  ) {
+    return "testing";
+  }
+
+  return undefined;
 }
 
 function isV1Prompt(text: string) {
@@ -4833,6 +5339,15 @@ function projectSummaryFromImport(result: RomImportResult): ProjectSummary {
     exportDirectory: previewProjectSummary.exportDirectory,
     romStatus: result.status,
     romDetail: `${formatBytes(result.bytes)} from ${result.sourceName}`,
+    assetRoles: [
+      {
+        role: "Imported ROM",
+        source: "External file",
+        symbol: result.importPath,
+        status: "Unknown",
+        notes: "Asset and sound sources are inside the imported ROM and are not audited by Drive16.",
+      },
+    ],
     files: [
       {
         label: "Imported ROM",
@@ -4865,6 +5380,15 @@ function projectSummaryFromActiveProject(
     exportDirectory: previewProjectSummary.exportDirectory,
     romStatus,
     romDetail: project.detail,
+    assetRoles: [
+      {
+        role: "Project assets",
+        source: "ASSETS.md",
+        symbol: `${project.projectPath}/ASSETS.md`,
+        status: "Needs refresh",
+        notes: "Native summary will parse the role ledger after the project is loaded.",
+      },
+    ],
     files: [
       {
         label: "Main C",
@@ -4895,6 +5419,15 @@ function projectSummaryFromSnapshot(snapshot: ProjectSnapshot): ProjectSummary {
     exportDirectory: previewProjectSummary.exportDirectory,
     romStatus: "ready",
     romDetail: snapshot.detail,
+    assetRoles: [
+      {
+        role: "Saved project assets",
+        source: "ASSETS.md",
+        symbol: `${snapshot.projectPath}/ASSETS.md`,
+        status: "Needs refresh",
+        notes: "Open the saved project to parse its current role ledger.",
+      },
+    ],
     files: [
       {
         label: "Main C",

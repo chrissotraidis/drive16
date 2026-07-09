@@ -24,6 +24,7 @@ type HeartbeatStatus = {
 
 export function ChatRail({
   activityNote,
+  agentPhaseLabel,
   buildEvents,
   heartbeat,
   rawBuildEvents,
@@ -40,6 +41,7 @@ export function ChatRail({
   onToggleCollapse,
 }: {
   activityNote: string;
+  agentPhaseLabel: string;
   buildEvents: BuildLogEvent[];
   heartbeat: HeartbeatStatus;
   rawBuildEvents: BuildLogEvent[];
@@ -164,6 +166,7 @@ export function ChatRail({
         {busy ? (
           <div className="agent-activity" data-testid="agent-activity">
             <Loader2 size={14} className="spin" aria-hidden="true" />
+            {agentPhaseLabel ? <b>{agentPhaseLabel}</b> : null}
             <span>{activityNote}</span>
           </div>
         ) : null}
@@ -230,7 +233,9 @@ function friendlyEventType(type: string) {
     "agent.assets.music.finished": "Music",
     "agent.assets.music.failed": "Music",
     "agent.questions": "Questions",
-    "agent.finished": "Done",
+    "agent.finished": "Testing",
+    "agent.verification.passed": "Verified",
+    "agent.verification.failed": "Verify",
     "agent.plan": "Plan",
     "agent.started": "Started",
     "agent.workspace": "Project",

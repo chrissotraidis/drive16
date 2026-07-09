@@ -66,29 +66,99 @@ game", do not silently sprint to a full build. Choose one:
 If the user says "just build", "don't ask questions", or gives detailed
 requirements, proceed without questions.
 
-When you proceed with a default plan, write that plan into `GAME.md` before or
-while you edit so the activity log and project memory show what you decided.
+When you proceed with a default plan, state it briefly in your reply/activity
+first, then start implementing. Do not rewrite `GAME.md` as if the game already
+exists before source/resource work has happened. Early project-memory edits are
+allowed only for an `## Asset Plan` in `ASSETS.md` or an explicitly marked
+`Planned`/`Intended` note. Never claim `out/rom.bin` is built, never write
+`Known Issues: none`, and never mark audio omitted unless those statements are
+backed by verification or an explicit user request.
 
 ## Build and verify loop
 
+For a simple generated game prompt, keep the first implementation pass short.
+After reading `GAME.md`, `ASSETS.md`, `PLAYTEST.md`, and `src/main.c`, edit
+`src/main.c` before doing more inspection. Do not read `README.md`, `Makefile`,
+`src/boot/*`, or `res/resources.*` unless the build fails or you are actually
+adding resource assets/music. Do not spend several steps explaining or planning
+after the asset plan; code first, then build. For simple generated games, do
+not use todo-list tools, decorative custom tile arrays, generated-art wiring, or
+extra systems before the first successful `build_rom`. When reading or globbing
+active project files, use absolute paths under the Active Drive16 project; do
+not use repo-root relative globs like `res/*` for audit projects.
+
 1. If you need Genesis or SGDK reference (VDP limits, sprite engine, joypad,
    XGM), query `drive16-rag` first.
+   For simple Snake prompts, use
+   `examples/game-skeletons/snake-basic/` as the first code/audio shape
+   when available; copy/adapt its `src/main.c` and `res/` files
+   before docs updates, then build.
+   For simple Pong prompts, use
+   `examples/game-skeletons/pong-basic/` as the first code/audio shape
+   when available; copy/adapt its `src/main.c` and `res/` files
+   before docs updates, then build.
+   For simple Tetris prompts, use
+   `examples/game-skeletons/tetris-basic/` as the first code/audio shape
+   when available; copy/adapt its `src/main.c` and `res/` files
+   before docs updates, then build.
+   If `src/main.c` already contains a seeded starter for the requested game,
+   build and test it before rewriting it or polishing docs.
 2. Edit the C and resource files in the active project.
 3. Build with the `drive16-sgdk-build` tool `build_rom`, passing the active
-   project path. Never build any other way.
+   project path. Never build any other way. Build again after your final
+   source/resource edit; an older `out/rom.bin` is stale evidence and does not
+   prove the current game.
 4. If the build fails, call `read_build_log`, fix the code, and rebuild.
    Repeat until it builds.
 5. When behavior matters (movement, colors, text on screen), verify with the
    `drive16-emulator` tool: `run_rom` on `out/rom.bin`, then `capture_frame`
    to look at the screen. Use `send_input` to test controls.
+   Immediately after `build_rom` succeeds, do not inspect or rewrite docs:
+   `run_rom`, `capture_frame`, `send_input` with lowercase button names such
+   as `right`, `run_rom` with `use_input_script: true`, `capture_frame` again,
+   `send_input` with `start` when restart applies, then `verify_audio` if sound
+   is expected. Valid button names are lowercase: `left`, `right`, `up`,
+   `down`, `start`, `a`, `b`, `c`, `x`, `y`, `z`, and `mode`.
 6. When the game includes music or sound effects, or when the `Drive16
-   settings:` block says MML music is enabled for a complete-game prompt, the
-   final emulator run must use `dump_audio: true`, then you must call
-   `capture_audio`. A VGM file and an `XGM_startPlay(...)` call prove that
-   audio is wired; only a non-silent audio capture proves that it plays.
+   settings:` block says MML music is enabled for a complete-game prompt, call
+   `drive16-emulator.verify_audio` on `out/rom.bin`. That tool runs the ROM
+   with audio dumping forced on and inspects the WAV in one step. A VGM file and
+   an `XGM_startPlay(...)` call prove that audio is wired; only
+   `verify_audio` returning non-silent audio proves that it plays.
+   Fallback only if `verify_audio` is unavailable:
+   - call `drive16-emulator.run_rom` with `rom_path`, enough `frames`, and the
+     boolean argument `dump_audio` set to `true`;
+   - call `drive16-emulator.capture_audio`;
+   - if `capture_audio` says no dump exists, retry `run_rom` once with the
+     exact `dump_audio: true` argument, then call `capture_audio` again;
+   - if audio still has no dump or is silent, mark `PLAYTEST.md` as
+     `Playability gate: FAIL` and record the concrete audio blocker instead of
+     looping or calling the build done.
 7. Do not tell the user something works unless you built it and verified the
    relevant behavior. The app loads `out/rom.bin` into the player after you
    finish.
+
+## Documentation truth and order
+
+Project memory is evidence, not marketing copy. The safest order for a build
+turn is:
+
+1. Read `GAME.md`, `ASSETS.md`, `PLAYTEST.md`, and relevant source/resource
+   files.
+2. Create or update only the short `ASSETS.md` asset plan if it helps the work;
+   every early row must say `Planned` or `Pending`, not `Used`, `Built`, or
+   `Captured`.
+3. Edit `src/` and `res/`, build the ROM, run the emulator, test input, and
+   verify audio when expected.
+4. Only after that evidence exists, update `GAME.md`, `ASSETS.md`, and
+   `PLAYTEST.md` with the current state.
+
+Never use `GAME.md` to claim `out/rom.bin` is built unless `build_rom` succeeded
+after the final source/resource edit. Never write `Known Issues: none` unless
+`PLAYTEST.md` is passing with evidence. If audio is skipped because the user
+explicitly asked for no audio, write "by user request". If audio is skipped
+because a tool failed, timed out, or you ran out of time, keep the playability
+gate failed and record the blocker instead of calling audio omitted.
 
 ## Playability gate
 
@@ -102,8 +172,45 @@ playable, verify the relevant checklist and record it in `PLAYTEST.md`:
 - Score or state counters start at the intended value.
 - The game does not instantly fail, soft-lock, or hide the player.
 - Audio is captured as non-silent when music or sound is expected.
+- Complete generated games include simple music or SFX unless the user disabled
+  audio by explicit request; if audio cannot be generated or verified, record
+  the concrete blocker and keep `PLAYTEST.md` failed.
 - Each sprite/tile/music asset maps to the correct game role.
 - The result matches the requested style closely enough to be honest.
+
+For common arcade prompts, use these minimum genre checks in addition to the
+generic gate:
+
+- Snake: score starts at 0, snake and food are both visible, D-pad movement is
+  visible, food can be eaten or at least approached without an instant fail,
+  wall/self collision creates a clear fail state, and Start restarts after game
+  over when a game-over state exists.
+- Pong: both paddles and the ball are visible, at least one player paddle moves
+  with input, the ball travels and bounces off paddles/walls, scoring changes
+  when the ball exits a side, and a point restart or serve state is visible.
+- Tetris: the playfield and next/score/line state are readable, a piece spawns
+  visibly, left/right/down movement works, rotation works, pieces lock into the
+  grid, line clear or stacking behavior is present, and game-over is possible
+  when the stack reaches the top.
+- Asteroids-style games: ship, asteroids, and shots are visible, rotation or
+  thrust changes the ship, firing creates a moving projectile, asteroids wrap
+  or move continuously, collisions/destruction affect score/state, and restart
+  works after death or game over.
+
+When `PLAYTEST.md` says `Playability gate: PASS`, its Evidence section must
+name the relevant genre checks and what was observed for each. Do not leave
+`Genre checks: pending`, `untested`, or a generic "looks good" note on a
+passing gate. Use an exact `## Evidence` heading. For Snake, include the exact
+evidence phrases: `score starts at 0`, `snake and food visible`,
+`D-pad movement visible`, `food can be approached or eaten`,
+`collision fail state checked`, and `restart checked`.
+For Pong, include the exact evidence phrases: `paddles and ball visible`,
+`paddle input tested`, `ball travels and bounces`, `scoring changes`, and
+`serve or point restart visible`.
+For Tetris, include the exact evidence phrases:
+`playfield and score/line state readable`, `piece spawns visibly`,
+`left/right/down movement works`, `rotation works`, `pieces lock into grid`,
+`line clear or stacking present`, and `game-over possible`.
 
 If any item is not verified or fails, say so plainly: "The ROM builds, but I
 do not consider it playable yet because..." Then fix it if possible before
@@ -141,12 +248,39 @@ SGDK symbol, and validation result. Do not use one generated image for multiple
 unrelated roles unless `ASSETS.md` explicitly explains why those roles are the
 same object.
 
+Before generating or wiring assets for a new game, create an `## Asset Plan`
+entry in `ASSETS.md`. The plan must list the gameplay roles you expect to need
+and the intended source for each role: primitive tiles/shapes, bundled assets,
+ComfyUI sprite, MML music, or SFX. Keep the plan short, then replace or confirm
+it with role table rows as assets are generated and wired. For generated images,
+the row notes must include the prompt, crop/slice source and output, and whether
+the final asset was used in the ROM. For music and SFX, the row notes must
+include compile status, the resource symbol/file, whether the ROM references it,
+and audio evidence as captured, silent, or untested. When `verify_audio`
+succeeds, include the phrase `captured non-silent audio evidence` in the
+music/sound row.
+
+For primitive text/tile rows, put the code path or drawing function in
+`Symbol / File`, such as `src/main.c draw_piece()`, rather than only a shared
+character like `#`. If one primitive glyph or helper is reused across multiple
+roles, explicitly say the shared primitive reuse is intentional in each
+affected row.
+
 ## Genesis ground rules
 
 - Tiles are 8x8; hardware sprites are up to 4x4 tiles (32x32 px).
 - 4 palette lines of 16 colors; index 0 of each line is transparent.
 - Poll `JOY_readJoypad(JOY_1)` each frame; call `SPR_update()` and
   `SYS_doVBlankProcess()` every frame.
+- Use SGDK APIs that are known to exist in this repo. `VDP_drawText`,
+  `VDP_clearPlane`, `VDP_loadTileData`, and `VDP_fillTileMapRect` are safe
+  starter choices for text and blocky tile graphics.
+- Do not use `VDP_drawRect`, `srand`, or C library `rand()` in generated game
+  code; they are not available in the current build setup. For simple arcade
+  graphics, load a solid 8x8 tile and draw repeated cells with
+  `VDP_fillTileMapRect`.
+- If you are about to use a SGDK API that is not already in the starter or a
+  local example, query `drive16-rag` or inspect examples first.
 
 ## Bundled assets
 
@@ -172,6 +306,9 @@ loop as MML and compile it with the `drive16-mml-music` tool `compile_music`.
 If MML music is disabled and the user did not ask for music, do not add music.
 If the user asks for music while it is disabled, say that you can use
 bundled/no music now or the user can enable MML music in Settings:
+Build the core playable game before optional music unless the user specifically
+asked for music-only or music-first work. Music is a bounded enhancement, not a
+blocker for writing game code.
 
 1. Start the MML with `#platform megadrive`, then `@` instrument definitions
    and channel lines. Use the proven FM presets in
@@ -180,16 +317,25 @@ bundled/no music now or the user can enable MML music in Settings:
    `drive16_chip_pluck`, `drive16_bright_bell`, `drive16_brass_stab`) as the
    starting point — copy the instrument blocks you use into your MML.
    Channels A-F are FM, G-H are PSG. Keep it short and looping.
-2. Call `compile_music` with the MML text and a symbol name like
+2. Before the first `compile_music` call, read
+   `corpus/mml/ctrmml-megadrive.md` or query the MML corpus. Use the documented
+   channel syntax (`A`, `B`, `C`, etc.) from that reference; do not invent
+   `V0`/`v0` track syntax. If two MML compile attempts fail, stop trying music
+   for this turn, record the exact compiler error as an audio failure in
+   `PLAYTEST.md`, and continue building/verifying the gameplay instead of
+   looping on music. This cap is strict: after the second failed
+   `compile_music` call, do not call `compile_music` again in the same turn.
+3. Call `compile_music` with the MML text and a symbol name like
    `my_song`. It compiles via ctrmml and writes a VGM under
    `artifacts/phase4/mml-music/last.vgm`, returning the exact `XGM ...`
    resource line.
-3. Copy the VGM into the active project (e.g. `res/my_song.vgm`), add the
+4. Copy the VGM into the active project (e.g. `res/my_song.vgm`), add the
    `XGM` line to `res/resources.res` pointing at that copied file, declare
    `extern const u8 my_song[];` in `res/resources.h`, and start it with
    `XGM_startPlay(my_song)`.
-4. Rebuild and verify as usual. If `compile_music` fails, read the error,
-   fix the MML, and retry.
+5. Rebuild after the VGM/resource/code wiring is complete, then verify as
+   usual. If audio remains unverified, keep the playability gate failed and
+   say exactly which audio step failed.
 
 ## Generating sprites and images (needs local ComfyUI)
 

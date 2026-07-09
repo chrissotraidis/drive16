@@ -94,9 +94,28 @@ function expectActivity(module, raw, expected) {
   }
 }
 
+function extractFunctionBody(source, functionName) {
+  const start = source.indexOf(`function ${functionName}(`);
+  assert(start >= 0, `Could not find function ${functionName}`);
+  const bodyStart = source.indexOf("{", start);
+  assert(bodyStart >= 0, `Could not find body for function ${functionName}`);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(bodyStart, index + 1);
+    }
+  }
+  throw new Error(`Could not parse body for function ${functionName}`);
+}
+
 const agent = await loadAgentModule();
 const repairState = agent.createAgentActivityRepairState();
 const appSource = await readFile(path.join(rootDir, "app", "src", "App.tsx"), "utf8");
+const startNewProjectSource = extractFunctionBody(appSource, "startNewProject");
+const appPackageSource = await readFile(path.join(rootDir, "app", "package.json"), "utf8");
 const playerPaneSource = await readFile(
   path.join(rootDir, "app", "src", "components", "PlayerPane.tsx"),
   "utf8",
@@ -105,13 +124,29 @@ const chatRailSource = await readFile(
   path.join(rootDir, "app", "src", "components", "ChatRail.tsx"),
   "utf8",
 );
+const projectMenuSource = await readFile(
+  path.join(rootDir, "app", "src", "components", "ProjectMenu.tsx"),
+  "utf8",
+);
+const settingsPanelSource = await readFile(
+  path.join(rootDir, "app", "src", "components", "SettingsPanel.tsx"),
+  "utf8",
+);
 const stylesSource = await readFile(path.join(rootDir, "app", "src", "styles.css"), "utf8");
 const starterRomSource = await readFile(
   path.join(rootDir, "app", "src-tauri", "src", "starter_rom.rs"),
   "utf8",
 );
+const nostalgistPlayerSource = await readFile(
+  path.join(rootDir, "app", "src", "player", "nostalgist.ts"),
+  "utf8",
+);
 const projectSource = await readFile(
   path.join(rootDir, "app", "src-tauri", "src", "project.rs"),
+  "utf8",
+);
+const starterGameTemplate = await readFile(
+  path.join(rootDir, "examples", "app-starter-blank", "GAME.md"),
   "utf8",
 );
 const starterAssetsTemplate = await readFile(
@@ -120,6 +155,54 @@ const starterAssetsTemplate = await readFile(
 );
 const starterPlaytestTemplate = await readFile(
   path.join(rootDir, "examples", "app-starter-blank", "PLAYTEST.md"),
+  "utf8",
+);
+const projectMemoryVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-project-memory.mjs"),
+  "utf8",
+);
+const genreGateVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-genre-playability-gates.mjs"),
+  "utf8",
+);
+const audioGateVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-audio-evidence-gates.mjs"),
+  "utf8",
+);
+const assetRoleGateVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-asset-role-gates.mjs"),
+  "utf8",
+);
+const liveGameAuditReadinessSource = await readFile(
+  path.join(rootDir, "scripts", "check-live-game-audit-readiness.mjs"),
+  "utf8",
+);
+const openCodeAudioTraceVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-opencode-audio-trace.mjs"),
+  "utf8",
+);
+const liveGameAuditVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-live-game-audit.mjs"),
+  "utf8",
+);
+const liveGameAuditPromptRunnerSource = await readFile(
+  path.join(rootDir, "scripts", "run-live-game-audit-prompt.mjs"),
+  "utf8",
+);
+const modelBakeoffVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-model-bakeoff-report.mjs"),
+  "utf8",
+);
+const emulatorServerSource = await readFile(
+  path.join(rootDir, "mcp-servers", "emulator", "server.py"),
+  "utf8",
+);
+const comfyUiSource = await readFile(
+  path.join(rootDir, "app", "src-tauri", "src", "comfyui.rs"),
+  "utf8",
+);
+const opencodeSource = await readFile(
+  path.join(rootDir, "app", "src-tauri", "src", "opencode.rs"),
   "utf8",
 );
 const nativeMainSource = await readFile(
@@ -133,22 +216,58 @@ const builderSkill = await readFile(
 const normalizedBuilderSkill = normalizedText(builderSkill);
 
 for (const expected of [
+  "drive16-emulator.verify_audio",
   "dump_audio: true",
   "capture_audio",
-  "only a non-silent audio capture proves that it plays",
+  "Build again after your final",
+  "an older `out/rom.bin` is stale evidence",
+  "verify_audio` returning non-silent audio proves that it plays",
+  "boolean argument `dump_audio` set to `true`",
+  "retry `run_rom` once with the",
+  "mark `PLAYTEST.md` as",
+  "only `verify_audio` returning non-silent audio proves that it plays",
   "asset source and path was used for each game role",
   "prefer deterministic SGDK primitives or tiles",
   "Reserve ComfyUI for semantic or styled artwork",
   "Treat `ASSETS.md` as the role ledger",
+  "Before generating or wiring assets for a new game, create an `## Asset Plan`",
+  "the row notes must include the prompt, crop/slice source and output",
+  "audio evidence as captured, silent, or untested",
   "record the role-specific prompt",
   "Drive16 can generate one Genesis-safe sprite PNG at a time",
   "Do not assume ComfyUI can produce a complete sprite sheet",
   "generate and validate separate role-specific sprites",
+  "Complete generated games include simple music or SFX",
+  "Build the core playable game before optional music",
+  "Music is a bounded enhancement, not a",
+  "Before the first `compile_music` call",
+  "corpus/mml/ctrmml-megadrive.md",
+  "do not invent",
+  "If two MML compile attempts fail",
+  "after the second failed",
+  "do not call `compile_music` again",
+  "continue building/verifying the gameplay",
   "Playability gate: PASS",
   "Playability gate: FAIL",
+  "Snake: score starts at 0",
+  "Pong: both paddles and the ball are visible",
+  "Tetris: the playfield and next/score/line state are readable",
+  "Asteroids-style games: ship, asteroids, and shots are visible",
+  "Evidence section must",
+  "`Genre checks: pending`",
   "Treat the active project folder, not the chat session, as the source of continuity",
   "modify the current game after reading",
   "Do not restart from a blank project unless the user explicitly asks",
+  "Do not rewrite `GAME.md` as if the game already exists before source/resource work has happened",
+  "Early project-memory edits are allowed only for an `## Asset Plan`",
+  "Never claim `out/rom.bin` is built",
+  "Never write `Known Issues: none`",
+  "Documentation truth and order",
+  "Project memory is evidence, not marketing copy",
+  "every early row must say `Planned` or `Pending`",
+  "If audio is skipped because the user explicitly asked for no audio, write \"by user request\"",
+  "If audio is skipped because a tool failed, timed out, or you ran out of time",
+  "examples/game-skeletons/snake-basic/",
 ]) {
   assert(
     normalizedBuilderSkill.includes(expected),
@@ -157,8 +276,23 @@ for (const expected of [
 }
 
 for (const expected of [
+  "First Build References",
+  "examples/game-skeletons/snake-basic/",
+  "proven compact source and audio seed",
+]) {
+  assert(
+    starterGameTemplate.includes(expected),
+    `Starter GAME.md template is missing: ${expected}`,
+  );
+  assert(projectSource.includes(expected), `Native GAME.md fallback is missing: ${expected}`);
+}
+
+for (const expected of [
   "Use this file as the role ledger for the game.",
+  "Asset Plan",
   "ComfyUI currently generates one Genesis-safe 32x32 sprite PNG at a time.",
+  "notes must include prompt, crop/slice, and whether it was used",
+  "audio evidence as captured, silent, or untested",
   "Do not reuse one generated image for unrelated roles.",
   "Asset Source Decision Log",
 ]) {
@@ -173,12 +307,307 @@ for (const expected of [
   "Playability gate: FAIL",
   "no game has been implemented",
   "audio-checked",
+  "Genre Acceptance Checklist",
+  "When `Playability gate: PASS`, the Evidence section must name each relevant",
+  "Passing games must record non-silent audio evidence",
+  "Genre checks: pending",
+  "Snake | Score starts at 0",
+  "Pong | Both paddles and ball are visible",
+  "Tetris | Playfield and score/line state are readable",
+  "Asteroids | Ship, asteroids, and shots are visible",
 ]) {
   assert(
     starterPlaytestTemplate.includes(expected),
     `Starter PLAYTEST.md template is missing: ${expected}`,
   );
   assert(projectSource.includes(expected), `Native PLAYTEST.md fallback is missing: ${expected}`);
+}
+
+for (const expected of [
+  "const genreAuditRules",
+  "function latestPlaytestText",
+  "function detectedGenre",
+  "function missingGenreEvidence",
+  "PLAYTEST.md passes",
+  "without evidence for",
+  "without active music/SFX evidence",
+  "does not record compiled music/resource wiring",
+  "does not record captured audio evidence",
+  "function hasCapturedAudioEvidence",
+  "function audioEvidenceIsNegated",
+  "function hasAssetPlan",
+  "function assetRoleIsVague",
+  "function generatedAssetRecordsPrompt",
+  "does not record crop/slice normalization",
+  "GAME.md claims out/rom.bin is built",
+  "without an explicit user no-audio request",
+  "genre=${report.genre}",
+]) {
+  assert(
+    projectMemoryVerifierSource.includes(expected),
+    `Project memory verifier is missing genre audit support: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "verify-genre-playability-gates.mjs",
+  "verify-audio-evidence-gates.mjs",
+  "verify-asset-role-gates.mjs",
+  "check:live-game-audit-readiness",
+  "check-live-game-audit-readiness.mjs",
+  "prepare:live-game-audit",
+  "pnpm check:live-game-audit-readiness && node ../scripts/verify-live-game-audit.mjs --write-template",
+  "prepare:live-game-audit:prompt",
+  "run-live-game-audit-prompt.mjs",
+  "run:live-game-audit:prompt",
+  "run-live-game-audit-prompt.mjs --run-agent",
+  "verify:opencode-audio-trace",
+  "verify-opencode-audio-trace.mjs --self-test",
+  "verify:live-game-audit",
+  "verify-live-game-audit.mjs --self-test",
+  "verify:live-game-audit:report",
+  "verify-live-game-audit.mjs --require-complete --require-files",
+  "prepare:model-bakeoff",
+  "pnpm verify:live-game-audit:report && node ../scripts/verify-model-bakeoff-report.mjs --write-template",
+  "verify-project-memory.mjs && node ../scripts/verify-genre-playability-gates.mjs && node ../scripts/verify-audio-evidence-gates.mjs && node ../scripts/verify-asset-role-gates.mjs",
+  "verify:model-bakeoff",
+  "verify-model-bakeoff-report.mjs --self-test",
+  "verify:model-bakeoff:report",
+  "verify-model-bakeoff-report.mjs --require-complete --require-files",
+]) {
+  assert(appPackageSource.includes(expected), `Package scripts are missing verification support: ${expected}`);
+}
+
+for (const expected of [
+  "Snake",
+  "Pong",
+  "Tetris",
+  "Asteroids",
+  "Genre checks: pending.",
+  "PLAYTEST.md passes ${genre.label} without evidence for",
+  "Genre playability fixture gates verified",
+]) {
+  assert(
+    genreGateVerifierSource.includes(expected),
+    `Genre playability fixture verifier is missing: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "missing-audio",
+  "good-audio",
+  "uncaptured-audio",
+  "explicit-no-audio",
+  "self-omitted-audio",
+  "without active music/SFX evidence",
+  "without an explicit user no-audio request",
+  "does not record captured audio evidence",
+  "Audio evidence fixture gates verified",
+]) {
+  assert(
+    audioGateVerifierSource.includes(expected),
+    `Audio evidence fixture verifier is missing: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "good-generated-role",
+  "missing-asset-plan",
+  "vague-generated-role",
+  "missing-generated-crop",
+  "missing-generated-use",
+  "uses a vague role",
+  "does not record crop/slice normalization",
+  "Asset role fixture gates verified",
+]) {
+  assert(
+    assetRoleGateVerifierSource.includes(expected),
+    `Asset role fixture verifier is missing: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "readyForLiveAudit",
+  "readyForPrimitiveAudit",
+  "readyForGeneratedSpriteAudit",
+  "Primitive/fallback audit readiness",
+  "Generated-sprite audit readiness",
+  "Docker daemon for SGDK builds",
+  "OpenCode config and MCP tools",
+  "OpenRouter credential",
+  "ComfyUI sprite readiness",
+  "Agent/UI contract checks",
+  "Project memory gates",
+  "Live audit verifier self-test",
+  "Fix required blocker",
+  "Run the primitive/fallback live audit now",
+  "fallback-disclosed",
+]) {
+  assert(
+    liveGameAuditReadinessSource.includes(expected),
+    `Live game audit readiness checker is missing guard: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "const requiredPrompts",
+  "snake-basic",
+  "pong-basic",
+  "tetris-basic",
+  "asteroids-basic",
+  'arg === "--"',
+  "--run-agent",
+  "DRIVE16_LIVE_AUDIT_MODEL",
+  "readyForPrimitiveAudit",
+  "readyForGeneratedSpriteAudit",
+  "examples",
+  "app-starter-blank",
+  "opencode-run.jsonl",
+  "opencode-run.status.json",
+  "createWriteStream",
+  "spawn(\"opencode\"",
+  "run-record.json",
+  "verify-project-memory.mjs",
+  "verify-opencode-audio-trace.mjs",
+  "drive16-emulator.verify_audio",
+  "Build the core playable game before optional music",
+  "Do not claim ComfyUI-generated sprites were used",
+  "Do not spend the run polishing project docs before gameplay exists",
+  "Never claim out/rom.bin is built",
+  "Known Issues: none",
+  "Date.now()",
+  "mtimeMs < notBeforeMs",
+  "Snake first-build reference",
+  "Snake first-build seed",
+  "firstBuildSeed",
+  "--allow-seeded-source",
+  "examples/game-skeletons/snake-basic",
+]) {
+  assert(
+    liveGameAuditPromptRunnerSource.includes(expected),
+    `Live game audit prompt runner is missing guard: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "Another local tool is using the build-agent port",
+  "fn reserve_ephemeral_endpoint",
+  "Stop only the child we own",
+  "move Drive16 to a fresh local port",
+  "OpenCode restart needs a free owned port",
+  "set_current_endpoint(endpoint)",
+]) {
+  assert(opencodeSource.includes(expected), `OpenCode startup ownership is missing: ${expected}`);
+}
+assert(
+  !opencodeSource.includes("pkill"),
+  "OpenCode startup ownership regressed: source must not use global pkill",
+);
+
+for (const expected of [
+  '"name": "verify_audio"',
+  "def verify_audio",
+  '"action": "verify_audio"',
+  '"dump_audio": True',
+  "capture_audio()",
+]) {
+  assert(emulatorServerSource.includes(expected), `Emulator MCP server is missing verify_audio support: ${expected}`);
+}
+
+for (const expected of [
+  "analyzeOpenCodeAudioTrace",
+  "validateOpenCodeAudioTrace",
+  "goodOpenCodeAudioTraceFixture",
+  "goodOpenCodeGameTraceFixture",
+  "expectGameProgress",
+  "allowSeededSource",
+  "--allow-seeded-source",
+  "sourceOrResourceEditCalls",
+  "buildRomAfterLastSourceOrResourceEdit",
+  "verifyAudioCalls",
+  "verifyAudioSuccesses",
+  "compileMusicFailures",
+  "no drive16-sgdk-build.build_rom call",
+  "edited source/resources but never rebuilt afterward",
+  "sourceEditWithoutBuildTrace",
+  "drive16-emulator_verify_audio",
+  "no run_rom call with dump_audio=true",
+  "no drive16-emulator.capture_audio call",
+  "repeated run_rom calls omitted dump_audio=true",
+  "repeated failed compile_music calls after the two-attempt cap",
+  "badMmlLoopTrace",
+  "compile_music=${result.summary.compileMusicCalls}",
+  "OpenCode audio trace verifier self-test passed",
+]) {
+  assert(
+    openCodeAudioTraceVerifierSource.includes(expected),
+    `OpenCode audio trace verifier is missing guard: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "const requiredPrompts",
+  "snake-basic",
+  "pong-basic",
+  "tetris-basic",
+  "asteroids-basic",
+  "previewLoaded",
+  "screenVisible",
+  "inputResponded",
+  "restartTested",
+  "audioKnown",
+  "assetLedgerUpdated",
+  "gameplayRulesTested",
+  "projectMemoryAudited",
+  "plumbing.comfyUiStatus must be ready, fallback-disclosed, or disabled.",
+  "--readiness <file>",
+  "function templatePlumbingFromReadiness",
+  "function templateSummaryFromReadiness",
+  "readyForGeneratedSpriteAudit",
+  "Live game audit template verified",
+  "This is not a completed live audit",
+  "--require-complete --require-files",
+  "cannot pass until checks.${field} is true.",
+  "audio must be captured or disabled by request.",
+  "validateOpenCodeAudioTrace",
+  "goodOpenCodeGameTraceFixture",
+  "expectGameProgress: true",
+  "function projectProofFiles",
+  "function staleRomProofFiles",
+  "romPath is stale",
+  "rebuild after newer source/resource file",
+  "Live game audit self-test rejected stale ROM evidence.",
+  "OpenCode trace is not valid",
+  "Live game audit self-test rejected incomplete pass evidence.",
+]) {
+  assert(
+    liveGameAuditVerifierSource.includes(expected),
+    `Live game audit verifier is missing evidence guard: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "requiredPromptIds",
+  "snake-basic",
+  "pong-basic",
+  "tetris-basic",
+  "asteroids-basic",
+  "Bakeoff must include DeepSeek V3.1.",
+  "plumbing.${gate} must be pass before running model bakeoff.",
+  "--require-files",
+  "function relativeOrAbsoluteExists",
+  "evidence.playtestPath does not exist",
+  "evidence.auditReportPath does not exist",
+  "Model bakeoff report is missing",
+  "prepare:model-bakeoff only after the completed live audit passes",
+  "Missing run for ${model.id} / ${prompt.id}; all models must use the same required prompts.",
+  "recommendedDefault.modelId must reference a tested model.",
+  "Model bakeoff report self-test rejected incomplete fixture.",
+]) {
+  assert(
+    modelBakeoffVerifierSource.includes(expected),
+    `Model bakeoff verifier is missing evidence guard: ${expected}`,
+  );
 }
 
 for (const expected of [
@@ -215,8 +644,19 @@ for (const expected of [
   "ollamaModel: value",
   "function canPlayActiveRom",
   'return projectSummary.romStatus === "ready"',
+  "type ProjectAssetRole",
+  "assetRoles: ProjectAssetRole[]",
+  "previewDataUrl?: string",
+  'type AgentPhase = "idle" | "planning" | "editing" | "building" | "testing" | "done" | "failed"',
+  "function agentPhaseFromEvent",
+  "function agentPhaseLabel",
+  'setAgentPhase("planning")',
+  'setAgentPhase("failed")',
+  'agentPhaseLabel={agentPhase === "idle" ? "" : agentPhaseLabel(agentPhase)}',
+  'if (eventType === "agent.verification.passed") return "done"',
+  'if (eventType === "agent.finished") return "testing"',
   "function appPlayabilityGateState",
-  'return { state: "warning", label: checking ? "Checking" : "Needs Check" }',
+  'return { state: "warning", label: checking ? "Checking" : "Needs Repair" }',
   'return { state: "error", label: "Gate Failed" }',
   'starterBusy || buildState === "building" || !activeRomPlayable',
   "const recentDuplicate = current",
@@ -227,8 +667,16 @@ for (const expected of [
   "const openCodeHeartbeatTimeoutMs = 15_000",
   "function clearOpenCodeHeartbeatTimer",
   "openCodeHeartbeatTimerRef.current = window.setTimeout",
+  '"project.active.rom.available"',
+  "not auto-loaded on refresh",
+  "Active project ROM available. Press Verify or Play ROM to load it.",
   "type ProjectMemoryAuditResult",
   'invoke<ProjectMemoryAuditResult>("audit_active_project_memory")',
+  "function surfaceAgentCompletionAudit",
+  "The ROM exists, but I’m not marking this game done.",
+  "Playability gate: FAIL",
+  "Playability unverified",
+  "Gate passed",
   '"project.memory.ready"',
   '"project.memory.warning"',
   '"project.memory.missing"',
@@ -242,6 +690,20 @@ for (const expected of [
   'return pending ? "raw" : "accept"',
   "agent.ignored.stale",
   "return pending.sessionId === sessionId ?",
+  "function recordPendingAgentMilestone",
+  "function pendingAgentStallDetail",
+  "function sourceOrResourcePathWasEdited",
+  "sawSourceOrResourceEdit",
+  "sawBuildStarted",
+  "sawBuildFinished",
+  "sawScreenCheck",
+  "sawInputTest",
+  "sawAudioCheck",
+  "edited game source/resources but did not rebuild the ROM afterward",
+  "hit a build failure and did not complete the repair/rebuild loop",
+  "built a ROM but did not capture a screen check afterward",
+  "checked the screen but did not run an input test afterward",
+  "tested input but did not verify audio or record why audio was skipped",
   '"project.reset.failed"',
   '"verify.no_rom"',
   'label: "No ROM to verify"',
@@ -305,15 +767,29 @@ for (const expected of [
   '["tetris", "Tetris"]',
   "The agent produced a ROM file. I’m loading it now, but it is not marked playable until Drive16 has screen, input, and audio evidence.",
   'label: "ROM built, checking"',
+  "type RomPreviewLoadResult",
+  "const previewResult = await launchRom(",
+  "surfaceAgentCompletionAudit(memoryAudit, previewResult)",
+  "ROM preview failed: ${previewResult.detail}",
+  'label: "Preview failed"',
+  '"preview.failed"',
+  '"agent.verification.failed"',
+  '"agent.verification.passed"',
   "Agent ROM preview captured. Playability still needs input/audio evidence.",
+  'setBuildState(previewResult.ok ? "running" : "error")',
   "audioMaxAbs",
   "preview.audio.captured",
   "preview.audio.silent",
   '"agent.rom.built"',
+  'label: "Game needs repair"',
+  'label: "Playability failed"',
   'label: "Player started muted"',
   "App volume is 0%",
   "setNostalgistVolume",
   "defaultPlayerVolume",
+  "seedActiveProjectForPrompt",
+  "agent.seeded",
+  "Starter code seeded; no ROM built yet",
   'label: "Screen visible, playtest incomplete"',
   'label: mostlyUnknown ? "Screen check inconclusive" : "Screen not verified"',
   '"The player is rendering visible frames. Controls and audio still need evidence before calling this game playable."',
@@ -321,9 +797,114 @@ for (const expected of [
   assert(appSource.includes(expected), `App lifecycle source is missing: ${expected}`);
 }
 assert(
+  !appSource.includes('void launchRom(project.romPath, "Active project ROM ready.")'),
+  "App startup must not auto-load an existing active-project ROM; loading should require Verify or Play.",
+);
+assert(
   !appSource.includes("window.sessionStorage.setItem(openRouter"),
   "OpenRouter key must not be saved to sessionStorage; refresh should keep it.",
 );
+for (const expected of [
+  "disposeInteractivePlayer();",
+  'setPlayerState("stopped")',
+  'setPlayerAudio("unavailable")',
+  "setPlayerVolume(defaultPlayerVolume)",
+  "setLoadedPlayerRom(undefined)",
+  "setAgentRom(undefined)",
+  "resetBuildActivityLog()",
+]) {
+  assert(startNewProjectSource.includes(expected), `New project reset is missing: ${expected}`);
+}
+
+for (const expected of [
+  "export const defaultPlayerVolume = 0",
+  "const retroarchMutedVolume = -80",
+  "audio_mute_enable: false",
+  "audio_mixer_mute_enable: false",
+  "audio_volume: retroarchMutedVolume",
+  "audio_mixer_volume: retroarchMutedVolume",
+  "forceMinimumRetroarchVolume(runtime);",
+  "return runtime.muted || runtime.volume === 0 ? \"muted\" : \"audible\"",
+  "Treat the app volume slider as the source of truth",
+]) {
+  assert(
+    nostalgistPlayerSource.includes(expected),
+    `Nostalgist player source is missing audio safety guard: ${expected}`,
+  );
+}
+assert(
+  !nostalgistPlayerSource.includes('sendCommand("MUTE")'),
+  "Nostalgist player must not use RetroArch's toggle mute command for audio safety.",
+);
+
+for (const expected of [
+  "function spriteEnhancementReadiness",
+  "function missingComfyUiChecks",
+  "Missing model + LoRA",
+  "Missing model",
+  "Missing LoRA",
+  "Not running",
+  'name === "Checkpoint"',
+  'name === "LoRA"',
+]) {
+  assert(
+    settingsPanelSource.includes(expected),
+    `Settings panel is missing specific ComfyUI readiness labeling: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "const LAUNCH_LOG_RELATIVE",
+  "struct ManagedComfyUiProcess",
+  "endpoint: LocalEndpoint",
+  "fn start_comfyui",
+  "fn comfyui_launch_exit_detail",
+  "fn launch_log_tail",
+  "ComfyUI launch exited before the API became ready",
+  "Launch log tail",
+  "drive16-comfyui-launch.log",
+  "stdout(Stdio::from(launch_log))",
+  "stderr(Stdio::from(launch_log_for_stderr))",
+  "launch_log_tail_reports_recent_lines",
+  "start_comfyui_reports_missing_launch_script",
+  "start_comfyui_relaunches_when_endpoint_changes",
+]) {
+  assert(
+    comfyUiSource.includes(expected),
+    `ComfyUI native launch diagnostics are missing: ${expected}`,
+  );
+}
+
+for (const expected of [
+  'data-testid="project-asset-roles"',
+  "Asset roles",
+  "ASSETS.md has no role rows yet.",
+  "previewDataUrl",
+  "asset-role-thumb",
+  "assetHealthState",
+  "shortAssetSymbol",
+]) {
+  assert(projectMenuSource.includes(expected), `Project menu is missing asset ledger UI: ${expected}`);
+}
+
+for (const expected of [
+  ".asset-role-list",
+  ".asset-role-row",
+  ".asset-role-state",
+  ".asset-role-thumb",
+  ".asset-role-empty",
+]) {
+  assert(stylesSource.includes(expected), `Styles are missing asset ledger UI: ${expected}`);
+}
+
+for (const expected of [
+  "preview_data_url",
+  "MAX_ASSET_PREVIEW_BYTES",
+  "clean_asset_symbol_path",
+  "data:image/png;base64,",
+]) {
+  assert(projectSource.includes(expected), `Native project summary is missing asset preview support: ${expected}`);
+}
 
 for (const expected of [
   "romUnavailable",
@@ -336,7 +917,7 @@ for (const expected of [
   "playabilityGateState",
   "playabilityGateLabel",
   "Gate: no ROM",
-  "Gate: incomplete",
+  "Gate: needs repair",
   "Gate: failed",
   "Gate: verified",
   "Screen: no ROM",
@@ -363,6 +944,8 @@ for (const expected of [
   'data-testid="player-volume-slider"',
   'aria-label="Player volume"',
   "Volume starts at 0%",
+  "ROM READY",
+  'romUnavailable || playerScreenEvidence === "none"',
   'disabled={playerAudio === "unavailable" && !sessionActive}',
   "Enable sound",
   "Enable player audio",
@@ -377,6 +960,9 @@ for (const expected of [
 
 for (const expected of [
   '"agent.rom.built": "ROM"',
+  '"agent.finished": "Testing"',
+  '"agent.verification.passed": "Verified"',
+  '"agent.verification.failed": "Verify"',
   '"project.memory.ready": "Memory"',
   '"project.memory.warning": "Memory"',
   '"project.memory.missing": "Memory"',
@@ -395,6 +981,7 @@ for (const expected of [
   ".filter((event) => !isHeartbeatEvent(event))",
   "OpenCode heartbeat active",
   "OpenCode is still connected and sending heartbeat events",
+  "agentPhaseLabel",
   "Raw log",
   "buildLogItemsRef",
   "latestVisibleBuildEventId",
@@ -412,6 +999,7 @@ for (const expected of [
   ".player-volume-slider",
   ".player-audio-toggle.needs-gesture",
   ".status-dot.warning",
+  ".agent-activity b",
 ]) {
   assert(stylesSource.includes(expected), `Styles are missing raw log support: ${expected}`);
 }
@@ -423,7 +1011,29 @@ for (const expected of [
   "fn audit_project_memory_for_repo",
   "fn playability_gate_status",
   "fn looks_like_asset_role_ledger",
+  "fn project_memory_pass_warnings",
+  "fn project_memory_truth_warnings",
+  "fn markdown_section",
+  "fn evidence_has_unfinished_marker",
+  "pub struct PromptSeedResult",
+  "pub fn seed_active_project_for_prompt",
+  "fn seed_active_project_for_prompt_in_repo",
+  "fn looks_like_simple_snake_request",
+  "fn looks_like_blank_starter_main",
+  "SNAKE_BASIC_SKELETON",
+  "fn detected_game_genre",
+  "fn has_captured_or_omitted_audio",
+  "fn audio_disabled_by_user_request",
+  "fn audio_self_omitted_without_user_request",
+  "GAME.md claims out/rom.bin is built",
+  "without an explicit user no-audio request",
+  "PLAYTEST.md pass still has pending or untested evidence",
+  "PLAYTEST.md pass is missing {} genre evidence",
+  "PLAYTEST.md pass does not record captured audio or an explicit no-audio request",
   "active_project_memory_defaults_start_with_failed_gate",
+  "project_memory_pass_rejects_pending_evidence",
+  "project_memory_pass_accepts_complete_native_evidence",
+  "project_memory_warns_on_premature_rom_and_self_omitted_audio_claims",
 ]) {
   assert(projectSource.includes(expected), `Project memory audit source is missing: ${expected}`);
 }
@@ -432,6 +1042,9 @@ for (const expected of [
   "async fn audit_active_project_memory",
   "project::audit_active_project_memory",
   "audit_active_project_memory,",
+  "async fn seed_active_project_for_prompt",
+  "project::seed_active_project_for_prompt",
+  "seed_active_project_for_prompt,",
 ]) {
   assert(nativeMainSource.includes(expected), `Native command wiring is missing: ${expected}`);
 }
@@ -468,11 +1081,33 @@ for (const expected of [
   "Treat the active project folder as the durable conversation state.",
   "Before editing, read GAME.md, ASSETS.md, and PLAYTEST.md when present.",
   "modify the current game instead of starting over",
-  "After the turn, update GAME.md, ASSETS.md, and PLAYTEST.md",
+  "Do not polish project docs before gameplay exists",
+  "Early ASSETS.md planning rows are okay only when marked Planned or Pending",
+  "After source/resource edits, build, emulator checks, input checks, and audio checks",
   "Verification contract:",
   "Do not call the game done or playable just because out/rom.bin exists.",
+  "Never claim out/rom.bin is built unless build_rom succeeded after the final source/resource edit.",
+  "Never write Known Issues: none unless PLAYTEST.md passes with evidence.",
+  "Never claim audio was omitted unless the user explicitly requested no audio",
+  "edit src/main.c before any more inspection only when the project is still blank",
+  "Do not use todo-list tools for simple generated games",
+  "Keep the first implementation small",
+  "Do not read README.md, Makefile, src/boot/*, or res/resources.*",
+  "Build after the final code/resource edit; an older out/rom.bin is stale evidence.",
+  "Build the core playable game before optional music unless the user specifically asked for music first.",
+  "If src/main.c already contains a simple seeded starter for the requested game",
+  "Use only SGDK APIs that are present in the starter or local examples",
+  "Do not use VDP_drawRect, srand, or C library rand()",
+  "VDP_fillTileMapRect",
+  "examples/game-skeletons/snake-basic/",
   "Build the ROM, run it, capture a frame, test input, and capture audio when sound is expected.",
-  "If audio is expected, run the emulator with dump_audio enabled",
+  "Immediately after build_rom succeeds, do not inspect or rewrite docs",
+  "verify_audio with use_input_script false",
+  "If audio is expected, use drive16-emulator.verify_audio",
+  "Before compiling MML music, read or query corpus/mml/ctrmml-megadrive.md",
+  "if two compile attempts fail, record audio as failed",
+  "The two-attempt MML cap is strict",
+  "do not call compile_music a third time",
   "If any screen, input, or audio check is missing or failed",
   "Drive16 settings:",
   "AI sprites: enabled",
@@ -483,6 +1118,14 @@ for (const expected of [
   "make snake",
 ]) {
   assert(prompt.includes(expected), `Prompt context is missing: ${expected}`);
+}
+
+for (const expected of [
+  "VDP_loadTileData",
+  "VDP_fillTileMapRect",
+  "Do not use `VDP_drawRect`",
+]) {
+  assert(starterAssetsTemplate.includes(expected), `Starter asset guidance is missing: ${expected}`);
 }
 
 const appFollowUpContract = [
@@ -564,6 +1207,10 @@ expectActivity(agent, toolEvent("drive16-emulator.capture_frame", "completed", "
 expectActivity(agent, toolEvent("drive16-emulator.capture_audio", "completed", "last-audio.wav"), {
   eventType: "agent.audio.checked",
   label: "Audio checked",
+});
+expectActivity(agent, toolEvent("drive16-emulator.verify_audio", "completed", "last-audio.wav"), {
+  eventType: "agent.audio.checked",
+  label: "Audio verified",
 });
 expectActivity(
   agent,

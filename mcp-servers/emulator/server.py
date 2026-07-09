@@ -88,7 +88,7 @@ TOOLS: list[dict[str, Any]] = [
                 },
                 "use_input_script": {
                     "type": "boolean",
-                    "description": "Use the pending input script from send_input.",
+                    "description": "Use the pending input script from send_input. Defaults to false for audio-only checks.",
                     "default": True,
                 },
                 "stream_frames": {
@@ -124,6 +124,34 @@ TOOLS: list[dict[str, Any]] = [
         "title": "Capture Audio",
         "description": "Inspect the latest WAV audio dump captured by run_rom.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "verify_audio",
+        "title": "Verify Audio",
+        "description": "Run a repo-local ROM with WAV audio dumping enabled, then inspect the dump for non-silent audio.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "rom_path": {
+                    "type": "string",
+                    "description": "Repo-relative ROM path.",
+                },
+                "frames": {
+                    "type": "integer",
+                    "description": "Number of frames to run. Defaults to 300.",
+                    "default": 300,
+                    "minimum": 1,
+                    "maximum": 20000,
+                },
+                "use_input_script": {
+                    "type": "boolean",
+                    "description": "Use the pending input script from send_input.",
+                    "default": True,
+                },
+            },
+            "required": ["rom_path"],
+            "additionalProperties": False,
+        },
     },
     {
         "name": "send_input",
@@ -323,7 +351,7 @@ def write_state(state: dict[str, Any], log_text: str) -> dict[str, Any]:
 def run_rom(args: dict[str, Any]) -> dict[str, Any]:
     rom_path = resolve_repo_file(args.get("rom_path"), "rom_path")
     frames = bounded_int(args.get("frames"), "frames", 180, 1, 20000)
-    use_input_script = bool_arg(args.get("use_input_script"), "use_input_script", True)
+    use_input_script = bool_arg(args.get("use_input_script"), "use_input_script", False)
     stream_frames = bool_arg(args.get("stream_frames"), "stream_frames", True)
     stream_every = bounded_int(args.get("stream_every"), "stream_every", 30, 1, 600)
     dump_audio = bool_arg(args.get("dump_audio"), "dump_audio", False)
@@ -447,6 +475,40 @@ def capture_audio() -> dict[str, Any]:
     return tool_result(payload, is_error=not summary["nonSilent"])
 
 
+def verify_audio(args: dict[str, Any]) -> dict[str, Any]:
+    rom_path = args.get("rom_path")
+    frames = bounded_int(args.get("frames"), "frames", 300, 1, 20000)
+    use_input_script = bool_arg(args.get("use_input_script"), "use_input_script", True)
+    run_result = run_rom(
+        {
+            "rom_path": rom_path,
+            "frames": frames,
+            "use_input_script": use_input_script,
+            "stream_frames": False,
+            "dump_audio": True,
+        }
+    )
+    run_payload = run_result["structuredContent"]
+    if run_result.get("isError") or not run_payload.get("audioDumpPath"):
+        payload = {
+            "ok": False,
+            "action": "verify_audio",
+            "error": "Audio dump was not created while running the ROM with dump_audio=true.",
+            "run": run_payload,
+        }
+        return tool_result(payload, is_error=True)
+
+    audio_result = capture_audio()
+    audio_payload = audio_result["structuredContent"]
+    payload = {
+        "ok": bool(audio_payload.get("ok")),
+        "action": "verify_audio",
+        "run": run_payload,
+        "audio": audio_payload,
+    }
+    return tool_result(payload, is_error=not payload["ok"])
+
+
 def send_input(args: dict[str, Any]) -> dict[str, Any]:
     frame = bounded_int(args.get("frame"), "frame", 0, 0, 20000)
     reset = bool_arg(args.get("reset"), "reset", False)
@@ -487,6 +549,8 @@ def call_tool(name: str, arguments: Any) -> dict[str, Any]:
         return capture_frame()
     if name == "capture_audio":
         return capture_audio()
+    if name == "verify_audio":
+        return verify_audio(args)
     if name == "send_input":
         return send_input(args)
     if name == "read_state":

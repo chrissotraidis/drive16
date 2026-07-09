@@ -84,7 +84,7 @@ def main() -> int:
 
         tools = call(process, 2, "tools/list")["tools"]
         tool_names = {tool["name"] for tool in tools}
-        expected = {"run_rom", "capture_frame", "capture_audio", "send_input", "read_state"}
+        expected = {"run_rom", "capture_frame", "capture_audio", "verify_audio", "send_input", "read_state"}
         missing = expected - tool_names
         if missing:
             raise RuntimeError(f"Missing tools: {sorted(missing)}")
@@ -118,11 +118,24 @@ def main() -> int:
         if audio["mimeType"] != "audio/wav" or audio["maxAbsSample"] <= 0:
             raise RuntimeError(f"capture_audio did not prove non-silent WAV output: {audio}")
 
-        state = tool_call(process, 7, "read_state")
+        verified = tool_call(
+            process,
+            7,
+            "verify_audio",
+            {
+                "rom_path": "examples/phase2-core-assets/out/rom.bin",
+                "frames": 180,
+                "use_input_script": True,
+            },
+        )
+        if not verified.get("ok") or verified.get("audio", {}).get("maxAbsSample", 0) <= 0:
+            raise RuntimeError(f"verify_audio did not prove non-silent WAV output: {verified}")
+
+        state = tool_call(process, 8, "read_state")
         if not state["ok"] or not state.get("audioDumpPath"):
             raise RuntimeError("read_state did not report a successful audio-backed run.")
 
-        print(f"Emulator audio MCP ok: {audio['audioDumpPath']} max_abs={audio['maxAbsSample']}")
+        print(f"Emulator audio MCP ok: {verified['audio']['audioDumpPath']} max_abs={verified['audio']['maxAbsSample']}")
         return 0
     finally:
         if process.stdin:

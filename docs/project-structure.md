@@ -42,8 +42,29 @@ contract. Agents should read them before editing a continued game and update
 them after each build turn. `GAME.md` answers what the game is, which controls
 it uses, what has been attempted, and what is currently broken. `ASSETS.md`
 maps each sprite, tile, music, or primitive drawing to its game role, source,
-path, and proof status. `PLAYTEST.md` records build/run/input/screenshot/audio
-evidence and the next checks required before calling a result done.
+path, prompt/crop details when generated, whether it was used, and proof
+status. The app project menu previews the `ASSETS.md` role rows so generated
+or primitive asset use is not hidden in markdown, and shows thumbnails when a
+row points at a small repo-local PNG. `PLAYTEST.md` records
+build/run/input/screenshot/audio evidence, the relevant genre acceptance row,
+and the next checks required before calling a result done.
+
+For Snake, Pong, Tetris, and Asteroids-style games, a passing `PLAYTEST.md`
+must include evidence for that genre's minimum checks. The project-memory audit
+rejects `Playability gate: PASS` when the relevant genre row is still pending
+or missing proof. `scripts/verify-genre-playability-gates.mjs` keeps those
+rules covered with temporary genre fixtures. The native app uses a lighter
+runtime version of the same idea before showing a generated build as verified:
+the Evidence section cannot still say pending, untested, unverified, or
+inconclusive, and it must name the detected genre evidence.
+
+Passing projects also need active music/SFX evidence unless audio was disabled
+or intentionally omitted by request. Music rows should identify the compiled
+VGM/MML/XGM resource and the captured audio evidence. The project-memory
+verification command includes audio fixtures so missing, uncaptured, or negated
+audio proof cannot pass by wording alone. The native app audit also requires a
+captured/non-silent audio note, or an explicit no-audio request, before treating
+`Playability gate: PASS` as ready.
 
 ## How assets get into the project
 
@@ -63,6 +84,14 @@ project's `res/` folder and referenced from `resources.res`:
   styled generated art.
 - Bundled pack: `assets/core/player.png` and `assets/core/loop.vgm` can be
   referenced directly, no copying needed.
+
+Before wiring assets for a new game, `ASSETS.md` should contain a short Asset
+Plan listing the expected gameplay roles and intended source. After the build,
+the role table should say which prompt, crop/slice output, SGDK symbol, MML
+resource, and audio evidence were actually used. Passing project-memory gates
+reject vague generated-asset roles such as `Sprite`; generated rows need the
+specific gameplay role, prompt, crop/slice normalization, and whether the asset
+entered the ROM.
 
 The project folder is therefore exactly the "non-ROM version" you would
 expect: all code and all assets as plain files, compiled into `out/rom.bin`

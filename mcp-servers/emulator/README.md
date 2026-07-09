@@ -16,6 +16,9 @@ It exposes:
 - `capture_frame()`: returns the latest PNG frame captured by `run_rom`.
 - `capture_audio()`: inspects the latest WAV audio dump captured by `run_rom`
   with `dump_audio = true` and reports whether it is non-silent.
+- `verify_audio(rom_path, frames = 300)`: runs the ROM with audio dumping forced
+  on, then inspects the WAV in one call. It ignores pending input by default so
+  audio checks do not keep driving a game after an input test.
 - `send_input(frame, p1_buttons, p2_buttons, reset = false)`: writes a sparse
   Genteel input-script event for the next run.
 - `read_state()`: returns the latest run metadata and log tail.

@@ -57,6 +57,9 @@ Goal 5 - Add per-project memory for resumed work.
 - These files should record the game's concept, controls, assets used, known
   bugs, playtest evidence, and next checks so future turns do not start from
   scratch.
+- The project menu should preview `ASSETS.md` role rows so the user can see
+  whether a game used primitive drawing, bundled files, ComfyUI sprites, MML,
+  or SFX without opening the project folder.
 
 Goal 6 - Gate "done" on playability evidence.
 
@@ -66,7 +69,7 @@ Goal 6 - Gate "done" on playability evidence.
   input response, basic game rules, restart/start behavior where relevant,
   style/asset intent, and audio status.
 - The player surface should show an aggregate playability gate such as `no ROM`,
-  `incomplete`, `failed`, or `verified` based on screen/input/audio evidence.
+  `needs repair`, `failed`, or `verified` based on screen/input/audio evidence.
 
 Goal 7 - Prove the asset and music paths through chat.
 
@@ -137,6 +140,246 @@ Follow-up from the Snake proof-case review:
   the OpenRouter key field stayed populated for the session, AI sprites and MML
   toggles stayed enabled, and there were no console warnings/errors. This is
   UI persistence/logging evidence, not a native ComfyUI/MML generation proof.
+- The asset-memory slice now makes `ASSETS.md` start with an Asset Plan, parses
+  its role table in the native project summary, and shows those rows in the
+  project menu with thumbnails for repo-local PNG files. This improves
+  auditability, but it is not proof that future games will use ComfyUI/MML well
+  until the live agent gates pass.
+- Passing project-memory gates now enforce the generated-asset side of that
+  ledger: `ASSETS.md` needs an Asset Plan, and ComfyUI/generated rows must use
+  a specific gameplay role rather than `Sprite`, plus record the prompt,
+  crop/slice normalization, and whether the asset was used. Temporary fixtures
+  cover vague roles and missing crop/use evidence.
+- The observability slice now derives a compact agent phase from real OpenCode
+  events: Planning, Editing, Building, Testing, Done, or Failed. The top status
+  and chat activity strip use that phase while the raw log keeps the detailed
+  event stream for debugging.
+- The project-memory audit now enforces genre evidence on passing gates for
+  Snake, Pong, Tetris, and Asteroids-style games. A `PLAYTEST.md` pass with
+  `Genre checks: pending` or missing genre proof fails the verifier, while a
+  failed gate can still record pending/untested checks honestly.
+- `pnpm --dir app verify:project-memory` now also runs temporary Snake, Pong,
+  Tetris, and Asteroids-style fixtures to prove those gate rules reject pending
+  genre checks and accept complete evidence.
+- After an agent-produced ROM appears, the app now reads the active
+  `PLAYTEST.md` gate and adds an explicit chat/action notice. A ROM with
+  `Playability gate: FAIL`, missing project memory, or an unknown gate is shown
+  as needing repair/unverified instead of being treated as done.
+- The same audit now rejects passing gates that have no active music/SFX
+  evidence unless the project explicitly records that audio was disabled or
+  intentionally omitted. `pnpm --dir app verify:project-memory` now includes
+  audio fixtures for missing audio, captured audio, uncaptured audio, and
+  explicit no-audio requests; that caught and fixed a false positive where
+  negated text like "no audio evidence was captured yet" could pass.
+- Model bakeoff remains pending, but the evidence contract now exists:
+  `scripts/verify-model-bakeoff-report.mjs` requires DeepSeek V3.1 plus at
+  least two alternatives, the same Snake/Pong/Tetris/Asteroids prompts, all
+  plumbing gates marked pass, compile/tool/asset/playability/honesty scores,
+  time/cost, and project-memory evidence before accepting any default-model
+  recommendation.
+- The bakeoff CLI now keeps scaffold checks separate from evidence:
+  `pnpm --dir app prepare:model-bakeoff` refuses to write a bakeoff template
+  until `pnpm --dir app verify:live-game-audit:report` passes, and
+  `pnpm --dir app verify:model-bakeoff:report` requires every model/prompt
+  evidence file to exist. This prevents a model recommendation from being made
+  before the four-prompt live audit is actually complete.
+- Live game-quality audit now has a pre-bakeoff report contract:
+  `scripts/verify-live-game-audit.mjs` validates the single-model Snake, Pong,
+  Tetris, and Asteroids prompt packet before comparing models. Each run must
+  record compile, preview, visible screen, input, restart, audio, asset-ledger,
+  gameplay-rule, and project-memory evidence; a passing run cannot carry
+  unresolved issues or unknown/silent audio unless sound was disabled by
+  request. This is a verifier/template for the next native audit, not proof
+  that the four live game runs have already passed.
+- Live audit readiness now has a concrete report:
+  `scripts/check-live-game-audit-readiness.mjs` writes
+  `artifacts/phase9/live-game-audit/readiness.json` after checking the local app
+  URL, OpenCode/MCP config, OpenRouter credential, Docker, ComfyUI, contract
+  checks, project-memory gates, and live-audit verifier. The report now
+  separates primitive/fallback readiness from generated-sprite readiness so a
+  green audit prerequisite does not imply ComfyUI is available. If ComfyUI is
+  not listening on `127.0.0.1:8188`, the primitive/fallback audit can still run
+  only with explicit fallback-art disclosure; generated-sprite audit readiness
+  stays false until ComfyUI is actually ready.
+- `pnpm --dir app prepare:live-game-audit` now writes the next single-model
+  `report.json` template after first refreshing readiness, so plumbing fields
+  such as `comfyUiStatus: fallback-disclosed` or `ready` match the current
+  machine state instead of being copied from stale notes. Historical failed-run
+  traces remain under `artifacts/phase9/live-game-audit/runs/`.
+- `scripts/run-live-game-audit-prompt.mjs` now prepares one reproducible
+  prompt packet for the required Snake/Pong/Tetris/Asteroids live audit. It
+  refreshes readiness, copies a fresh starter project without stale ROM output,
+  writes the exact prompt and `run-record.json` skeleton, and can optionally
+  run OpenCode with `--run-agent`. Real runs now stream OpenCode stdout/stderr
+  into `opencode-run.jsonl` and `opencode-run.stderr` while the process is
+  still alive, with `opencode-run.status.json` reporting pid/status. Use
+  `pnpm --dir app prepare:live-game-audit:prompt -- --prompt snake-basic` for
+  a dry packet, then `pnpm --dir app run:live-game-audit:prompt -- --prompt
+  snake-basic --model openrouter/<model>` when ready to produce real evidence.
+- The first streamed `snake-basic` retry using
+  `openrouter/deepseek/deepseek-chat-v3.1` confirmed the harness visibility fix:
+  `opencode-run.jsonl` grew live and `opencode-run.status.json` exposed the
+  running pid before the 180-second cap expired. The model still failed the
+  audit: it read the project memory files, then spent the run editing `GAME.md`
+  and `ASSETS.md`, claimed `out/rom.bin` was built before any ROM existed,
+  claimed no known issues while `PLAYTEST.md` still failed, and self-omitted
+  audio without a user no-audio request. The JS and native project-memory
+  audits now reject those exact claims, including for failed gates, so this
+  failed run is recorded as useful blocker evidence rather than a clean project
+  memory pass.
+- The builder instructions, app runtime prompt, and live-audit prompt now all
+  include a source-first documentation rule learned from that failed run: do
+  not polish `GAME.md` before gameplay exists, keep early `ASSETS.md` rows
+  `Planned`/`Pending`, never claim `out/rom.bin` was built before `build_rom`
+  succeeds, never write `Known Issues: none` before a passing `PLAYTEST.md`,
+  and never call audio omitted unless the user explicitly requested no audio.
+  A dry `smoke-doc-order` packet confirms those lines are present in the
+  generated audit prompt.
+- `verify-live-game-audit.mjs` now labels zero-run packets as templates, not
+  completed audits, and `pnpm --dir app verify:live-game-audit:report` is the
+  evidence command that requires all Snake/Pong/Tetris/Asteroids runs plus their
+  files. This keeps verifier self-tests from being mistaken for live-game
+  proof.
+- A direct `scripts/launch-phase4-comfyui-api.sh` run reached a healthy
+  `http://127.0.0.1:8188/system_stats` response on the local machine, and
+  `pnpm --dir app check:live-game-audit-readiness` reported generated-sprite
+  audit readiness as ready while that process was running. This proves the
+  pinned source/model setup can work locally; generated-sprite readiness still
+  depends on the API process being live.
+- The follow-up July 8 live-readiness run launched Docker successfully. ComfyUI
+  ran correctly in the foreground long enough for
+  `scripts/validate-phase4-live-generated-assets.sh` to pass end to end with a
+  live ComfyUI sprite, generated MML, SGDK build, emulator run, movement proof,
+  and non-silent generated-audio proof. After the foreground process was
+  stopped, a detached shell restart reached "Starting server" but did not stay
+  listening on `127.0.0.1:8188`, so the current readiness command is green for
+  primitive/fallback blockers but not generated-sprite readiness unless
+  ComfyUI is launched again through the app/foreground path.
+- A first isolated OpenCode live game audit was run for `snake-basic` under
+  `artifacts/phase9/live-game-audit/runs/snake-basic/`. That run is failed
+  evidence, not a pass:
+  DeepSeek V3.1 eventually wrote game code, fixed one SGDK compile error, built
+  `out/rom.bin`, ran the emulator, captured a frame, and sent Start/movement
+  input. It did not call `capture_audio`, did not produce an audio dump, left
+  `PLAYTEST.md` at `Playability gate: FAIL`, and the project-memory audit
+  caught overclaiming in `GAME.md` plus weak primitive-role disclosure. The
+  builder skill now spells out the exact `dump_audio: true` then
+  `capture_audio` sequence and requires a failed playtest note instead of an
+  endless audio loop.
+- The exact failed audio-loop pattern is now mechanically checked:
+  `scripts/verify-opencode-audio-trace.mjs` parses OpenCode JSONL traces and
+  accepts either the safer one-shot `drive16-emulator.verify_audio` tool or the
+  fallback `run_rom` with `dump_audio=true` followed by `capture_audio`. It
+  rejects repeated emulator `run_rom` calls that omit `dump_audio=true`, missing
+  audio capture, and silent/missing audio evidence. The live-game audit verifier
+  now uses this trace guard for any passing run that claims captured audio, so a
+  report cannot simply mark audio as captured without the real tool sequence.
+- The emulator MCP server now exposes `verify_audio`, which runs the ROM with
+  audio dumping forced on and inspects the WAV in one tool call. The builder
+  skill and app prompt now make `verify_audio` the default audio proof path, with
+  the old `dump_audio: true` plus `capture_audio` sequence only as fallback.
+- A second isolated `snake-basic` retry that explicitly asked for
+  `verify_audio` still failed before the evidence gate. The trace shows the
+  agent tried invalid `V0`/`v0` MML syntax three times, only succeeded after
+  reading `corpus/mml/ctrmml-megadrive.md`, copied `snake_music.vgm`, then
+  edited `src/main.c` after the existing `out/rom.bin` timestamp. No
+  `build_rom`, `run_rom`, `capture_frame`, `send_input`, or `verify_audio`
+  call happened after that final edit. A manual post-run SGDK build of that
+  project failed on deprecated `VDP_setPlanSize`, so the old ROM was stale
+  evidence. The builder skill and app prompt now require a rebuild after the
+  final edit, require reading/querying the MML corpus before the first music
+  compile, and cap failed MML compile attempts at two before recording audio as
+  failed and finishing gameplay verification. The live-game audit verifier also
+  rejects a passing run when `out/rom.bin` is older than files under the
+  project's `src/` or `res/` folders.
+- A third primitive/fallback `snake-basic` audit run improved one thing but
+  exposed the next blocker. The agent read the MML corpus before compiling, but
+  then called `drive16-mml-music_compile_music` five times, all failed with
+  `Expected track or tag identifier`, and it never edited gameplay source,
+  rebuilt, ran the emulator, captured a frame, sent input, or verified audio.
+  It also overclaimed music in `GAME.md`. `scripts/verify-opencode-audio-trace.mjs`
+  now counts failed `compile_music` calls and rejects traces that keep trying
+  after the two-attempt cap, while the builder skill/app prompt now say core
+  playable gameplay comes before optional music.
+- A follow-up primitive/fallback `snake-basic` trace was stopped after it wrote
+  `GAME.md`, `ASSETS.md`, and a large `src/main.c` edit but before any
+  `build_rom`, emulator frame capture, input, or audio call. This is not a pass
+  or a fair complete model-quality result, but it proves another report loophole:
+  a trace can contain real source edits while the existing `out/rom.bin` remains
+  older than the source. `scripts/verify-opencode-audio-trace.mjs` now has
+  `--expect-game-progress`, which fails traces with source/resource edits that
+  are not followed by a rebuild, frame capture, and input evidence. The live
+  audit verifier now applies that trace check to passing runs, not only the
+  audio sequence.
+- The native project-memory audit now rejects weak `Playability gate: PASS`
+  notes before the app surfaces a build as verified. A passing `PLAYTEST.md`
+  must have a non-empty Evidence section without pending/untested markers,
+  genre evidence for the detected game type, and either captured/non-silent
+  audio evidence or an explicit no-audio request. Focused Tauri tests cover a
+  pending-evidence pass staying `warning` and a complete Snake/audio pass
+  becoming `ready`.
+
+Current reliability update from July 8:
+
+- OpenCode startup no longer assumes port `4096` is safe. If the health check
+  gets the observed HTTP 401/auth response from another local tool, Drive16
+  reports the port conflict and launches OpenCode on a Drive16-owned alternate
+  local port. OpenCode restarts now stop only the child process Drive16 owns;
+  if something else is still healthy on the current endpoint, Drive16 moves
+  itself to a fresh owned port instead of killing unrelated `opencode serve`
+  processes.
+- Background OpenCode request failures are drained back into the UI so a failed
+  agent POST can produce a concrete chat/build-log error before the generic
+  stall timer.
+- Pending OpenCode runs now track the missing milestone before declaring a
+  stall. If the agent edits `src/` or `res/` and stops before `build_rom`, or
+  builds without screen/input/audio checks, the chat/build notice names that
+  concrete gap instead of only saying the agent stopped.
+- Settings now has a ComfyUI Launch action. It invokes the existing local
+  ComfyUI launch script, shows `Starting`, then reuses the readiness checks for
+  ready/missing-model/missing-LoRA/failure detail. The AI sprites toggle now
+  summarizes those rows as `Not running`, `Missing model`, `Missing LoRA`, or
+  `Missing model + LoRA` when it can distinguish the blocker.
+- The native ComfyUI launch path now captures stdout/stderr to
+  `artifacts/phase4/comfyui-api/drive16-comfyui-launch.log`. If the process
+  exits before the API becomes ready, Settings reports the exit status and log
+  tail instead of only showing a generic connection failure. The managed child
+  is now tied to the requested endpoint, so changing the Settings endpoint/port
+  relaunches the Drive16-owned ComfyUI process instead of reusing a child that
+  is listening somewhere else.
+- The active ComfyUI endpoint/checkpoint/LoRA are passed into the OpenCode
+  runtime environment for MCP tools, not only written into the visible prompt.
+- The builder prompt now includes ComfyUI readiness and explicitly requires
+  primitive/manual Genesis-safe art disclosure when AI sprites are enabled but
+  ComfyUI is not ready.
+- The playability contract now includes genre-specific minimum checks for
+  Snake, Pong, Tetris, and Asteroids-style prompts. New projects include that
+  checklist in `PLAYTEST.md`, the native fallback template matches it, and the
+  UI calls a running-but-unverified ROM `Gate: needs repair` rather than
+  implying it is merely unfinished.
+- App refresh no longer auto-loads an existing active-project ROM into the
+  preview/player path. A remembered ROM is shown as available, but the user
+  must press Verify or Play before Drive16 captures frames or starts playback,
+  which avoids stale-ROM evidence being mistaken for a fresh build.
+- Interactive Play audio now treats the Drive16 volume slider as the safety
+  source of truth. RetroArch launches at minimum volume, Drive16 pushes the
+  runtime volume down on session start, and the player no longer depends on the
+  toggle-style RetroArch mute command to keep startup silent. `New Project`
+  also explicitly resets app volume to 0%, and the agent/UI contract verifier
+  guards that reset path.
+- Agent-finished ROMs now actually run through the ROM preview capture path
+  before Drive16 surfaces the project-memory audit. The chat no longer says it
+  is loading/checking a generated ROM while only reading `PLAYTEST.md`; if the
+  preview capture fails, the build state stays in error instead of looking
+  verified.
+- Preview capture failures now override optimistic project-memory results. A
+  generated ROM with a failing preview path surfaces `Preview failed` with the
+  concrete launch error, keeps screen/audio evidence unverified or failed, and
+  does not allow a `PLAYTEST.md` pass to make the UI look done.
+- OpenCode `finished` no longer means Drive16 `Done`. The visible phase and
+  build-log label move to Testing while Drive16 loads the ROM, captures preview
+  evidence, and audits project memory; only an explicit verification pass moves
+  the phase to Done.
 
 The native chat loop, MML music path, and ComfyUI sprite path were reproduced
 live in the current session on July 7.

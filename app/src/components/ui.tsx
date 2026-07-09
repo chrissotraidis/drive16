@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Activity, AlertCircle, CheckCircle2, Circle } from "lucide-react";
 
 export type HealthState = "ready" | "warning" | "missing";
-export type ConnectionState = HealthState | "idle" | "testing";
+export type ConnectionState = HealthState | "idle" | "testing" | "starting";
 
 export const defaultComfyUiCheckpoint = "sd_xl_base_1.0.safetensors";
 export const defaultComfyUiLora = "pixel-art-xl.safetensors";
@@ -25,7 +25,7 @@ export function healthIcon(state: HealthState) {
 export function connectionIcon(state: ConnectionState) {
   if (state === "ready") return <CheckCircle2 size={15} />;
   if (state === "missing") return <AlertCircle size={15} />;
-  if (state === "testing") return <Activity size={15} />;
+  if (state === "testing" || state === "starting") return <Activity size={15} />;
   return <Circle size={15} />;
 }
 
@@ -33,6 +33,7 @@ export function connectionLabel(state: ConnectionState) {
   if (state === "ready") return "Connected";
   if (state === "missing") return "Failed";
   if (state === "testing") return "Testing";
+  if (state === "starting") return "Starting";
   if (state === "warning") return "Needs attention";
   return "Not tested";
 }

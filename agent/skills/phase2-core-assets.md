@@ -72,6 +72,7 @@ In `src/main.c`:
 - Run the ROM through `drive16-emulator`, then call `capture_frame` to inspect
   the neutral screenshot.
 - To prove controls and music together, call `send_input` with Player 1
-  `right`, run the ROM again with `dump_audio` enabled, then call
-  `capture_frame` and `capture_audio`. The final emulator state must include
-  both the Right-input screenshot and a non-silent audio dump.
+  `right`, run the ROM again, call `capture_frame`, then call
+  `verify_audio` on the same ROM. The final emulator state must include both
+  the Right-input screenshot and a non-silent audio dump. If `verify_audio` is
+  unavailable, use `run_rom` with `dump_audio: true`, then `capture_audio`.

@@ -77,14 +77,14 @@ Required flow:
 8. If the build fails, call `read_build_log`, fix the issue, and rebuild.
 9. Run the ROM through `drive16-emulator`.
 10. Call `capture_frame` after the first run to inspect the neutral screenshot.
-11. Call `send_input` with Player 1 holding Right, run the ROM again with
-    `dump_audio` enabled, then call `capture_frame` and `capture_audio` again
-    so movement and non-silent music are both proven in the final emulator
-    state.
+11. Call `send_input` with Player 1 holding Right, run the ROM again, call
+    `capture_frame`, then call `verify_audio` so movement and non-silent music
+    are both proven in the final emulator state. If `verify_audio` is not
+    available, use `run_rom` with `dump_audio=true`, then `capture_audio`.
 
 Success means the ROM builds, runs in Genteel, uses the bundled sprite and
 bundled music symbols, captures screenshots, proves non-silent audio through
-`capture_audio`, and exercises D-pad movement.
+`verify_audio` or `capture_audio`, and exercises D-pad movement.
 
 Phase 2 skill:
 
@@ -273,10 +273,11 @@ def verify_agent_log() -> None:
         "build_rom",
         "run_rom",
         "capture_frame",
-        "capture_audio",
         "send_input",
     ]
     missing = [marker for marker in required_markers if marker not in log_text]
+    if "verify_audio" not in log_text and "capture_audio" not in log_text:
+        missing.append("verify_audio or capture_audio")
     if missing:
         raise ValidationError(f"OpenCode log is missing expected tool markers: {missing}")
 

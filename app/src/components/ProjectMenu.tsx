@@ -15,6 +15,16 @@ type ProjectSummaryInfo = {
   projectPath: string;
   romPath: string;
   exportDirectory: string;
+  assetRoles: ProjectAssetRoleInfo[];
+};
+
+type ProjectAssetRoleInfo = {
+  role: string;
+  source: string;
+  symbol: string;
+  status: string;
+  notes: string;
+  previewDataUrl?: string;
 };
 
 type ActionNotice = {
@@ -234,8 +244,66 @@ export function ProjectMenu({
               </strong>
             </div>
           </div>
+
+          <div className="menu-summary" data-testid="project-asset-roles">
+            <h3>Asset roles</h3>
+            <div className="asset-role-list">
+              {projectSummary.assetRoles.length > 0 ? (
+                projectSummary.assetRoles.slice(0, 6).map((asset) => (
+                  <div className="asset-role-row" key={`${asset.role}-${asset.symbol}`}>
+                    <span className={`asset-role-state ${assetHealthState(asset.status)}`}>
+                      {healthIcon(assetHealthState(asset.status))}
+                    </span>
+                    {asset.previewDataUrl ? (
+                      <img
+                        className="asset-role-thumb"
+                        src={asset.previewDataUrl}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <span className="asset-role-thumb asset-role-thumb-empty" aria-hidden="true" />
+                    )}
+                    <span>
+                      <strong>{asset.role}</strong>
+                      <small title={asset.notes}>
+                        {asset.source} · {shortAssetSymbol(asset.symbol)}
+                        {asset.status ? ` · ${asset.status}` : ""}
+                      </small>
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="asset-role-empty">
+                  ASSETS.md has no role rows yet.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </aside>
     </div>
   );
+}
+
+function assetHealthState(status: string): HealthState {
+  const lower = status.toLowerCase();
+  if (
+    lower.includes("used") ||
+    lower.includes("ready") ||
+    lower.includes("captured") ||
+    lower.includes("pass")
+  ) {
+    return "ready";
+  }
+  if (lower.includes("missing") || lower.includes("failed") || lower.includes("silent")) {
+    return "missing";
+  }
+  return "warning";
+}
+
+function shortAssetSymbol(symbol: string) {
+  return symbol.startsWith("`") && symbol.endsWith("`")
+    ? shortPath(symbol.slice(1, -1))
+    : shortPath(symbol);
 }

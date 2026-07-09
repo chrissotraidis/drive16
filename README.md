@@ -18,23 +18,28 @@ Drive16:  (writes C, composes an FM song, builds, verifies)  →  the game
           appears on the right, playable
 ```
 
-## Current status (2026-07-05)
+## Current status (2026-07-08)
 
-The core loop is real and verified end-to-end on this codebase:
+The desktop shell and local tool loop are real, but the builder is still in a
+reliability/playability hardening phase. A ROM existing is not treated as proof
+that the generated game is good or playable.
 
 | Capability | Status |
 |---|---|
-| Chat → agent writes C → ROM builds → auto-plays in app | ✅ working |
-| Self-correction on build errors (reads build log, fixes, rebuilds) | ✅ working |
-| Interactive play: keyboard + gamepad, pause/reset/stop, fullscreen | ✅ working |
-| Audio in the player (with mute control) | ✅ working |
-| Original music: agent composes MML → ctrmml → VGM → XGM in the ROM | ✅ working, fully local |
-| AI sprites: prompt → SDXL pixel-art → 32x32, 16-color, validated → in the ROM | ✅ working (needs local ComfyUI) |
-| Project lifecycle: New / Save / Open / Import ROM / Export ROM / Verify | ✅ working |
-| Emulator-verified truthfulness (agent checks the screen and audio) | ✅ working |
-| Ollama as the agent brain | 🔜 planned (readiness check only) |
-| Distributable .app/.dmg (currently runs from the repo checkout) | 🔜 planned (packaging track) |
-| LICENSE file | ⏳ pending owner confirmation (MIT proposed) |
+| Desktop chat → OpenCode agent → active SGDK project | Working, still being hardened |
+| Agent startup | Defaults to local OpenCode; falls back to a Drive16-owned port if another local tool owns 4096, and restarts only the process Drive16 owns |
+| Project lifecycle: New / Save / Open / Import ROM / Export ROM / Verify | Working, with no-ROM/stale-ROM guards |
+| Interactive play: keyboard + gamepad, pause/reset/stop, fullscreen | Working |
+| Audio in the player | Working with safe default volume: ROM playback starts muted/0% |
+| Original music through MML | Tooling works; chat-built games must still prove it was wired and captured |
+| AI sprites through ComfyUI | Tooling exists; Settings can check/launch local ComfyUI, but the agent must disclose fallback art when unavailable |
+| Asset and sound disclosure | In progress: `ASSETS.md` is the role ledger and the project menu previews its rows |
+| Playability verification | In progress: screen/input/audio evidence is visible and common genre gates are being wired into the agent loop |
+| Live game-quality audit | Pending; verifier/template exists for Snake, Pong, Tetris, and Asteroids native runs |
+| Model bakeoff | Pending; verifier scaffold exists, but it waits on the live game-quality audit |
+| Ollama as the agent brain | Planned (readiness check only) |
+| Distributable .app/.dmg (currently runs from the repo checkout) | Planned (packaging track) |
+| LICENSE file | Pending owner confirmation (MIT proposed) |
 
 Recent history: the app was overhauled on 2026-07-05 — the agent loop was
 wired for real (previously only one hardcoded prompt built anything), the UI
@@ -49,7 +54,7 @@ Four swappable layers (full detail in `drive16-architecture.md`):
 
 ```text
 App shell (Tauri 2 + React)          — two-pane UI, player, project actions
-  └── Agent spine (OpenCode, local)  — the agent loop, spawned on port 4096
+  └── Agent spine (OpenCode, local)  — the agent loop, spawned on a local Drive16-owned port
         └── Model (BYOK config)      — OpenRouter today; Ollama planned
         └── MCP tool servers         — the agent's hands:
               drive16-sgdk-build     — compile C + assets → rom.bin (Docker)
@@ -84,7 +89,11 @@ out/rom.bin       # the built ROM — nothing more than a compile of this folder
 Generated sprites and songs are staged in scratch space, validated, then
 copied into `res/` and registered in `resources.res`. You can open the folder
 in any editor, build it by hand (`scripts/build-sgdk.sh <path>`), or export
-the ROM to share. Save/Open snapshots live in `artifacts/phase3/projects/`.
+the ROM to share. `ASSETS.md` records which roles used primitive drawing,
+bundled files, ComfyUI PNGs, MML music, or SFX; the project menu previews that
+ledger and shows thumbnails for repo-local PNG rows so asset use is visible
+without opening markdown. Save/Open snapshots live in
+`artifacts/phase3/projects/`.
 Full contract: **`docs/project-structure.md`**.
 
 ## Quickstart
@@ -127,7 +136,7 @@ validated against hardware rules). One-time setup:
 # install the two model files after reviewing their licenses
 scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
 
-# start the local ComfyUI API (any time you want sprite generation)
+# start the local ComfyUI API (or use Settings → AI sprites → Launch)
 scripts/launch-phase4-comfyui-api.sh
 ```
 
@@ -145,7 +154,16 @@ automatically on first use, entirely locally.
 
 ```sh
 pnpm --dir app build                          # typecheck + bundle
-cargo test --manifest-path app/src-tauri/Cargo.toml   # 51 native tests
+pnpm --dir app check:live-game-audit-readiness # writes primitive/fallback vs generated-sprite audit readiness
+pnpm --dir app prepare:live-game-audit        # refreshes readiness, then writes report.json
+pnpm --dir app prepare:live-game-audit:prompt # prepares one Snake/Pong/Tetris/Asteroids run packet
+pnpm --dir app run:live-game-audit:prompt -- --prompt snake-basic --model openrouter/<model>
+pnpm --dir app verify:opencode-audio-trace    # self-test audio trace guard for generated-game audits
+pnpm --dir app verify:live-game-audit         # self-test the next live game-quality audit gate
+pnpm --dir app verify:live-game-audit:report  # fails until all live prompt runs have evidence files
+pnpm --dir app prepare:model-bakeoff          # requires the completed live audit report first
+pnpm --dir app verify:model-bakeoff:report    # fails until all model/prompt evidence files exist
+cargo test --manifest-path app/src-tauri/Cargo.toml   # native tests
 node scripts/verify-phase6-browser-smoke.mjs  # Playwright UI smoke (dev server must run)
 scripts/verify-phase6-loop.sh --browser       # full loop harness
 ```

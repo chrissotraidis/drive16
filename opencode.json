@@ -39,7 +39,6 @@
         "scripts/comfyui-mcp.sh"
       ],
       "environment": {
-        "COMFYUI_URL": "http://127.0.0.1:8188",
         "COMFYUI_DOWNLOAD_CACHE_DIR": "artifacts/phase4/comfyui-mcp/cache"
       },
       "enabled": true

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     env,
+    net::TcpListener,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
@@ -10,12 +11,30 @@ use std::{
 };
 
 const HOST: &str = "127.0.0.1";
-const PORT: u16 = 4096;
-const BASE_URL: &str = "http://127.0.0.1:4096";
+const DEFAULT_PORT: u16 = 4096;
+const DEFAULT_COMFYUI_URL: &str = "http://127.0.0.1:8188";
+const DEFAULT_COMFYUI_CHECKPOINT: &str = "sd_xl_base_1.0.safetensors";
+const DEFAULT_COMFYUI_LORA: &str = "pixel-art-xl.safetensors";
 const HEALTH_PATH: &str = "/global/health";
 const EVENT_PATH: &str = "/global/event";
 
 static OPENCODE_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+static OPENCODE_ENDPOINT: OnceLock<Mutex<OpenCodeEndpoint>> = OnceLock::new();
+static OPENCODE_RUNTIME: OnceLock<Mutex<OpenCodeRuntimeConfig>> = OnceLock::new();
+static OPENCODE_BACKGROUND_ERRORS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+
+#[derive(Debug, Clone)]
+struct OpenCodeEndpoint {
+    port: u16,
+    base_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OpenCodeRuntimeConfig {
+    comfy_ui_endpoint: String,
+    comfy_ui_checkpoint: String,
+    comfy_ui_lora: String,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +59,9 @@ pub struct OpenCodeSendRequest {
     pub model_id: Option<String>,
     pub no_reply: Option<bool>,
     pub background: Option<bool>,
+    pub comfy_ui_endpoint: Option<String>,
+    pub comfy_ui_checkpoint: Option<String>,
+    pub comfy_ui_lora: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -69,6 +91,13 @@ pub struct OpenCodeAuthResult {
     pub detail: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenCodeBackgroundError {
+    pub generated_at: String,
+    pub detail: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct HealthResponse {
     healthy: bool,
@@ -81,6 +110,7 @@ struct HttpResponse {
 }
 
 pub fn connect_opencode() -> OpenCodeBridgeStatus {
+    let initial_endpoint = current_endpoint();
     match wait_for_health(Duration::from_millis(250), Duration::from_millis(250)) {
         Ok(health) => status(
             "ready",
@@ -88,18 +118,97 @@ pub fn connect_opencode() -> OpenCodeBridgeStatus {
             Some(health),
             false,
         ),
-        Err(_) => match start_opencode() {
-            Ok(()) => match wait_for_health(Duration::from_secs(8), Duration::from_millis(250)) {
-                Ok(health) => status("ready", "OpenCode server launched", Some(health), true),
-                Err(error) => status(
-                    "warning",
-                    &format!("OpenCode launched but did not become ready: {}", error),
-                    None,
-                    true,
-                ),
-            },
-            Err(error) => status("missing", &error, None, false),
-        },
+        Err(error) => {
+            let conflict = port_conflict_detail(&initial_endpoint, &error);
+            if conflict.is_some() {
+                match reserve_ephemeral_endpoint() {
+                    Ok(endpoint) => set_current_endpoint(endpoint),
+                    Err(error) => {
+                        return status(
+                            "missing",
+                            &format!(
+                                "{} Could not choose an alternate build-agent port: {}",
+                                conflict.unwrap_or_default(),
+                                error
+                            ),
+                            None,
+                            false,
+                        );
+                    }
+                }
+            }
+
+            match start_opencode() {
+                Ok(()) => match wait_for_health(Duration::from_secs(8), Duration::from_millis(250))
+                {
+                    Ok(health) => {
+                        let detail = conflict
+                            .map(|value| {
+                                format!(
+                                    "{} Drive16 launched its own OpenCode server at {}.",
+                                    value,
+                                    current_endpoint().base_url
+                                )
+                            })
+                            .unwrap_or_else(|| "OpenCode server launched".to_string());
+                        status("ready", &detail, Some(health), true)
+                    }
+                    Err(error) => status(
+                        "warning",
+                        &format!("OpenCode launched but did not become ready: {}", error),
+                        None,
+                        true,
+                    ),
+                },
+                Err(error) => status("missing", &error, None, false),
+            }
+        }
+    }
+}
+
+fn port_conflict_detail(endpoint: &OpenCodeEndpoint, error: &str) -> Option<String> {
+    if !error.contains("HTTP 401") && !error.to_lowercase().contains("requires authentication") {
+        return None;
+    }
+
+    Some(format!(
+        "Another local tool is using the build-agent port at {}.",
+        endpoint.base_url
+    ))
+}
+
+fn reserve_ephemeral_endpoint() -> Result<OpenCodeEndpoint, String> {
+    let listener = TcpListener::bind((HOST, 0))
+        .map_err(|error| format!("could not reserve a local port: {}", error))?;
+    let port = listener
+        .local_addr()
+        .map_err(|error| format!("could not inspect reserved port: {}", error))?
+        .port();
+    drop(listener);
+    Ok(endpoint_for_port(port))
+}
+
+fn endpoint_for_port(port: u16) -> OpenCodeEndpoint {
+    OpenCodeEndpoint {
+        port,
+        base_url: format!("http://{}:{}", HOST, port),
+    }
+}
+
+fn current_endpoint() -> OpenCodeEndpoint {
+    OPENCODE_ENDPOINT
+        .get_or_init(|| Mutex::new(endpoint_for_port(DEFAULT_PORT)))
+        .lock()
+        .map(|endpoint| endpoint.clone())
+        .unwrap_or_else(|_| endpoint_for_port(DEFAULT_PORT))
+}
+
+fn set_current_endpoint(endpoint: OpenCodeEndpoint) {
+    if let Ok(mut guard) = OPENCODE_ENDPOINT
+        .get_or_init(|| Mutex::new(endpoint_for_port(DEFAULT_PORT)))
+        .lock()
+    {
+        *guard = endpoint;
     }
 }
 
@@ -108,6 +217,8 @@ pub fn send_opencode_message(request: OpenCodeSendRequest) -> Result<OpenCodeSen
     if text.is_empty() {
         return Err("OpenCode message text cannot be empty".to_string());
     }
+
+    apply_runtime_config_from_request(&request)?;
 
     wait_for_health(Duration::from_secs(3), Duration::from_millis(200))
         .map_err(|error| format!("OpenCode server is not ready: {}", error))?;
@@ -160,6 +271,7 @@ pub fn send_opencode_message(request: OpenCodeSendRequest) -> Result<OpenCodeSen
             }) {
                 Ok(()) => {}
                 Err(error) => {
+                    push_background_error(error.clone());
                     eprintln!("Drive16 OpenCode background message failed: {}", error);
                 }
             }
@@ -287,6 +399,100 @@ pub fn set_opencode_auth(request: OpenCodeAuthRequest) -> Result<OpenCodeAuthRes
     })
 }
 
+pub fn drain_background_errors() -> Vec<OpenCodeBackgroundError> {
+    OPENCODE_BACKGROUND_ERRORS
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .map(|mut errors| {
+            errors
+                .drain(..)
+                .map(|detail| OpenCodeBackgroundError {
+                    generated_at: unix_timestamp(),
+                    detail,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn push_background_error(detail: String) {
+    if let Ok(mut errors) = OPENCODE_BACKGROUND_ERRORS
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+    {
+        errors.push(detail);
+        if errors.len() > 20 {
+            let drain_count = errors.len() - 20;
+            errors.drain(0..drain_count);
+        }
+    }
+}
+
+fn apply_runtime_config_from_request(request: &OpenCodeSendRequest) -> Result<(), String> {
+    let next = OpenCodeRuntimeConfig {
+        comfy_ui_endpoint: request
+            .comfy_ui_endpoint
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(DEFAULT_COMFYUI_URL)
+            .to_string(),
+        comfy_ui_checkpoint: request
+            .comfy_ui_checkpoint
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(DEFAULT_COMFYUI_CHECKPOINT)
+            .to_string(),
+        comfy_ui_lora: request
+            .comfy_ui_lora
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(DEFAULT_COMFYUI_LORA)
+            .to_string(),
+    };
+
+    let changed = set_runtime_config(next);
+    if changed && probe_health().is_ok() {
+        restart_opencode()?;
+    }
+    Ok(())
+}
+
+fn current_runtime_config() -> OpenCodeRuntimeConfig {
+    OPENCODE_RUNTIME
+        .get_or_init(|| Mutex::new(default_runtime_config()))
+        .lock()
+        .map(|config| config.clone())
+        .unwrap_or_else(|_| default_runtime_config())
+}
+
+fn set_runtime_config(next: OpenCodeRuntimeConfig) -> bool {
+    match OPENCODE_RUNTIME
+        .get_or_init(|| Mutex::new(default_runtime_config()))
+        .lock()
+    {
+        Ok(mut guard) => {
+            if *guard == next {
+                false
+            } else {
+                *guard = next;
+                true
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+fn default_runtime_config() -> OpenCodeRuntimeConfig {
+    OpenCodeRuntimeConfig {
+        comfy_ui_endpoint: DEFAULT_COMFYUI_URL.to_string(),
+        comfy_ui_checkpoint: DEFAULT_COMFYUI_CHECKPOINT.to_string(),
+        comfy_ui_lora: DEFAULT_COMFYUI_LORA.to_string(),
+    }
+}
+
 fn connected_providers() -> Vec<String> {
     http_request("GET", "/provider", None)
         .ok()
@@ -307,8 +513,9 @@ fn connected_providers() -> Vec<String> {
 }
 
 fn restart_opencode() -> Result<(), String> {
-    // Stop the child we own, or any external `opencode serve` holding the
-    // Drive16 port, then bring up a fresh server that reads current auth.
+    // Stop only the child we own. If another local tool is healthy on the
+    // current endpoint, move Drive16 to a fresh local port instead of killing
+    // unrelated OpenCode processes.
     let child_slot = OPENCODE_CHILD.get_or_init(|| Mutex::new(None));
     {
         let mut guard = child_slot
@@ -321,13 +528,9 @@ fn restart_opencode() -> Result<(), String> {
     }
 
     if probe_health().is_ok() {
-        let _ = Command::new("pkill")
-            .args(["-f", "opencode serve"])
-            .status();
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while probe_health().is_ok() && std::time::Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(150));
-        }
+        let endpoint = reserve_ephemeral_endpoint()
+            .map_err(|error| format!("OpenCode restart needs a free owned port: {}", error))?;
+        set_current_endpoint(endpoint);
     }
 
     start_opencode()?;
@@ -369,6 +572,8 @@ fn create_session() -> Result<String, String> {
 fn start_opencode() -> Result<(), String> {
     let command_path = find_command("opencode", &opencode_fallbacks())
         .ok_or_else(|| "Install or configure OpenCode".to_string())?;
+    let endpoint = current_endpoint();
+    let runtime = current_runtime_config();
     let child_slot = OPENCODE_CHILD.get_or_init(|| Mutex::new(None));
     let mut guard = child_slot
         .lock()
@@ -386,12 +591,15 @@ fn start_opencode() -> Result<(), String> {
 
     let child = Command::new(command_path)
         .env("PATH", crate::starter_rom::extended_path_env())
+        .env("COMFYUI_URL", &runtime.comfy_ui_endpoint)
+        .env("DRIVE16_COMFYUI_CHECKPOINT", &runtime.comfy_ui_checkpoint)
+        .env("DRIVE16_COMFYUI_LORA", &runtime.comfy_ui_lora)
         .args([
             "serve",
             "--hostname",
             HOST,
             "--port",
-            &PORT.to_string(),
+            &endpoint.port.to_string(),
             "--cors",
             "http://127.0.0.1:1420",
             "--cors",
@@ -453,7 +661,8 @@ fn http_request_with_timeout(
     body: Option<&Value>,
     read_timeout: Duration,
 ) -> Result<HttpResponse, String> {
-    let url = format!("{}{}", BASE_URL, path);
+    let endpoint = current_endpoint();
+    let url = format!("{}{}", endpoint.base_url, path);
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(2))
         .timeout(read_timeout)
@@ -481,13 +690,19 @@ fn http_request_with_timeout(
             let body = response.into_string().unwrap_or_default();
             Ok(HttpResponse { status, body })
         }
-        Err(error) => Err(format!("Could not reach {}: {}", BASE_URL, error)),
+        Err(error) => Err(format!("Could not reach {}: {}", endpoint.base_url, error)),
     }
 }
 
 fn require_success(status: u16, body: &str, label: &str) -> Result<(), String> {
     if (200..300).contains(&status) {
         Ok(())
+    } else if label == "health check" && status == 401 {
+        Err(format!(
+            "OpenCode {} failed with HTTP 401: another local tool is using {} and requires authentication",
+            label,
+            current_endpoint().base_url
+        ))
     } else {
         Err(format!(
             "OpenCode {} failed with HTTP {}: {}",
@@ -502,6 +717,7 @@ fn status(
     health: Option<HealthResponse>,
     launched: bool,
 ) -> OpenCodeBridgeStatus {
+    let endpoint = current_endpoint();
     let connected = if state == "ready" {
         connected_providers()
     } else {
@@ -511,9 +727,9 @@ fn status(
         generated_at: unix_timestamp(),
         state: state.to_string(),
         detail: detail.to_string(),
-        base_url: BASE_URL.to_string(),
-        health_url: format!("{}{}", BASE_URL, HEALTH_PATH),
-        event_url: format!("{}{}", BASE_URL, EVENT_PATH),
+        base_url: endpoint.base_url.clone(),
+        health_url: format!("{}{}", endpoint.base_url, HEALTH_PATH),
+        event_url: format!("{}{}", endpoint.base_url, EVENT_PATH),
         version: health.map(|value| value.version),
         launched,
         connected_providers: connected,
@@ -565,6 +781,7 @@ mod tests {
 
     #[test]
     fn bridge_status_uses_canonical_opencode_urls() {
+        set_current_endpoint(endpoint_for_port(DEFAULT_PORT));
         let report = status(
             "ready",
             "test",
@@ -581,6 +798,44 @@ mod tests {
         assert_eq!(report.version.as_deref(), Some("1.14.33"));
     }
 
+    #[test]
+    fn detects_authenticated_port_conflict() {
+        let endpoint = endpoint_for_port(4096);
+        let detail = port_conflict_detail(
+            &endpoint,
+            "OpenCode health check failed with HTTP 401: authentication required",
+        )
+        .expect("401 should be treated as a port conflict");
+
+        assert!(detail.contains("Another local tool is using the build-agent port"));
+        assert!(detail.contains("http://127.0.0.1:4096"));
+    }
+
+    #[test]
+    fn runtime_config_uses_request_comfyui_values() {
+        let unused_endpoint =
+            reserve_ephemeral_endpoint().expect("unused port should be available");
+        set_current_endpoint(unused_endpoint);
+        let request = OpenCodeSendRequest {
+            session_id: None,
+            text: "test".to_string(),
+            provider_id: None,
+            model_id: None,
+            no_reply: None,
+            background: None,
+            comfy_ui_endpoint: Some("http://127.0.0.1:8288".to_string()),
+            comfy_ui_checkpoint: Some("custom.safetensors".to_string()),
+            comfy_ui_lora: Some("custom-lora.safetensors".to_string()),
+        };
+
+        let _ = set_runtime_config(default_runtime_config());
+        apply_runtime_config_from_request(&request).expect("runtime config should update");
+        let config = current_runtime_config();
+        assert_eq!(config.comfy_ui_endpoint, "http://127.0.0.1:8288");
+        assert_eq!(config.comfy_ui_checkpoint, "custom.safetensors");
+        assert_eq!(config.comfy_ui_lora, "custom-lora.safetensors");
+    }
+
     // Requires a running `opencode serve` on 4096. Run explicitly with:
     // cargo test live_agent_reply_roundtrip -- --ignored
     #[test]
@@ -593,6 +848,9 @@ mod tests {
             model_id: Some("big-pickle".to_string()),
             no_reply: Some(false),
             background: Some(false),
+            comfy_ui_endpoint: None,
+            comfy_ui_checkpoint: None,
+            comfy_ui_lora: None,
         })
         .expect("agent reply should complete");
 

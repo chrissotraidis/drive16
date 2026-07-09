@@ -211,11 +211,13 @@ export function PlayerPane({
                           ? "LOADING"
                           : romUnavailable
                             ? "NO ROM"
+                            : playerScreenEvidence === "none"
+                            ? "ROM READY"
                             : transport === "running"
                             ? "PREVIEW"
                             : "PAUSED"}
                       </span>
-                      {romUnavailable ? null : (
+                      {romUnavailable || playerScreenEvidence === "none" ? null : (
                         <span
                           className="sprite-cursor"
                           style={{ left: `${spriteX}%` }}
@@ -566,7 +568,7 @@ function playabilityGateLabel(state: EvidenceState, romUnavailable: boolean) {
   if (romUnavailable) return "Gate: no ROM";
   if (state === "ready") return "Gate: verified";
   if (state === "missing") return "Gate: failed";
-  return "Gate: incomplete";
+  return "Gate: needs repair";
 }
 
 function InputControlsPanel({
