@@ -56,6 +56,7 @@ const requiredEvidence = [
   "projectMemoryAuditPath",
   "buildLogPath",
   "runPlanPath",
+  "screenQualityPath",
   "screenshotPath",
 ];
 
@@ -136,6 +137,26 @@ function relativeOrAbsoluteExists(filePath) {
 
 function resolveRelativeOrAbsolute(filePath) {
   return path.isAbsolute(filePath) ? filePath : path.join(rootDir, filePath);
+}
+
+const qualityReviewFields = [
+  "Screen composition",
+  "Player feedback",
+  "Restart clarity",
+  "Audio response",
+  "Style coherence",
+];
+
+function missingQualityReviewFields(playtestText) {
+  const section = playtestText.match(/##\s+Quality Review\s*\n([\s\S]*?)(?:\n## |\s*$)/i)?.[1] ?? "";
+  const lines = section.split(/\r?\n/).map((line) => line.trim().replace(/^[-*]\s*/, ""));
+  return qualityReviewFields.filter((field) => {
+    const line = lines.find((candidate) => candidate.toLowerCase().startsWith(`${field.toLowerCase()}:`));
+    if (!line) return true;
+    const observation = line.slice(line.indexOf(":") + 1).trim();
+    return observation.length < 12
+      || /\b(pending|untested|unverified|todo|tbd|n\/?a|looks good|good|fine|nice)\b/i.test(observation);
+  });
 }
 
 function listFilesRecursive(dirPath) {
@@ -240,6 +261,32 @@ function validateRun(run, report, promptIds, { requireFiles }) {
     );
     captureIssue(issues, () => assert(run.issues.length === 0, `${runLabel} cannot pass while issues are listed.`));
     if (requireFiles) {
+      captureIssue(issues, () => {
+        const memoryAudit = JSON.parse(
+          readFileSync(resolveRelativeOrAbsolute(evidence.projectMemoryAuditPath), "utf8"),
+        );
+        assert(
+          memoryAudit.status === "passed" && memoryAudit.gate === "pass",
+          `${runLabel} project memory audit did not pass.`
+        );
+      });
+      captureIssue(issues, () => {
+        const playtestText = readFileSync(resolveRelativeOrAbsolute(evidence.playtestPath), "utf8");
+        const missing = missingQualityReviewFields(playtestText);
+        assert(
+          missing.length === 0,
+          `${runLabel} PLAYTEST.md has incomplete Quality Review fields: ${missing.join(", ")}.`,
+        );
+      });
+      captureIssue(issues, () => {
+        const screenQuality = JSON.parse(
+          readFileSync(resolveRelativeOrAbsolute(evidence.screenQualityPath), "utf8"),
+        );
+        assert(
+          screenQuality.status === "passed" && (screenQuality.issues ?? []).length === 0,
+          `${runLabel} gameplay screenshot quality audit did not pass.`,
+        );
+      });
       captureIssue(issues, () => {
         const newerFiles = staleRomProofFiles(run);
         const newestFile = newerFiles[0] ? path.relative(rootDir, newerFiles[0]) : "unknown";
@@ -426,6 +473,7 @@ function fixtureRun(prompt, root) {
     projectMemoryAuditPath: path.join(root, prompt.id, "audit.json"),
     buildLogPath: path.join(root, prompt.id, "build-log.jsonl"),
     runPlanPath: path.join(root, prompt.id, "run-plan.json"),
+    screenQualityPath: path.join(root, prompt.id, "screen-quality.json"),
     screenshotPath: path.join(root, prompt.id, "screen.png"),
   };
   return {
@@ -454,8 +502,14 @@ async function writeFixtureEvidence(run) {
       evidencePath,
       field === "buildLogPath"
         ? `${goodOpenCodeGameTraceFixture()}\n`
+        : field === "projectMemoryAuditPath"
+          ? `${JSON.stringify({ status: "passed", gate: "pass", issues: [] }, null, 2)}\n`
+          : field === "playtestPath"
+            ? `# Playtest Notes\n\nPlayability gate: PASS.\n\n## Quality Review\n\n- Screen composition: Playfield and status remain readable without overlap.\n- Player feedback: Input produces a visible gameplay response.\n- Restart clarity: Start returns the game to its initial state.\n- Audio response: Captured non-silent music supports gameplay.\n- Style coherence: Shapes and palette form one consistent arcade style.\n`
         : field === "runPlanPath"
           ? `${JSON.stringify({ prompt: { id: run.promptId }, firstBuildSeed: null }, null, 2)}\n`
+          : field === "screenQualityPath"
+            ? `${JSON.stringify({ status: "passed", issues: [] }, null, 2)}\n`
           : "fixture\n",
     );
   }

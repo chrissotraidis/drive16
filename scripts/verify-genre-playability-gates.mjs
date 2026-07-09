@@ -108,6 +108,14 @@ Playability gate: PASS.
 
 The ${genre.label} ROM compiled, loaded, and passed its genre checks.
 
+## Quality Review
+
+- Screen composition: Captured frame keeps the playfield, score, and controls readable without overlap.
+- Player feedback: Movement and state changes are visible immediately after input.
+- Restart clarity: The tested Start action returns the game to a clear initial state.
+- Audio response: Captured non-silent audio matches the active gameplay loop.
+- Style coherence: The primitive shapes and limited palette consistently fit the arcade presentation.
+
 ## Evidence
 
 - Build: compiled \`out/rom.bin\`.

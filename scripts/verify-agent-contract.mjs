@@ -268,6 +268,8 @@ for (const expected of [
   "If audio is skipped because the user explicitly asked for no audio, write \"by user request\"",
   "If audio is skipped because a tool failed, timed out, or you ran out of time",
   "examples/game-skeletons/snake-basic/",
+  "examples/game-skeletons/asteroids-basic/",
+  "exact `## Quality Review` section",
 ]) {
   assert(
     normalizedBuilderSkill.includes(expected),
@@ -278,6 +280,7 @@ for (const expected of [
 for (const expected of [
   "First Build References",
   "examples/game-skeletons/snake-basic/",
+  "examples/game-skeletons/asteroids-basic/",
   "proven compact source and audio seed",
 ]) {
   assert(
@@ -315,6 +318,9 @@ for (const expected of [
   "Pong | Both paddles and ball are visible",
   "Tetris | Playfield and score/line state are readable",
   "Asteroids | Ship, asteroids, and shots are visible",
+  "Quality Review",
+  "Screen composition: pending",
+  "Style coherence: pending",
 ]) {
   assert(
     starterPlaytestTemplate.includes(expected),
@@ -476,7 +482,10 @@ for (const expected of [
   "Never claim out/rom.bin is built",
   "Known Issues: none",
   "Date.now()",
-  "mtimeMs < notBeforeMs",
+  "captureStableFrame",
+  "scripts/capture-game-screenshot.py",
+  '"--frames", "180"',
+  "--evidence-only",
   "Snake first-build reference",
   "Snake first-build seed",
   "firstBuildSeed",

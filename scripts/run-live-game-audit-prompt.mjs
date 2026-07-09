@@ -2,10 +2,10 @@
 import { execFile, spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import {
-  copyFile,
   cp,
   mkdir,
   readFile,
+  readdir,
   rm,
   stat,
   writeFile,
@@ -25,7 +25,7 @@ const starterProjectPath = path.join(rootDir, "examples", "app-starter-blank");
 const snakeBasicSkeletonPath = path.join(rootDir, "examples", "game-skeletons", "snake-basic");
 const pongBasicSkeletonPath = path.join(rootDir, "examples", "game-skeletons", "pong-basic");
 const tetrisBasicSkeletonPath = path.join(rootDir, "examples", "game-skeletons", "tetris-basic");
-const emulatorFramePath = path.join(rootDir, "artifacts", "phase1", "emulator", "last-frame.png");
+const asteroidsBasicSkeletonPath = path.join(rootDir, "examples", "game-skeletons", "asteroids-basic");
 
 const requiredPrompts = [
   {
@@ -66,12 +66,17 @@ const firstBuildSkeletons = {
     source: tetrisBasicSkeletonPath,
     description: "compact first implementation and audio shape",
   },
+  "asteroids-basic": {
+    label: "Asteroids",
+    source: asteroidsBasicSkeletonPath,
+    description: "compact first implementation and audio shape",
+  },
 };
 
 // Contract labels emitted by promptText: "Snake first-build reference",
 // "Snake first-build seed", "Pong first-build reference", "Pong first-build seed".
 // Contract paths: examples/game-skeletons/snake-basic and examples/game-skeletons/pong-basic.
-// Extra seed path: examples/game-skeletons/tetris-basic.
+// Extra seed paths: examples/game-skeletons/tetris-basic and examples/game-skeletons/asteroids-basic.
 
 const genreEvidencePhrases = {
   snake: [
@@ -113,6 +118,7 @@ function parseArgs(argv) {
     prompt: "snake-basic",
     model: process.env.DRIVE16_LIVE_AUDIT_MODEL || "",
     runAgent: false,
+    evidenceOnly: false,
     resumeRun: "",
     runId: "",
     runsRoot: defaultRunsRoot,
@@ -129,6 +135,8 @@ function parseArgs(argv) {
       args.model = argv[++index];
     } else if (arg === "--run-agent") {
       args.runAgent = true;
+    } else if (arg === "--evidence-only") {
+      args.evidenceOnly = true;
     } else if (arg === "--resume-run") {
       args.resumeRun = argv[++index];
     } else if (arg === "--run-id") {
@@ -148,6 +156,9 @@ function parseArgs(argv) {
   if (!Number.isFinite(args.timeoutSeconds) || args.timeoutSeconds <= 0) {
     throw new Error("--timeout-seconds must be a positive number.");
   }
+  if (args.evidenceOnly && !args.resumeRun) {
+    throw new Error("--evidence-only requires --resume-run.");
+  }
   return args;
 }
 
@@ -161,6 +172,7 @@ Asteroids audit; it does not mark the final report passed by itself.
 Options:
   --prompt <id>           snake-basic, pong-basic, tetris-basic, or asteroids-basic.
   --run-agent             Actually run opencode after preparing the packet.
+  --evidence-only         On a resume, forbid edits and refresh build/emulator evidence only.
   --resume-run <run-id>   Continue an existing failed run without deleting its project or trace.
   --model <model>         OpenCode model, for example openrouter/deepseek/deepseek-chat-v3.1.
                           Defaults to DRIVE16_LIVE_AUDIT_MODEL.
@@ -293,12 +305,14 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
     "- Do not use VDP_drawRect, srand, or C library rand(); for blocky graphics, load solid 8x8 tiles and draw cells with VDP_fillTileMapRect.",
     "- Build after the final code/resource edit; an older out/rom.bin is stale evidence.",
     "- Immediately after a successful build_rom, do not inspect or rewrite docs; run_rom, capture_frame, send_input with lowercase p1_buttons such as [\"right\"], run_rom with use_input_script true, capture_frame again, send_input with p1_buttons [\"start\"] when restart applies, then verify_audio if sound is expected.",
+    "- Every final gameplay capture must come from a run_rom call of at least 180 frames; short reset captures can catch an unfinished tile queue and are not valid visual evidence.",
     "- Valid send_input button names are lowercase: left, right, up, down, start, a, b, c, x, y, z, mode. Do not use SGDK constants like BUTTON_RIGHT.",
     "- Run the ROM, capture a frame, test input, test restart/start behavior when relevant, and verify audio or record why audio was explicitly disabled.",
     "- Use drive16-emulator.verify_audio for audio proof when sound is expected.",
     "- For audio checks after movement tests, call verify_audio with use_input_script false unless the sound specifically requires held input.",
     "- If MML compilation fails twice, stop trying music for this turn, record audio as failed, and finish gameplay verification.",
     "- Update GAME.md, ASSETS.md, and PLAYTEST.md with evidence and remaining issues.",
+    "- In PLAYTEST.md, complete an exact ## Quality Review section with specific observations for Screen composition, Player feedback, Restart clarity, Audio response, and Style coherence. Pending or generic praise cannot pass.",
     evidencePhrases.length
       ? `- In PLAYTEST.md, use an exact ## Evidence section and include the exact ${prompt.genre} evidence phrases when passing: ${evidencePhrases.join(", ")}.`
       : "- In PLAYTEST.md, use an exact ## Evidence section and include the relevant genre evidence phrases when passing.",
@@ -320,7 +334,15 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
   ].join("\n");
 }
 
-function resumePromptText({ prompt, projectPath, runPath, readiness, firstBuildSeed }) {
+function resumePromptText({ prompt, projectPath, runPath, readiness, firstBuildSeed, evidenceOnly }) {
+  const evidenceOnlyRequirements = evidenceOnly
+    ? [
+        "Evidence-only continuation:",
+        "- The project and project-memory files are already repaired. Do not edit source, resources, or documentation.",
+        "- Build the current project exactly as it is, then refresh run_rom, capture_frame, directional input, Start/restart, and verify_audio evidence.",
+        "- If a check fails, report that failure without changing project files.",
+      ]
+    : [];
   return [
     promptText({ prompt, projectPath, readiness, firstBuildSeed }),
     "",
@@ -330,17 +352,54 @@ function resumePromptText({ prompt, projectPath, runPath, readiness, firstBuildS
     "- Preserve the existing ROM functionality, then rerun the missing emulator evidence calls.",
     "- Audio is required for this audit. Do not claim the user requested no audio; add a small Genesis-safe music or SFX resource when needed, rebuild, and capture non-silent audio evidence.",
     "- Update GAME.md, ASSETS.md, and PLAYTEST.md so their claims match the fresh build and evidence.",
+    ...evidenceOnlyRequirements,
   ].join("\n");
 }
 
-async function maybeCopyFrame(runPath, notBeforeMs) {
-  if (!existsSync(emulatorFramePath)) return "";
-  const frameInfo = await stat(emulatorFramePath);
-  if (frameInfo.mtimeMs < notBeforeMs) return "";
+async function runScreenshotAudit(runPath, screenshotPath) {
+  const out = path.join(runPath, "screen-quality.json");
+  if (!screenshotPath) {
+    await writeFile(out, `${JSON.stringify({ status: "failed", issues: ["No gameplay screenshot was captured."] }, null, 2)}\n`);
+    return out;
+  }
+  try {
+    await runCommand(
+      "python3",
+      ["scripts/validate-game-screenshot.py", screenshotPath, "--out", out],
+      { timeout: 120000 },
+    );
+  } catch (error) {
+    if (!existsSync(out)) {
+      await writeFile(
+        out,
+        `${JSON.stringify({ status: "failed", issues: [compact(`${error.stdout ?? ""}\n${error.stderr ?? ""}`) || String(error.message ?? error)] }, null, 2)}\n`,
+      );
+    }
+  }
+  return out;
+}
+
+async function captureStableFrame(projectPath, runPath) {
+  const romPath = path.join(projectPath, "out", "rom.bin");
   const screenshotPath = path.join(runPath, "evidence", "last-frame.png");
   await mkdir(path.dirname(screenshotPath), { recursive: true });
-  await copyFile(emulatorFramePath, screenshotPath);
-  return screenshotPath;
+  try {
+    const result = await runCommand(
+      "python3",
+      ["scripts/capture-game-screenshot.py", romPath, screenshotPath, "--frames", "180"],
+      { timeout: 180000 },
+    );
+    await writeFile(path.join(runPath, "stable-capture.stdout"), result.stdout ?? "");
+    await writeFile(path.join(runPath, "stable-capture.stderr"), result.stderr ?? "");
+    return screenshotPath;
+  } catch (error) {
+    await writeFile(path.join(runPath, "stable-capture.stdout"), error.stdout ?? "");
+    await writeFile(
+      path.join(runPath, "stable-capture.stderr"),
+      error.stderr ?? String(error.message ?? error),
+    );
+    return "";
+  }
 }
 
 async function runProjectMemoryAudit(projectPath, runPath) {
@@ -452,6 +511,26 @@ async function fileExists(filePath) {
   }
 }
 
+async function newestFileMtime(filePath) {
+  if (!existsSync(filePath)) return 0;
+  const info = await stat(filePath);
+  if (info.isFile()) return info.mtimeMs;
+  if (!info.isDirectory()) return 0;
+  const entries = await readdir(filePath);
+  const childTimes = await Promise.all(entries.map((entry) => newestFileMtime(path.join(filePath, entry))));
+  return Math.max(0, ...childTimes);
+}
+
+async function romIsFresh(projectPath, romPath) {
+  if (!(await fileExists(romPath))) return false;
+  const romTime = (await stat(romPath)).mtimeMs;
+  const sourceTime = Math.max(
+    await newestFileMtime(path.join(projectPath, "src")),
+    await newestFileMtime(path.join(projectPath, "res")),
+  );
+  return romTime >= sourceTime;
+}
+
 async function writeRunRecord({
   prompt,
   projectPath,
@@ -461,6 +540,7 @@ async function writeRunRecord({
   screenshotPath,
   auditPath,
   traceAuditPath,
+  screenshotAuditPath,
   elapsedSeconds,
   firstBuildSeed,
 }) {
@@ -474,10 +554,15 @@ async function writeRunRecord({
   const agentStatus = await readJsonIfExists(agentStatusPath);
   const traceSummary = await readTraceSummary(runPath);
   const traceIssues = await readTraceIssues(traceAuditPath);
+  const screenshotAudit = await readJsonIfExists(screenshotAuditPath);
+  const screenshotIssues = screenshotAudit.status === "passed"
+    ? []
+    : (screenshotAudit.issues ?? ["Gameplay screenshot quality audit did not pass."]);
   const runIssues = [
     ...(await agentStatusIssues(agentStatusPath)),
     ...(audit.issues ?? []),
     ...traceIssues,
+    ...screenshotIssues,
   ];
   const auditPassed = audit.status === "passed" && audit.gate === "pass";
   const agentCompleted = agentStatus.status === "finished";
@@ -490,10 +575,15 @@ async function writeRunRecord({
     ((traceSummary.captureFrameCalls ?? 0) >= 2 || (traceSummary.runRomWithInputScript ?? 0) > 0);
   const restartTested = (traceSummary.sendInputStartCalls ?? 0) > 0;
   const audioKnown = audioProofs > 0;
+  const romExists = await fileExists(romPath);
+  const freshRom = await romIsFresh(projectPath, romPath);
+  if (romExists && !freshRom) {
+    runIssues.push("ROM is stale; rebuild after the latest source or resource edit.");
+  }
   const checks = {
-    compiled: await fileExists(romPath),
+    compiled: romExists && freshRom,
     previewLoaded: Boolean(screenshotPath),
-    screenVisible: Boolean(screenshotPath),
+    screenVisible: Boolean(screenshotPath) && screenshotAudit.status === "passed",
     inputResponded,
     restartTested,
     audioKnown,
@@ -535,6 +625,7 @@ async function writeRunRecord({
       traceAuditPath: relative(traceAuditPath),
       agentStatusPath: relative(agentStatusPath),
       runPlanPath: relative(path.join(runPath, "run-plan.json")),
+      screenQualityPath: relative(screenshotAuditPath),
       screenshotPath: screenshotPath ? relative(screenshotPath) : relative(path.join(runPath, "evidence", "last-frame.png")),
     },
     issues: runPassed
@@ -675,7 +766,7 @@ async function main() {
   const runTimestamp = timestamp();
   const promptPath = path.join(runPath, resuming ? `resume-prompt-${runTimestamp}.md` : "prompt.md");
   const preparedPrompt = resuming
-    ? resumePromptText({ prompt, projectPath, runPath, readiness, firstBuildSeed })
+    ? resumePromptText({ prompt, projectPath, runPath, readiness, firstBuildSeed, evidenceOnly: args.evidenceOnly })
     : promptText({ prompt, projectPath, readiness, firstBuildSeed });
   await writeFile(promptPath, preparedPrompt);
   const planPath = path.join(runPath, resuming ? `resume-plan-${runTimestamp}.json` : "run-plan.json");
@@ -694,6 +785,7 @@ async function main() {
         readinessPath: relative(readinessPath),
         firstBuildSeed,
         resuming,
+        evidenceOnly: args.evidenceOnly,
       },
       null,
       2,
@@ -712,8 +804,9 @@ async function main() {
   }
 
   const existingScreenshotPath = path.join(runPath, "evidence", "last-frame.png");
-  const freshScreenshotPath = args.runAgent ? await maybeCopyFrame(runPath, startedAtMs) : "";
+  const freshScreenshotPath = args.runAgent ? await captureStableFrame(projectPath, runPath) : "";
   const screenshotPath = freshScreenshotPath || (existsSync(existingScreenshotPath) ? existingScreenshotPath : "");
+  const screenshotAuditPath = await runScreenshotAudit(runPath, screenshotPath);
   const auditPath = await runProjectMemoryAudit(projectPath, runPath);
   const traceAuditPath = await runTraceAudit(runPath, {
     allowSeededSource: Boolean(firstBuildSeed),
@@ -733,6 +826,7 @@ async function main() {
     screenshotPath,
     auditPath,
     traceAuditPath,
+    screenshotAuditPath,
     elapsedSeconds,
     firstBuildSeed,
   });

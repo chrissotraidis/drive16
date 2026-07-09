@@ -225,6 +225,26 @@ function markdownSection(text, title) {
   return text.match(new RegExp(`##\\s+${escaped}\\s*\\n([\\s\\S]*?)(?:\\n## |\\s*$)`, "i"))?.[1] ?? "";
 }
 
+const qualityReviewFields = [
+  "Screen composition",
+  "Player feedback",
+  "Restart clarity",
+  "Audio response",
+  "Style coherence",
+];
+
+function missingQualityReview(playtestText) {
+  const section = markdownSection(playtestText, "Quality Review");
+  const lines = section.split(/\r?\n/).map((line) => line.trim().replace(/^[-*]\s*/, ""));
+  return qualityReviewFields.filter((field) => {
+    const line = lines.find((candidate) => candidate.toLowerCase().startsWith(`${field.toLowerCase()}:`));
+    if (!line) return true;
+    const observation = line.slice(line.indexOf(":") + 1).trim();
+    return observation.length < 12
+      || /\b(pending|untested|unverified|todo|tbd|n\/?a|looks good|good|fine|nice)\b/i.test(observation);
+  });
+}
+
 function gameGenreContext(gameText) {
   const focused = [
     markdownSection(gameText, "Concept"),
@@ -381,6 +401,12 @@ function auditProject({ game, assets, playtest, expectGate, romExists }) {
     const missing = missingGenreEvidence({ genre, playtestText: playtest.text });
     for (const check of missing) {
       issues.push(`PLAYTEST.md passes ${genre.label} without evidence for: ${check}.`);
+    }
+  }
+
+  if (gate === "pass") {
+    for (const field of missingQualityReview(playtest.text)) {
+      issues.push(`PLAYTEST.md passes without a specific Quality Review observation for: ${field}.`);
     }
   }
 

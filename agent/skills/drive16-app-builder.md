@@ -101,6 +101,10 @@ not use repo-root relative globs like `res/*` for audit projects.
    `examples/game-skeletons/tetris-basic/` as the first code/audio shape
    when available; copy/adapt its `src/main.c` and `res/` files
    before docs updates, then build.
+   For simple Asteroids prompts, use
+   `examples/game-skeletons/asteroids-basic/` as the first code/audio shape
+   when available; copy/adapt its `src/main.c` and `res/` files
+   before docs updates, then build.
    If `src/main.c` already contains a seeded starter for the requested game,
    build and test it before rewriting it or polishing docs.
 2. Edit the C and resource files in the active project.
@@ -211,6 +215,12 @@ For Tetris, include the exact evidence phrases:
 `playfield and score/line state readable`, `piece spawns visibly`,
 `left/right/down movement works`, `rotation works`, `pieces lock into grid`,
 `line clear or stacking present`, and `game-over possible`.
+
+A passing `PLAYTEST.md` must also include an exact `## Quality Review` section
+with specific observations for `Screen composition`, `Player feedback`,
+`Restart clarity`, `Audio response`, and `Style coherence`. Do not pass a game
+with pending fields or generic claims such as "looks good"; record what is
+visible or audible and call out any limitation that still matters.
 
 If any item is not verified or fails, say so plainly: "The ROM builds, but I
 do not consider it playable yet because..." Then fix it if possible before

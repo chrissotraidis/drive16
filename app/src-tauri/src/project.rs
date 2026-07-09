@@ -12,6 +12,7 @@ const STARTER_ROM: &str = "examples/app-starter-blank/out/rom.bin";
 const SNAKE_BASIC_SKELETON: &str = "examples/game-skeletons/snake-basic";
 const PONG_BASIC_SKELETON: &str = "examples/game-skeletons/pong-basic";
 const TETRIS_BASIC_SKELETON: &str = "examples/game-skeletons/tetris-basic";
+const ASTEROIDS_BASIC_SKELETON: &str = "examples/game-skeletons/asteroids-basic";
 const ACTIVE_PROJECT_DIRECTORY: &str = "artifacts/phase3/active-project";
 const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
 const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
@@ -322,6 +323,12 @@ fn seed_active_project_for_prompt_in_repo(
             "Tetris",
             TETRIS_BASIC_SKELETON,
             "Loaded the simple Tetris starter code and audio loop into the blank project",
+        ))
+    } else if looks_like_simple_asteroids_request(prompt) {
+        Some((
+            "Asteroids",
+            ASTEROIDS_BASIC_SKELETON,
+            "Loaded the simple Asteroids starter code and audio loop into the blank project",
         ))
     } else {
         None
@@ -761,6 +768,13 @@ fn project_memory_pass_warnings(
         warnings.push("PLAYTEST.md pass still has pending or untested evidence".to_string());
     }
 
+    for field in missing_quality_review_fields(playtest_text) {
+        warnings.push(format!(
+            "PLAYTEST.md pass is missing a specific Quality Review observation for {}",
+            field
+        ));
+    }
+
     let combined_text = format!("{}\n{}", game_text, playtest_text);
     let genre = detected_game_genre(&combined_text);
     if genre != "unknown"
@@ -859,6 +873,47 @@ fn evidence_has_unfinished_marker(evidence_lower: &str) -> bool {
             || trimmed.contains("unverified")
             || trimmed.contains("inconclusive")
     })
+}
+
+fn missing_quality_review_fields(playtest_text: &str) -> Vec<&'static str> {
+    let section = markdown_section(playtest_text, "Quality Review");
+    let fields = [
+        "Screen composition",
+        "Player feedback",
+        "Restart clarity",
+        "Audio response",
+        "Style coherence",
+    ];
+
+    fields
+        .into_iter()
+        .filter(|field| {
+            let prefix = format!("{}:", field).to_ascii_lowercase();
+            let observation = section.lines().find_map(|line| {
+                let trimmed = line.trim().trim_start_matches(['-', '*', ' ']);
+                let lower = trimmed.to_ascii_lowercase();
+                lower
+                    .starts_with(&prefix)
+                    .then(|| trimmed[prefix.len()..].trim().to_ascii_lowercase())
+            });
+            let Some(observation) = observation else {
+                return true;
+            };
+            observation.len() < 12
+                || [
+                    "pending",
+                    "untested",
+                    "unverified",
+                    "todo",
+                    "tbd",
+                    "n/a",
+                    "looks good",
+                ]
+                .iter()
+                .any(|marker| observation.contains(marker))
+                || matches!(observation.as_str(), "good" | "fine" | "nice")
+        })
+        .collect()
 }
 
 fn detected_game_genre(text: &str) -> &'static str {
@@ -1772,6 +1827,11 @@ fn looks_like_simple_tetris_request(prompt: &str) -> bool {
     looks_like_simple_game_request(prompt, "tetris")
 }
 
+fn looks_like_simple_asteroids_request(prompt: &str) -> bool {
+    looks_like_simple_game_request(prompt, "asteroids")
+        || looks_like_simple_game_request(prompt, "asteroid")
+}
+
 fn looks_like_simple_game_request(prompt: &str, genre: &str) -> bool {
     let text = prompt.to_lowercase();
     text.contains(genre)
@@ -1908,6 +1968,14 @@ passing gate.
 | Tetris | Playfield and score/line state are readable; a piece spawns visibly; left/right/down movement works; rotation works; pieces lock into the grid; line clear/stacking behavior is present; game-over is possible at the top. |
 | Asteroids | Ship, asteroids, and shots are visible; rotation/thrust changes the ship; firing creates a moving projectile; asteroids move or wrap; collisions/destruction affect score/state; restart works after death/game over. |
 
+## Quality Review
+
+- Screen composition: pending
+- Player feedback: pending
+- Restart clarity: pending
+- Audio response: pending
+- Style coherence: pending
+
 ## Evidence
 
 - Build log: pending
@@ -1941,6 +2009,9 @@ Blank Drive16 project.
 - For a simple Tetris request, `examples/game-skeletons/tetris-basic/` is a
   proven compact source and audio seed. Copy/adapt its `src/main.c` and `res/`
   files, then build and test before polishing docs or art.
+- For a simple Asteroids request, `examples/game-skeletons/asteroids-basic/` is
+  a proven compact source and audio seed. Copy/adapt its `src/main.c` and
+  `res/` files, then build and test before polishing docs or art.
 
 ## Known Issues
 
@@ -2202,6 +2273,14 @@ mod tests {
 
 Playability gate: PASS.
 
+## Quality Review
+
+- Screen composition: pending
+- Player feedback: pending
+- Restart clarity: pending
+- Audio response: pending
+- Style coherence: pending
+
 ## Evidence
 
 - Build log: pending
@@ -2249,6 +2328,14 @@ Playability gate: PASS.
             r#"# Playtest Notes
 
 Playability gate: PASS.
+
+## Quality Review
+
+- Screen composition: The bordered playfield, score, snake, and food remain readable without overlap.
+- Player feedback: Snake movement and the game-over state visibly respond to input and collision.
+- Restart clarity: Pressing Start after game over visibly returns to score zero and the initial snake.
+- Audio response: Captured non-silent audio confirms the loop plays during active gameplay.
+- Style coherence: The simple text-grid shapes and restrained palette form a consistent arcade style.
 
 ## Evidence
 

@@ -32,6 +32,9 @@ starts a real game.
 - For a simple Tetris request, `examples/game-skeletons/tetris-basic/` is a
   proven compact source and audio seed. Copy/adapt its `src/main.c` and `res/`
   files, then build and test before polishing docs or art.
+- For a simple Asteroids request, `examples/game-skeletons/asteroids-basic/` is
+  a proven compact source and audio seed. Copy/adapt its `src/main.c` and
+  `res/` files, then build and test before polishing docs or art.
 
 ## Controls
 

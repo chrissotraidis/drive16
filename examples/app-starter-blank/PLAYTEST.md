@@ -36,6 +36,14 @@ passing gate.
 | Tetris | Playfield and score/line state are readable; a piece spawns visibly; left/right/down movement works; rotation works; pieces lock into the grid; line clear/stacking behavior is present; game-over is possible at the top. |
 | Asteroids | Ship, asteroids, and shots are visible; rotation/thrust changes the ship; firing creates a moving projectile; asteroids move or wrap; collisions/destruction affect score/state; restart works after death/game over. |
 
+## Quality Review
+
+- Screen composition: pending
+- Player feedback: pending
+- Restart clarity: pending
+- Audio response: pending
+- Style coherence: pending
+
 ## Evidence
 
 - Build log: pending
