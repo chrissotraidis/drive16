@@ -376,6 +376,11 @@ async function main() {
 
     await page.getByRole("button", { name: "Ollama", exact: true }).click();
     await page.getByTestId("ollama-settings").waitFor();
+    if (await page.getByLabel("Ollama endpoint").isVisible()) {
+      throw new Error("Ollama endpoint should stay behind Advanced setup by default.");
+    }
+    await page.getByTestId("advanced-ollama-setup").locator("summary").click();
+    await page.getByLabel("Ollama endpoint").waitFor();
     await page.waitForFunction((modelIds) => {
       const modelSelect = document.querySelector('select[aria-label="Ollama model"]');
       const options = Array.from(modelSelect?.querySelectorAll("option") ?? []).map(

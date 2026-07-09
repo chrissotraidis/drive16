@@ -276,18 +276,6 @@ export function SettingsPanel({
                 data-testid="ollama-settings"
               >
                 <label className="field-row">
-                  <span>Endpoint</span>
-                  <input
-                    aria-label="Ollama endpoint"
-                    autoComplete="off"
-                    onChange={(event) => onOllamaEndpointChange(event.target.value)}
-                    spellCheck={false}
-                    type="url"
-                    value={ollamaEndpoint}
-                  />
-                </label>
-
-                <label className="field-row">
                   <span>Model</span>
                   <div className="field-with-action">
                     <select
@@ -322,6 +310,29 @@ export function SettingsPanel({
                   <span>{connectionLabel(connection.state)}</span>
                   <small>{connection.detail}</small>
                 </div>
+
+                <details className="settings-disclosure" data-testid="advanced-ollama-setup">
+                  <summary>
+                    <Settings size={16} />
+                    <span>
+                      <strong>Advanced Ollama setup</strong>
+                      <small>Local endpoint</small>
+                    </span>
+                  </summary>
+                  <div className="comfyui-config">
+                    <label className="field-row">
+                      <span>Ollama endpoint</span>
+                      <input
+                        aria-label="Ollama endpoint"
+                        autoComplete="off"
+                        onChange={(event) => onOllamaEndpointChange(event.target.value)}
+                        spellCheck={false}
+                        type="url"
+                        value={ollamaEndpoint}
+                      />
+                    </label>
+                  </div>
+                </details>
               </div>
             )}
           </section>
