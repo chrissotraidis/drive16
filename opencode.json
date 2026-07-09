@@ -3,6 +3,16 @@
   "instructions": [
     "agent/skills/drive16-app-builder.md"
   ],
+  "agent": {
+    "bakeoff": {
+      "description": "Bounded Drive16 model comparison runs",
+      "mode": "primary",
+      "steps": 16,
+      "max_tokens": 8000,
+      "maxOutputTokens": 8000,
+      "temperature": 0
+    }
+  },
   "mcp": {
     "drive16-sgdk-build": {
       "type": "local",

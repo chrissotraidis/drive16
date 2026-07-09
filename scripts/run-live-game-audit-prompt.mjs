@@ -117,6 +117,7 @@ function parseArgs(argv) {
   const args = {
     prompt: "snake-basic",
     model: process.env.DRIVE16_LIVE_AUDIT_MODEL || "",
+    agent: "",
     runAgent: false,
     evidenceOnly: false,
     resumeRun: "",
@@ -133,6 +134,8 @@ function parseArgs(argv) {
       args.prompt = argv[++index];
     } else if (arg === "--model") {
       args.model = argv[++index];
+    } else if (arg === "--agent") {
+      args.agent = argv[++index];
     } else if (arg === "--run-agent") {
       args.runAgent = true;
     } else if (arg === "--evidence-only") {
@@ -176,6 +179,7 @@ Options:
   --resume-run <run-id>   Continue an existing failed run without deleting its project or trace.
   --model <model>         OpenCode model, for example openrouter/deepseek/deepseek-chat-v3.1.
                           Defaults to DRIVE16_LIVE_AUDIT_MODEL.
+  --agent <agent>         Optional bounded OpenCode agent, for example bakeoff.
   --run-id <id>           Custom run folder suffix.
   --runs-root <dir>       Output root. Default: artifacts/phase9/live-game-audit/runs
   --timeout-seconds <n>   OpenCode run timeout. Default: 2400.
@@ -639,7 +643,7 @@ async function writeRunRecord({
   return out;
 }
 
-async function runAgent({ promptPath, runPath, model, timeoutSeconds, appendTrace = false }) {
+async function runAgent({ promptPath, runPath, model, agent, timeoutSeconds, appendTrace = false }) {
   if (!model) {
     throw new Error(
       "No model configured. Pass --model openrouter/<model> or set DRIVE16_LIVE_AUDIT_MODEL.",
@@ -651,6 +655,7 @@ async function runAgent({ promptPath, runPath, model, timeoutSeconds, appendTrac
   const prompt = await readFile(promptPath, "utf8");
   const command = [
     "run",
+    ...(agent ? ["--agent", agent] : []),
     "--model",
     model,
     "--format",
@@ -662,6 +667,7 @@ async function runAgent({ promptPath, runPath, model, timeoutSeconds, appendTrac
   ];
   const stdoutPath = path.join(runPath, "opencode-run.jsonl");
   const stderrPath = path.join(runPath, "opencode-run.stderr");
+  const traceStartBytes = appendTrace && existsSync(stdoutPath) ? (await stat(stdoutPath)).size : 0;
   const flags = appendTrace ? "a" : "w";
   const stdoutStream = createWriteStream(stdoutPath, { flags });
   const stderrStream = createWriteStream(stderrPath, { flags });
@@ -674,6 +680,7 @@ async function runAgent({ promptPath, runPath, model, timeoutSeconds, appendTrac
     status: "running",
     pid: child.pid ?? null,
     model,
+    agent: agent || null,
     stdoutPath: relative(stdoutPath),
     stderrPath: relative(stderrPath),
     timeoutSeconds,
@@ -706,6 +713,7 @@ async function runAgent({ promptPath, runPath, model, timeoutSeconds, appendTrac
         status: "failed",
         pid: child.pid ?? null,
         model,
+        agent: agent || null,
         error: String(error.message ?? error),
         stdoutPath: relative(stdoutPath),
         stderrPath: relative(stderrPath),
@@ -717,21 +725,44 @@ async function runAgent({ promptPath, runPath, model, timeoutSeconds, appendTrac
       if (settled) return;
       settled = true;
       clearTimeout(killTimer);
-      stdoutStream.end();
-      stderrStream.end();
+      await Promise.all([
+        stdoutStream.writableFinished
+          ? Promise.resolve()
+          : new Promise((finish) => stdoutStream.once("finish", finish)),
+        stderrStream.writableFinished
+          ? Promise.resolve()
+          : new Promise((finish) => stderrStream.once("finish", finish)),
+      ]);
       const exitCode = typeof code === "number" ? code : signal ? 1 : 0;
+      const traceBuffer = existsSync(stdoutPath) ? await readFile(stdoutPath) : Buffer.alloc(0);
+      const appendedTrace = traceBuffer.subarray(traceStartBytes).toString("utf8");
+      const apiErrors = appendedTrace
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .flatMap((line) => {
+          try {
+            const event = JSON.parse(line);
+            if (event.type !== "error") return [];
+            return [event.error?.data?.message || event.error?.message || "OpenCode emitted an API error."];
+          } catch {
+            return [];
+          }
+        });
+      const effectiveExitCode = apiErrors.length > 0 ? 1 : exitCode;
       await writeAgentRunStatus(runPath, {
-        status: exitCode === 0 ? "finished" : "failed",
+        status: effectiveExitCode === 0 ? "finished" : "failed",
         pid: child.pid ?? null,
         model,
-        exitCode,
+        agent: agent || null,
+        exitCode: effectiveExitCode,
+        error: apiErrors[0] || undefined,
         signal,
         timedOut,
         timeoutSeconds,
         stdoutPath: relative(stdoutPath),
         stderrPath: relative(stderrPath),
       });
-      resolve(exitCode);
+      resolve(effectiveExitCode);
     });
   });
 }
@@ -777,6 +808,7 @@ async function main() {
         generatedAt: new Date().toISOString(),
         prompt,
         model: args.model || null,
+        agent: args.agent || null,
         runAgent: args.runAgent,
         mode,
         runPath: relative(runPath),
@@ -798,6 +830,7 @@ async function main() {
       promptPath,
       runPath,
       model: args.model,
+      agent: args.agent,
       timeoutSeconds: args.timeoutSeconds,
       appendTrace: resuming,
     });
