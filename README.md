@@ -33,7 +33,7 @@ that the generated game is good or playable.
 | Interactive play: keyboard + gamepad, pause/reset/stop, fullscreen | Working |
 | Audio in the player | Working with safe default volume: ROM playback starts muted/0% |
 | Original music through MML | Tooling works; chat-built games must still prove it was wired and captured |
-| AI sprites through ComfyUI | Tooling exists; Settings can check/launch local ComfyUI, but the agent must disclose fallback art when unavailable |
+| AI sprites through ComfyUI | Working locally; when AI sprites are enabled, the desktop app starts ComfyUI automatically and the agent must disclose fallback art if setup is unavailable |
 | Asset and sound disclosure | Working: `ASSETS.md` is the enforced role ledger and the project menu previews its rows |
 | Playability verification | Working for the primitive/fallback audit: screen, input, restart, audio, genre, freshness, and project-memory evidence are required |
 | Live game-quality audit | Functional four-prompt audit complete; its sparse historical frames are now rejected by presentation contract v2 |

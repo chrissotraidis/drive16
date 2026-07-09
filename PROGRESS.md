@@ -29,6 +29,10 @@ baseline; downloaded copies may require macOS **Open Anyway** on first launch.
   composed playfield panels, stronger palette hierarchy, and distinct object
   silhouettes. All four baselines build, pass v2 screenshot checks, and emit
   verified non-silent audio without any new model calls.
+- The desktop app now auto-starts ComfyUI whenever the persisted AI-sprites
+  toggle is enabled. The native release reached readiness in nine seconds and
+  generated a validated 32x32, 16-slot local sprite; browser preview now states
+  plainly that it cannot start native sprite tools.
 - Tauri bundling is enabled. The release `.app` embeds the 3.7 MB Drive16
   support runtime, copies it to
   `~/Library/Application Support/dev.drive16.desktop/runtime`, and initializes

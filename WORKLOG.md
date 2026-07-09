@@ -1,5 +1,29 @@
 # Drive16 Worklog
 
+## 2026-07-10 - ITERATION 121 - automatic native sprite tools
+
+Did:
+
+- Made the desktop app auto-start ComfyUI on launch whenever AI sprites were
+  previously enabled, and auto-start it when the toggle is enabled later.
+- Kept the browser preview honest: it now labels the native-only boundary and
+  disables controls it cannot execute.
+- Replaced dim optional copy with clear auto-start copy, restored the missing
+  shared button styling, and raised enabled helper-text contrast.
+- Kept OpenRouter with DeepSeek V3.1 as the fresh-install default; DeepSeek
+  orchestrates the game build while local ComfyUI produces the sprite pixels.
+
+Evidence:
+
+- The rebuilt release app auto-started ComfyUI from a stopped state and reached
+  API readiness in nine seconds using the persisted enabled toggle.
+- A local workflow produced a validated 32x32 sprite with 16 palette slots at
+  `artifacts/phase4/live-comfyui-sprite/bf0c3413-13dd-45db-8e78-a41f883347c7/drive16_genesis_sprite_00014_-sgdk.png`.
+- Frontend build, browser smoke, agent contract, 68 native tests, release
+  signature/DMG checks, and the isolated install/runtime smoke pass.
+- Final DMG SHA-256:
+  `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`.
+
 ## 2026-07-10 - ITERATION 120 - MIT and direct-download release closure
 
 Did:
@@ -19,7 +43,7 @@ Evidence:
 - The rebuilt package contains `drive16-support/LICENSE`; its isolated runtime
   copy is required by the release smoke.
 - Final DMG SHA-256:
-  `f8271b70dff77cd6659e7ba0d27f3f467cf2584d1b04439139d20934bfccc989`.
+  `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`.
 
 Next:
 
@@ -81,7 +105,7 @@ Evidence:
 - The isolated first launch created all packaged support entries and
   `artifacts/phase3/active-project/Makefile` under its clean app-data runtime.
 - DMG SHA-256:
-  `f8271b70dff77cd6659e7ba0d27f3f467cf2584d1b04439139d20934bfccc989`.
+  `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`.
 
 Note:
 

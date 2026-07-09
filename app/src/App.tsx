@@ -938,6 +938,7 @@ function App() {
   const pendingAgentRunRef = useRef<PendingAgentRun | undefined>();
   const openCodeHeartbeatTimerRef = useRef<number | undefined>();
   const controllerPressedRef = useRef<Set<PlayerInputActionId>>(new Set());
+  const comfyUiAutoLaunchAttemptedRef = useRef(false);
 
   useEffect(() => {
     void refreshPreflight();
@@ -1001,14 +1002,26 @@ function App() {
     void refreshOllamaModels();
   }, [modelProvider, ollamaModelsSource, settingsOpen]);
 
-  // Check enabled enhancements automatically when Settings opens so their
-  // status is real without an extra Test click.
+  // The desktop owns the local sprite service. Once the user enables AI
+  // sprites, start it on app launch and on later re-enables. Browser preview
+  // can only explain that boundary; it cannot spawn or inspect local tools.
   useEffect(() => {
-    if (!settingsOpen || !enhancements.spriteGeneration) return;
+    if (!enhancements.spriteGeneration) {
+      comfyUiAutoLaunchAttemptedRef.current = false;
+      return;
+    }
     if (comfyUiConnection.state !== "idle") return;
-    void testComfyUiConnection();
+
+    if (isTauriRuntime()) {
+      if (comfyUiAutoLaunchAttemptedRef.current) return;
+      comfyUiAutoLaunchAttemptedRef.current = true;
+      void launchComfyUiConnection();
+      return;
+    }
+
+    if (settingsOpen) void testComfyUiConnection();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsOpen, enhancements.spriteGeneration]);
+  }, [settingsOpen, enhancements.spriteGeneration, comfyUiConnection.state]);
 
   // Preflight is a snapshot; re-run it when Settings opens so rows like
   // Docker reflect reality, not app-launch time.
@@ -4657,6 +4670,7 @@ function App() {
           comfyUiEndpoint={comfyUiEndpoint}
           comfyUiLora={comfyUiLora}
           connection={modelConnection}
+          desktopRuntime={isTauriRuntime()}
           enhancements={enhancements}
           modelOptions={modelOptions}
           modelProvider={modelProvider}

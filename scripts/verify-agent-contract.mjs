@@ -986,7 +986,9 @@ for (const expected of [
   "Missing model",
   "Missing LoRA",
   "Not running",
-  "Launch sprite tools, or leave AI sprites off.",
+  "Starts local pixel-art tools automatically",
+  "The browser preview cannot start sprite tools. Open the Drive16 desktop app.",
+  "Drive16 could not auto-start sprite tools. Try Start sprite tools again.",
   "Open Advanced sprite setup for technical details.",
 ]) {
   assert(
@@ -997,6 +999,8 @@ for (const expected of [
 
 for (const expected of [
   "function comfyUiActivityDetail",
+  "comfyUiAutoLaunchAttemptedRef",
+  "void launchComfyUiConnection();",
   "Sprite tools are not running. AI sprites remain optional.",
   "Sprite tools need model setup. Open Advanced sprite setup.",
 ]) {

@@ -30,10 +30,14 @@ Date: 2026-07-10
 
 - App bundle: `app/src-tauri/target/release/bundle/macos/Drive16.app`
 - DMG: `app/src-tauri/target/release/bundle/dmg/Drive16_0.1.0_aarch64.dmg`
-- DMG SHA-256: `f8271b70dff77cd6659e7ba0d27f3f467cf2584d1b04439139d20934bfccc989`
+- DMG SHA-256: `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`
 - Packaged resources: `Drive16.app/Contents/Resources/drive16-support/`
 - Writable runtime: `~/Library/Application Support/dev.drive16.desktop/runtime/`
 - Local Qwen pass: `artifacts/phase9/model-bakeoff/runs/local-qwen-snake-audit-tool-proof/run-record.json`
+- Native ComfyUI auto-start proof: the enabled release app reached
+  `http://127.0.0.1:8188` readiness in nine seconds.
+- Local sprite proof:
+  `artifacts/phase4/live-comfyui-sprite/bf0c3413-13dd-45db-8e78-a41f883347c7/drive16_genesis_sprite_00014_-sgdk.png`
 
 ## Distribution decision
 

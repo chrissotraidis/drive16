@@ -81,6 +81,7 @@ export function SettingsPanel({
   comfyUiEndpoint,
   comfyUiLora,
   connection,
+  desktopRuntime,
   enhancements,
   modelOptions,
   modelProvider,
@@ -120,6 +121,7 @@ export function SettingsPanel({
   comfyUiEndpoint: string;
   comfyUiLora: string;
   connection: ModelConnectionReport;
+  desktopRuntime: boolean;
   enhancements: EnhancementSettings;
   modelOptions: ModelOption[];
   modelProvider: ModelProvider;
@@ -159,6 +161,7 @@ export function SettingsPanel({
   const spriteReadiness = spriteEnhancementReadiness(
     enhancements.spriteGeneration,
     comfyUiConnection,
+    desktopRuntime,
   );
   const musicReadiness = musicEnhancementReadiness(enhancements.musicGeneration);
 
@@ -351,13 +354,16 @@ export function SettingsPanel({
                 <span className="toggle-switch" aria-hidden="true" />
                 <span className="toggle-copy">
                   <strong>AI sprites</strong>
-                  <small>Generated pixel art (optional)</small>
+                  <small>Starts local pixel-art tools automatically</small>
                 </span>
                 <span className={`toggle-status ${spriteReadiness.state}`}>
                   {spriteReadiness.label}
                 </span>
               </label>
-              <p className="enhancement-line" data-testid="sprite-readiness">
+              <p
+                className={`enhancement-line ${spriteReadiness.state}`}
+                data-testid="sprite-readiness"
+              >
                 {spriteReadiness.detail}
               </p>
 
@@ -367,17 +373,21 @@ export function SettingsPanel({
                     <button
                       aria-label="Launch ComfyUI"
                       data-testid="launch-comfyui"
-                      disabled={busyComfyUi}
+                      disabled={busyComfyUi || !desktopRuntime}
                       onClick={onLaunchComfyUi}
                       type="button"
                     >
                       <TerminalSquare size={15} />
-                      {comfyUiConnection.state === "starting" ? "Starting" : "Launch sprite tools"}
+                      {!desktopRuntime
+                        ? "Desktop app only"
+                        : comfyUiConnection.state === "starting"
+                          ? "Starting"
+                          : "Start sprite tools"}
                     </button>
                     <button
                       aria-label="Test ComfyUI"
                       data-testid="test-comfyui"
-                      disabled={busyComfyUi}
+                      disabled={busyComfyUi || !desktopRuntime}
                       onClick={onTestComfyUiConnection}
                       type="button"
                     >
@@ -578,12 +588,21 @@ export function SettingsPanel({
 function spriteEnhancementReadiness(
   enabled: boolean,
   connection: ComfyUiStatus,
+  desktopRuntime: boolean,
 ): EnhancementReadiness {
   if (!enabled) {
     return {
       state: "disabled",
       label: "Off",
       detail: "Enable to generate sprites with a local ComfyUI.",
+    };
+  }
+
+  if (!desktopRuntime) {
+    return {
+      state: "needsSetup",
+      label: "Desktop app",
+      detail: "The browser preview cannot start sprite tools. Open the Drive16 desktop app.",
     };
   }
 
@@ -622,7 +641,7 @@ function spriteEnhancementReadiness(
       return {
         state: "failed",
         label: "Not running",
-        detail: "Launch sprite tools, or leave AI sprites off.",
+        detail: "Drive16 could not auto-start sprite tools. Try Start sprite tools again.",
       };
     }
 

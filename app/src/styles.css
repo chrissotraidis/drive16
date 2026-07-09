@@ -123,6 +123,7 @@ p {
 .controls-panel-actions button,
 .secret-field button,
 .endpoint-field button,
+.enhancement-actions button,
 .icon-button,
 .rail-toggle {
   display: inline-flex;
@@ -146,6 +147,7 @@ p {
 .controls-panel-actions button:hover:not(:disabled),
 .secret-field button:hover:not(:disabled),
 .endpoint-field button:hover:not(:disabled),
+.enhancement-actions button:hover:not(:disabled),
 .icon-button:hover:not(:disabled),
 .rail-toggle:hover:not(:disabled) {
   border-color: var(--line-strong);
@@ -1578,6 +1580,10 @@ p {
   font-size: 11.5px;
 }
 
+.enhancement-toggle input:checked ~ .toggle-copy small {
+  color: var(--muted-2);
+}
+
 .toggle-status {
   margin-left: auto;
   padding: 3px 9px;
@@ -1602,6 +1608,14 @@ p {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.enhancement-line.failed {
+  color: var(--danger);
+}
+
+.enhancement-line.needsSetup {
+  color: var(--muted-2);
 }
 
 .enhancement-actions {
