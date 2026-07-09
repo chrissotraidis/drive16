@@ -423,6 +423,10 @@ type OllamaEndpointStatus = {
   models: string[];
 };
 
+type OllamaTagsResponse = {
+  models?: Array<{ name?: string; model?: string }>;
+};
+
 type DecodedFramebufferFrame = {
   frameIndex: number;
   width: number;
@@ -888,6 +892,8 @@ function App() {
     persisted.ollamaEndpoint ?? defaultOllamaEndpoint,
   );
   const [ollamaModel, setOllamaModel] = useState(persisted.ollamaModel ?? defaultOllamaModel);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([ollamaModel]);
+  const [ollamaModelsSource, setOllamaModelsSource] = useState("idle");
   const [enhancements, setEnhancements] = useState<EnhancementSettings>(
     persisted.enhancements ?? {
       spriteGeneration: false,
@@ -987,6 +993,13 @@ function App() {
 
     void refreshOpenRouterModels();
   }, [modelProvider, modelsSource, settingsOpen]);
+
+  useEffect(() => {
+    if (!settingsOpen || modelProvider !== "ollama") return;
+    if (ollamaModelsSource !== "idle") return;
+
+    void refreshOllamaModels();
+  }, [modelProvider, ollamaModelsSource, settingsOpen]);
 
   // Check enabled enhancements automatically when Settings opens so their
   // status is real without an extra Test click.
@@ -2963,24 +2976,10 @@ function App() {
     });
 
     try {
-      if (!isTauriRuntime()) {
-        const baseUrl = normalizeLocalEndpoint(endpoint, "11434");
-        const detail = "Native app checks Ollama locally";
-        setModelConnection({
-          state: "warning",
-          detail,
-          baseUrl,
-          model,
-          models: [],
-        });
-        appendOpenCodeEvent("model.warning", detail);
-        return;
-      }
+      const result = await loadOllamaModels(endpoint, model);
 
-      const result = await invoke<OllamaEndpointStatus>("check_ollama_endpoint", {
-        request: { endpoint, model },
-      });
-
+      setOllamaModels(result.models.length ? result.models : [model]);
+      setOllamaModelsSource(result.models.length ? "ready" : "empty");
       setModelConnection({
         state: result.state,
         detail: result.detail,
@@ -2995,6 +2994,8 @@ function App() {
     } catch (error) {
       const detail =
         error instanceof Error ? `Ollama check failed: ${error.message}` : "Ollama check failed";
+      setOllamaModels((current) => (current.includes(model) ? current : [model]));
+      setOllamaModelsSource("error");
       setModelConnection({
         state: "missing",
         detail,
@@ -3004,6 +3005,90 @@ function App() {
       });
       appendOpenCodeEvent("model.failed", detail);
     }
+  }
+
+  async function refreshOllamaModels() {
+    const endpoint = ollamaEndpoint.trim();
+    if (!endpoint) {
+      setOllamaModelsSource("error");
+      return;
+    }
+
+    setOllamaModelsSource("loading");
+    try {
+      const result = await loadOllamaModels(endpoint, ollamaModel.trim());
+      const models = result.models;
+      if (!models.length) {
+        setOllamaModels([ollamaModel]);
+        setOllamaModelsSource("empty");
+        setModelConnection({
+          state: "warning",
+          detail: "Ollama is reachable, but no installed models were found",
+          baseUrl: result.baseUrl,
+          model: ollamaModel,
+          models,
+        });
+        return;
+      }
+
+      setOllamaModels(models);
+      setOllamaModelsSource("ready");
+      if (!models.includes(ollamaModel)) {
+        handleOllamaModelChange(models[0]);
+      }
+    } catch (error) {
+      const detail = errorDetail(error, "Could not load Ollama models");
+      setOllamaModels((current) => (current.includes(ollamaModel) ? current : [ollamaModel]));
+      setOllamaModelsSource("error");
+      setModelConnection({
+        state: "missing",
+        detail,
+        baseUrl: endpoint,
+        model: ollamaModel,
+        models: [],
+      });
+    }
+  }
+
+  async function loadOllamaModels(
+    endpoint: string,
+    model: string,
+  ): Promise<OllamaEndpointStatus> {
+    if (isTauriRuntime()) {
+      return invoke<OllamaEndpointStatus>("check_ollama_endpoint", {
+        request: { endpoint, model },
+      });
+    }
+
+    const baseUrl = normalizeLocalEndpoint(endpoint, "11434");
+    const response = await fetch(`${baseUrl}/api/tags`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`Ollama returned HTTP ${response.status}`);
+    }
+    const payload = (await response.json()) as OllamaTagsResponse;
+    const models = Array.from(
+      new Set(
+        (payload.models ?? [])
+          .map((item) => (item.name ?? item.model ?? "").trim())
+          .filter(Boolean),
+      ),
+    );
+    const available = models.includes(model);
+    return {
+      generatedAt: String(Date.now()),
+      state: available ? "ready" : "warning",
+      detail: available
+        ? "Ollama model available"
+        : models.length
+          ? `Ollama reachable, but ${model} is not installed`
+          : "Ollama API reachable, but no local models were reported",
+      baseUrl,
+      tagsUrl: `${baseUrl}/api/tags`,
+      model,
+      models,
+    };
   }
 
   async function testComfyUiConnection() {
@@ -3182,6 +3267,7 @@ function App() {
     }
     if (value === "ollama") {
       setShowOpenRouterKey(false);
+      setOllamaModelsSource("idle");
     }
     noteAction(
       value === "openrouter"
@@ -3207,6 +3293,7 @@ function App() {
 
   function handleOllamaEndpointChange(value: string) {
     setOllamaEndpoint(value);
+    setOllamaModelsSource("stale");
     savePersistedSettings({
       modelProvider,
       activeModel,
@@ -4568,6 +4655,11 @@ function App() {
           modelsSource={modelsSource}
           ollamaEndpoint={ollamaEndpoint}
           ollamaModel={ollamaModel}
+          ollamaModelOptions={ollamaModels.map((model) => ({
+            id: model,
+            name: shortOllamaLabel(model),
+          }))}
+          ollamaModelsSource={ollamaModelsSource}
           openCode={openCode}
           openCodeEvents={openCodeEvents}
           openCodeSource={openCodeSource}
@@ -4588,6 +4680,9 @@ function App() {
           onOllamaModelChange={handleOllamaModelChange}
           onOpenRouterKeyChange={handleOpenRouterKeyChange}
           onProviderChange={handleProviderChange}
+          onRefreshOllamaModels={() => {
+            void refreshOllamaModels();
+          }}
           onRefreshModels={() => {
             void refreshOpenRouterModels();
           }}

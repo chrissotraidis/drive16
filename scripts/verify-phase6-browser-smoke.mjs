@@ -163,6 +163,10 @@ async function main() {
   const states = {};
   let openRouterCompletionRequests = 0;
   const smokeOpenRouterModel = "openrouter/auto";
+  const smokeOllamaModels = [
+    "rafw007/Qwen3.6-35B-A3B-mlx-claude-coder-abliterated:latest",
+    "gpt-oss:120b",
+  ];
 
   try {
     const context = await browser.newContext({
@@ -238,6 +242,14 @@ async function main() {
             completion_tokens: 9,
             total_tokens: 30,
           },
+        }),
+      });
+    });
+    await context.route("http://127.0.0.1:11434/api/tags", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          models: smokeOllamaModels.map((name) => ({ name })),
         }),
       });
     });
@@ -361,6 +373,40 @@ async function main() {
     }
     states.openRouterApiKeyRestored = "OpenRouter API key survived reload.";
     states.openRouterModelRestored = restoredOpenRouterModel;
+
+    await page.getByRole("button", { name: "Ollama", exact: true }).click();
+    await page.getByTestId("ollama-settings").waitFor();
+    await page.waitForFunction((modelIds) => {
+      const modelSelect = document.querySelector('select[aria-label="Ollama model"]');
+      const options = Array.from(modelSelect?.querySelectorAll("option") ?? []).map(
+        (option) => option.value,
+      );
+      return modelIds.every((modelId) => options.includes(modelId));
+    }, smokeOllamaModels);
+    await page.locator('select[aria-label="Ollama model"]').selectOption(smokeOllamaModels[1]);
+    await page.getByRole("button", { name: "Test Ollama" }).click();
+    await page.waitForFunction(() => {
+      const status =
+        document.querySelector('[data-testid="model-connection-status"]')?.textContent ?? "";
+      return /Connected|Ollama model available/i.test(status);
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByTestId("agent-settings-open").waitFor();
+    await page.getByTestId("agent-settings-open").click();
+    await page.getByTestId("ollama-settings").waitFor();
+    const restoredOllamaModel = await page.locator('select[aria-label="Ollama model"]').inputValue();
+    if (restoredOllamaModel !== smokeOllamaModels[1]) {
+      throw new Error(
+        `Ollama model did not survive reload. Expected ${smokeOllamaModels[1]}, saw ${restoredOllamaModel}.`,
+      );
+    }
+    states.ollamaModelDropdown = {
+      models: smokeOllamaModels,
+      selected: restoredOllamaModel,
+      connection: await visibleText(page, "model-connection-status"),
+    };
+    await page.getByRole("button", { name: "OpenRouter", exact: true }).click();
+    await page.getByTestId("openrouter-settings").waitFor();
 
     const smokeComfyUiEndpoint = new URL(args.url).origin;
     await page.getByTestId("sprite-enhancement-input").check({ force: true });

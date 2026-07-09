@@ -1494,20 +1494,6 @@ p {
   font-size: 12px;
 }
 
-.provider-model-list {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.provider-model-list strong {
-  min-width: 0;
-  color: var(--muted-2);
-  overflow-wrap: anywhere;
-}
-
 .settings-meta {
   display: flex;
   align-items: center;

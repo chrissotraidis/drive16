@@ -385,6 +385,13 @@ for (const expected of [
 }
 
 for (const expected of [
+  "promote:model-bakeoff",
+  "promote-model-bakeoff-runs.mjs",
+]) {
+  assert(appPackageSource.includes(expected), `App package scripts are missing: ${expected}`);
+}
+
+for (const expected of [
   "Snake",
   "Pong",
   "Tetris",
@@ -653,6 +660,9 @@ for (const expected of [
   "ollamaEndpoint: value",
   "function handleOllamaModelChange",
   "ollamaModel: value",
+  "function refreshOllamaModels",
+  "function loadOllamaModels",
+  'fetch(`${baseUrl}/api/tags`',
   "function canPlayActiveRom",
   'return projectSummary.romStatus === "ready"',
   "type ProjectAssetRole",
@@ -849,6 +859,9 @@ assert(
 );
 
 for (const expected of [
+  'aria-label="Ollama model"',
+  'aria-label="Refresh Ollama models"',
+  "ollamaModelOptions.map",
   "function spriteEnhancementReadiness",
   "function missingComfyUiChecks",
   "Missing model + LoRA",

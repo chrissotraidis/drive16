@@ -10,7 +10,37 @@
       "steps": 16,
       "max_tokens": 8000,
       "maxOutputTokens": 8000,
-      "temperature": 0
+      "temperature": 0,
+      "permission": {
+        "drive16-comfyui_*": "deny",
+        "drive16-rag_*": "deny",
+        "drive16-mml-music_*": "deny",
+        "task": "deny",
+        "todowrite": "deny"
+      }
+    }
+  },
+  "provider": {
+    "ollama": {
+      "name": "Ollama local",
+      "npm": "@ai-sdk/openai-compatible",
+      "models": {
+        "minimax-m2.5:cloud": {
+          "name": "MiniMax M2.5 Cloud"
+        },
+        "rafw007/Qwen3.6-35B-A3B-mlx-claude-coder-abliterated:latest": {
+          "name": "Qwen 3.6 35B Claude Coder MLX"
+        },
+        "gemma4:31b-it-qat": {
+          "name": "Gemma 4 31B IT QAT"
+        },
+        "gpt-oss:120b": {
+          "name": "GPT-OSS 120B"
+        }
+      },
+      "options": {
+        "baseURL": "http://127.0.0.1:11434/v1"
+      }
     }
   },
   "mcp": {

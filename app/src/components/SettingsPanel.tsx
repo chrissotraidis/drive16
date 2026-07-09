@@ -16,7 +16,6 @@ import {
   defaultComfyUiLora,
   healthIcon,
   SectionTitle,
-  shortOllamaLabel,
   type ConnectionState,
   type HealthState,
 } from "./ui";
@@ -88,6 +87,8 @@ export function SettingsPanel({
   modelsSource,
   ollamaEndpoint,
   ollamaModel,
+  ollamaModelOptions,
+  ollamaModelsSource,
   openCode,
   openCodeEvents,
   openCodeSource,
@@ -106,6 +107,7 @@ export function SettingsPanel({
   onOllamaModelChange,
   onOpenRouterKeyChange,
   onProviderChange,
+  onRefreshOllamaModels,
   onRefreshModels,
   onRefreshPreflight,
   onShowOpenRouterKeyChange,
@@ -124,6 +126,8 @@ export function SettingsPanel({
   modelsSource: string;
   ollamaEndpoint: string;
   ollamaModel: string;
+  ollamaModelOptions: ModelOption[];
+  ollamaModelsSource: string;
   openCode: OpenCodeStatus;
   openCodeEvents: OpenCodeEventItem[];
   openCodeSource: string;
@@ -142,6 +146,7 @@ export function SettingsPanel({
   onOllamaModelChange: (value: string) => void;
   onOpenRouterKeyChange: (value: string) => void;
   onProviderChange: (value: ModelProvider) => void;
+  onRefreshOllamaModels: () => void;
   onRefreshModels: () => void;
   onRefreshPreflight: () => void;
   onShowOpenRouterKeyChange: (value: boolean) => void;
@@ -284,14 +289,29 @@ export function SettingsPanel({
 
                 <label className="field-row">
                   <span>Model</span>
-                  <input
-                    aria-label="Ollama model"
-                    autoComplete="off"
-                    onChange={(event) => onOllamaModelChange(event.target.value)}
-                    spellCheck={false}
-                    type="text"
-                    value={ollamaModel}
-                  />
+                  <div className="field-with-action">
+                    <select
+                      aria-label="Ollama model"
+                      disabled={ollamaModelsSource === "loading"}
+                      onChange={(event) => onOllamaModelChange(event.target.value)}
+                      value={ollamaModel}
+                    >
+                      {ollamaModelOptions.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      aria-label="Refresh Ollama models"
+                      className="icon-button"
+                      disabled={ollamaModelsSource === "loading"}
+                      onClick={onRefreshOllamaModels}
+                      type="button"
+                    >
+                      <RefreshCcw size={14} />
+                    </button>
+                  </div>
                 </label>
 
                 <div
@@ -302,14 +322,6 @@ export function SettingsPanel({
                   <span>{connectionLabel(connection.state)}</span>
                   <small>{connection.detail}</small>
                 </div>
-                {connection.models?.length ? (
-                  <div className="provider-model-list" data-testid="ollama-models">
-                    <span>Installed models</span>
-                    <strong title={connection.models.join(", ")}>
-                      {connection.models.slice(0, 3).map(shortOllamaLabel).join(", ")}
-                    </strong>
-                  </div>
-                ) : null}
               </div>
             )}
           </section>

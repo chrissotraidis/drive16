@@ -649,8 +649,8 @@ async function runAgent({ promptPath, runPath, model, agent, timeoutSeconds, app
       "No model configured. Pass --model openrouter/<model> or set DRIVE16_LIVE_AUDIT_MODEL.",
     );
   }
-  if (!model.startsWith("openrouter/")) {
-    throw new Error("--model should use the OpenCode provider/model format, for example openrouter/deepseek/deepseek-chat-v3.1.");
+  if (!model.includes("/")) {
+    throw new Error("--model must use the OpenCode provider/model format, for example openrouter/deepseek/deepseek-chat-v3.1 or ollama/gpt-oss:120b.");
   }
   const prompt = await readFile(promptPath, "utf8");
   const command = [

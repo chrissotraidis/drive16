@@ -159,6 +159,10 @@ Toolchain and validation scripts live here.
   report passes; it refuses to write the bakeoff template first. Use
   `pnpm --dir app verify:model-bakeoff:report` for the real bakeoff packet with
   evidence-file existence checks.
+- `promote-model-bakeoff-runs.mjs`: reads a model/run selection manifest,
+  derives tool, asset, playability, honesty, time, and cost scores from the
+  actual run records and traces, verifies the complete 12-run packet, and only
+  then replaces the model bakeoff report.
 - `validate-sprite-movement.py`: compares neutral and scripted-input PNG
   screenshots to prove a sprite-like movement signal.
 - `verify-phase6-loop.sh`: runs the repeatable Phase 6 verification loop:
