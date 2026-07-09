@@ -1,9 +1,10 @@
+use crate::runtime::repo_root;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     env,
     net::TcpListener,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Child, Command, Stdio},
     sync::{Mutex, OnceLock},
     thread,
@@ -734,15 +735,6 @@ fn status(
         launched,
         connected_providers: connected,
     }
-}
-
-fn repo_root() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .unwrap_or(manifest_dir)
 }
 
 fn opencode_fallbacks() -> Vec<PathBuf> {

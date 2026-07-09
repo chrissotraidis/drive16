@@ -34,12 +34,12 @@ that the generated game is good or playable.
 | Audio in the player | Working with safe default volume: ROM playback starts muted/0% |
 | Original music through MML | Tooling works; chat-built games must still prove it was wired and captured |
 | AI sprites through ComfyUI | Tooling exists; Settings can check/launch local ComfyUI, but the agent must disclose fallback art when unavailable |
-| Asset and sound disclosure | In progress: `ASSETS.md` is the role ledger and the project menu previews its rows |
+| Asset and sound disclosure | Working: `ASSETS.md` is the enforced role ledger and the project menu previews its rows |
 | Playability verification | Working for the primitive/fallback audit: screen, input, restart, audio, genre, freshness, and project-memory evidence are required |
 | Live game-quality audit | Complete for DeepSeek V3.1 primitive/fallback runs across Snake, Pong, Tetris, and Asteroids |
-| Model bakeoff | Pending; live-audit plumbing is green, but first-run UX and generated-game quality are being raised before comparison |
-| Ollama as the agent brain | Planned (readiness check only) |
-| Distributable .app/.dmg (currently runs from the repo checkout) | Planned (packaging track) |
+| Model bakeoff | Complete across DeepSeek V3.1, local Qwen 3.6 35B Coder, and local GPT-OSS 120B on the same four prompts |
+| Ollama as the agent brain | Working locally; Qwen passed the full Snake build/runtime/audio/project-memory gate, while DeepSeek remains the stronger default |
+| Distributable .app/.dmg | Unsigned release `.app` and `.dmg` build successfully; the app runs from bundled support files copied into Application Support, while signing/notarization and owner license approval remain |
 | LICENSE file | Pending owner confirmation (MIT proposed) |
 
 Recent history: the app was overhauled on 2026-07-05 — the agent loop was
@@ -56,7 +56,7 @@ Four swappable layers (full detail in `drive16-architecture.md`):
 ```text
 App shell (Tauri 2 + React)          — two-pane UI, player, project actions
   └── Agent spine (OpenCode, local)  — the agent loop, spawned on a local Drive16-owned port
-        └── Model (BYOK config)      — OpenRouter today; Ollama planned
+        └── Model (BYOK/local)       — OpenRouter or Ollama
         └── MCP tool servers         — the agent's hands:
               drive16-sgdk-build     — compile C + assets → rom.bin (Docker)
               drive16-emulator       — run ROM, screenshot, input, audio dump
@@ -104,8 +104,8 @@ Requirements (macOS today; the toolchain itself is cross-platform):
 - Docker Desktop (runs the SGDK compiler image — no local cross-compiler)
 - Node 22+ and pnpm, Rust + Cargo
 - [OpenCode CLI](https://opencode.ai) (`opencode` on PATH — the agent spine)
-- An OpenRouter API key (BYOK; any strong model — default is
-  `deepseek/deepseek-chat-v3.1`)
+- An OpenRouter API key (BYOK; default `deepseek/deepseek-chat-v3.1`) or a
+  supported local Ollama model
 
 ```sh
 pnpm --dir app install
@@ -120,8 +120,8 @@ scripts/launch-drive16-native.sh
 First run, in the app:
 
 1. Start Docker Desktop.
-2. Settings → paste your OpenRouter key → **Test OpenRouter** (one time —
-   the key is stored in OpenCode's local auth store, never in the repo).
+2. Settings → choose OpenRouter and test your key, or choose Ollama and select
+   one of the installed local models.
 3. Type what you want to build. Watch the right pane.
 
 If something is missing (Docker down, no key), the agent tells you in one
@@ -165,6 +165,7 @@ pnpm --dir app verify:live-game-audit         # self-test the next live game-qua
 pnpm --dir app verify:live-game-audit:report  # fails until all live prompt runs have evidence files
 pnpm --dir app prepare:model-bakeoff          # requires the completed live audit report first
 pnpm --dir app verify:model-bakeoff:report    # fails until all model/prompt evidence files exist
+pnpm --dir app tauri build --bundles app      # release-mode macOS .app with bundled support runtime
 cargo test --manifest-path app/src-tauri/Cargo.toml   # native tests
 node scripts/verify-phase6-browser-smoke.mjs  # Playwright UI smoke (dev server must run)
 scripts/verify-phase6-loop.sh --browser       # full loop harness
@@ -206,9 +207,9 @@ Key documents:
 
 ## Model stance
 
-Bring-your-own-key or local-only. OpenRouter is the hosted default; direct
-provider keys can be configured; Ollama is planned for the agent brain. No
-Drive16 flow asks you to log into a consumer AI subscription.
+Bring-your-own-key or local-only. OpenRouter is the hosted default, and Ollama
+can run the builder agent with an installed local model. No Drive16 flow asks
+you to log into a consumer AI subscription.
 
 ## Asset and license hygiene
 
@@ -220,11 +221,12 @@ MIT; the LICENSE file lands once the owner confirms (`DECISIONS.md`).
 
 ## Roadmap
 
-1. **Packaging** — move storage out of the repo checkout to app-data dirs,
-   enable Tauri bundling, ship a signed .dmg (overhaul plan, Track E).
+1. **Packaging** — sign and notarize the now-working release `.app`, then ship
+   a `.dmg` after the owner confirms the app license.
 2. **Multi-project workspaces** — named projects you can switch between,
    beyond the single active workspace + snapshots.
-3. **Ollama as the agent brain** — fully local, keyless building.
+3. **Local-model quality** — extend the passing Qwen proof across the remaining
+   audit prompts and keep improving completion discipline.
 4. **Play-core policy** — bundle or fetch a licensed Genesis core instead of
    the development CDN fallback.
 5. **LICENSE + CSP + release hardening.**

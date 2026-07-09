@@ -159,8 +159,6 @@ export function SettingsPanel({
   const spriteReadiness = spriteEnhancementReadiness(
     enhancements.spriteGeneration,
     comfyUiConnection,
-    comfyUiCheckpoint,
-    comfyUiLora,
   );
   const musicReadiness = musicEnhancementReadiness(enhancements.musicGeneration);
 
@@ -580,8 +578,6 @@ export function SettingsPanel({
 function spriteEnhancementReadiness(
   enabled: boolean,
   connection: ComfyUiStatus,
-  checkpoint: string,
-  lora: string,
 ): EnhancementReadiness {
   if (!enabled) {
     return {
@@ -595,7 +591,7 @@ function spriteEnhancementReadiness(
     return {
       state: "running",
       label: "Checking",
-      detail: "Checking the ComfyUI endpoint, checkpoint, and LoRA.",
+      detail: "Checking local sprite tools.",
     };
   }
 
@@ -603,7 +599,7 @@ function spriteEnhancementReadiness(
     return {
       state: "running",
       label: "Starting",
-      detail: connection.detail,
+      detail: "Starting local sprite tools.",
     };
   }
 
@@ -611,7 +607,7 @@ function spriteEnhancementReadiness(
     return {
       state: "ready",
       label: "Ready",
-      detail: `${checkpoint || defaultComfyUiCheckpoint} with ${lora || defaultComfyUiLora}`,
+      detail: "Local sprite generation is ready.",
     };
   }
 
@@ -626,14 +622,14 @@ function spriteEnhancementReadiness(
       return {
         state: "failed",
         label: "Not running",
-        detail: connection.detail,
+        detail: "Launch sprite tools, or leave AI sprites off.",
       };
     }
 
     return {
       state: "failed",
       label: "Failed",
-      detail: connection.detail,
+      detail: "Sprite tools need attention. Open Advanced sprite setup for details.",
     };
   }
 
@@ -644,18 +640,10 @@ function spriteEnhancementReadiness(
         : missingModel
           ? "Missing model"
           : "Missing LoRA";
-    const detail = missingChecks
-      .filter((name) => name === "Checkpoint" || name === "LoRA")
-      .map((name) => {
-        const check = connection.checks.find((item) => item.name === name);
-        return check ? `${name}: ${check.detail}` : name;
-      })
-      .join("; ");
-
     return {
       state: "needsSetup",
       label,
-      detail: detail || connection.detail,
+      detail: "Open Advanced sprite setup to choose the installed model files.",
     };
   }
 
@@ -664,8 +652,8 @@ function spriteEnhancementReadiness(
     label: "Needs setup",
     detail:
       connection.detail === "Not tested"
-        ? "Set the endpoint, then run Test."
-        : connection.detail,
+        ? "Run Test, or leave AI sprites off."
+        : "Open Advanced sprite setup for technical details.",
   };
 }
 

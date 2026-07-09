@@ -116,6 +116,9 @@ const repairState = agent.createAgentActivityRepairState();
 const appSource = await readFile(path.join(rootDir, "app", "src", "App.tsx"), "utf8");
 const startNewProjectSource = extractFunctionBody(appSource, "startNewProject");
 const appPackageSource = await readFile(path.join(rootDir, "app", "package.json"), "utf8");
+const tauriConfig = JSON.parse(
+  await readFile(path.join(rootDir, "app", "src-tauri", "tauri.conf.json"), "utf8"),
+);
 const playerPaneSource = await readFile(
   path.join(rootDir, "app", "src", "components", "PlayerPane.tsx"),
   "utf8",
@@ -211,6 +214,10 @@ const opencodeSource = await readFile(
 );
 const nativeMainSource = await readFile(
   path.join(rootDir, "app", "src-tauri", "src", "main.rs"),
+  "utf8",
+);
+const runtimeSource = await readFile(
+  path.join(rootDir, "app", "src-tauri", "src", "runtime.rs"),
   "utf8",
 );
 const builderSkill = await readFile(
@@ -852,6 +859,33 @@ assert(
   !appSource.includes("window.sessionStorage.setItem(openRouter"),
   "OpenRouter key must not be saved to sessionStorage; refresh should keep it.",
 );
+assert(tauriConfig.bundle?.active === true, "Tauri release bundling must stay enabled.");
+assert(
+  typeof tauriConfig.app?.security?.csp === "string" && tauriConfig.app.security.csp.length > 0,
+  "Tauri release CSP must be explicit.",
+);
+assert(
+  Object.keys(tauriConfig.bundle?.resources ?? {}).length >= 8,
+  "Tauri bundle must include the Drive16 support runtime.",
+);
+for (const expected of [
+  "install_packaged_runtime",
+  'app.path().resource_dir()?.join("drive16-support")',
+  'app.path().app_data_dir()?.join("runtime")',
+  'env::var_os("DRIVE16_REPO_ROOT")',
+  '"opencode.json"',
+]) {
+  assert(runtimeSource.includes(expected), `Packaged runtime source is missing: ${expected}`);
+}
+assert(
+  nativeMainSource.includes("runtime::initialize(app)?"),
+  "Native startup must initialize the packaged runtime before commands run.",
+);
+assert(
+  appSource.includes("VITE_DRIVE16_ALLOW_DEV_CDN") &&
+    !appSource.includes("if (isTauriRuntime()) return true"),
+  "Release builds must require a user-supplied Play core unless the dev override is explicit.",
+);
 for (const expected of [
   "disposeInteractivePlayer();",
   'setPlayerState("stopped")',
@@ -898,13 +932,21 @@ for (const expected of [
   "Missing model",
   "Missing LoRA",
   "Not running",
-  'name === "Checkpoint"',
-  'name === "LoRA"',
+  "Launch sprite tools, or leave AI sprites off.",
+  "Open Advanced sprite setup for technical details.",
 ]) {
   assert(
     settingsPanelSource.includes(expected),
     `Settings panel is missing specific ComfyUI readiness labeling: ${expected}`,
   );
+}
+
+for (const expected of [
+  "function comfyUiActivityDetail",
+  "Sprite tools are not running. AI sprites remain optional.",
+  "Sprite tools need model setup. Open Advanced sprite setup.",
+]) {
+  assert(appSource.includes(expected), `App is missing concise sprite activity copy: ${expected}`);
 }
 
 for (const expected of [

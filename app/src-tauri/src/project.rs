@@ -1,7 +1,8 @@
+use crate::runtime::repo_root;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
@@ -2071,15 +2072,6 @@ fn copy_project_tree(source: &Path, destination: &Path) -> Result<u64, String> {
     }
 
     Ok(copied_files)
-}
-
-fn repo_root() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .unwrap_or(manifest_dir)
 }
 
 fn repo_relative(repo_root: &Path, path: &Path) -> String {

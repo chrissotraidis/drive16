@@ -2989,7 +2989,9 @@ function App() {
       });
       appendOpenCodeEvent(
         result.state === "ready" ? "model.ready" : "model.warning",
-        result.detail,
+        result.state === "ready"
+          ? `${shortOllamaLabel(result.model)} is ready in Ollama.`
+          : "Ollama needs attention. Open Advanced Ollama setup for details.",
       );
     } catch (error) {
       const detail =
@@ -3136,7 +3138,7 @@ function App() {
           : result.state === "warning"
             ? "comfyui.warning"
             : "comfyui.missing",
-        result.detail,
+        comfyUiActivityDetail(result),
       );
     } catch (error) {
       const detail =
@@ -3153,7 +3155,10 @@ function App() {
           },
         ],
       }));
-      appendOpenCodeEvent("comfyui.failed", detail);
+      appendOpenCodeEvent(
+        "comfyui.failed",
+        "Sprite tools check failed. Open Advanced sprite setup for details.",
+      );
     }
   }
 
@@ -3193,7 +3198,7 @@ function App() {
         },
       ],
     }));
-    appendOpenCodeEvent("comfyui.starting", endpoint);
+    appendOpenCodeEvent("comfyui.starting", "Starting local sprite tools.");
 
     try {
       const result = isTauriRuntime()
@@ -3211,7 +3216,7 @@ function App() {
             : result.state === "warning"
               ? "comfyui.warning"
               : "comfyui.missing",
-        result.detail,
+        comfyUiActivityDetail(result),
       );
     } catch (error) {
       const detail =
@@ -3228,7 +3233,10 @@ function App() {
           },
         ],
       }));
-      appendOpenCodeEvent("comfyui.failed", detail);
+      appendOpenCodeEvent(
+        "comfyui.failed",
+        "Sprite tools could not start. Open Advanced sprite setup for details.",
+      );
     }
   }
 
@@ -4740,16 +4748,37 @@ function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-// Streamed-CDN core fallback: allowed in dev and in the local desktop app so
-// Play works out of the box. A public release should bundle or require a
-// user-supplied core instead (tracked in the overhaul plan).
+function comfyUiActivityDetail(connection: ComfyUiEndpointStatus) {
+  if (connection.state === "ready") return "Local sprite tools are ready.";
+  if (connection.state === "starting") return "Starting local sprite tools.";
+
+  const missingChecks = connection.checks
+    .filter((check) => check.state !== "ready")
+    .map((check) => check.name);
+  if (missingChecks.includes("API")) {
+    return "Sprite tools are not running. AI sprites remain optional.";
+  }
+  if (missingChecks.includes("Checkpoint") || missingChecks.includes("LoRA")) {
+    return "Sprite tools need model setup. Open Advanced sprite setup.";
+  }
+  return "Sprite tools need attention. Open Advanced sprite setup for details.";
+}
+
+// Streamed-CDN core fallback is development-only. Packaged releases require a
+// user-supplied core so Drive16 never silently redistributes or downloads one.
 function allowDevCoreCdnFallback() {
-  if (isTauriRuntime()) return true;
   const meta = import.meta as ImportMeta & {
-    env?: { DEV?: unknown };
+    env?: { DEV?: unknown; VITE_DRIVE16_ALLOW_DEV_CDN?: unknown };
   };
   const dev = meta.env?.DEV;
-  return dev === true || String(dev) === "true";
+  const explicitDevBundle = meta.env?.VITE_DRIVE16_ALLOW_DEV_CDN;
+  return (
+    dev === true ||
+    String(dev) === "true" ||
+    explicitDevBundle === true ||
+    String(explicitDevBundle) === "true" ||
+    String(explicitDevBundle) === "1"
+  );
 }
 
 // Tauri invoke rejects with plain strings; keep the real reason.

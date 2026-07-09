@@ -1,3 +1,4 @@
+use crate::runtime::repo_root;
 use serde::Serialize;
 use serde_json::Value;
 use std::{
@@ -930,15 +931,6 @@ fn comfyui_root() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join("Documents/ComfyUI")))
         .unwrap_or_else(|| PathBuf::from("ComfyUI"))
-}
-
-fn repo_root() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .unwrap_or(manifest_dir)
 }
 
 fn status(

@@ -431,6 +431,7 @@ async function main() {
     const restoredComfyEndpoint = await page.getByLabel("ComfyUI endpoint").inputValue();
     const restoredComfyCheckpoint = await page.getByLabel("ComfyUI checkpoint").inputValue();
     const restoredComfyLora = await page.getByLabel("ComfyUI LoRA").inputValue();
+    const restoredSpriteReadiness = await visibleText(page, "sprite-readiness");
     if (!restoredSpriteToggle || !restoredMusicToggle) {
       throw new Error("Enhancement toggles did not survive reload.");
     }
@@ -441,13 +442,23 @@ async function main() {
     ) {
       throw new Error("ComfyUI settings did not survive reload.");
     }
+    if (/https?:\/\/|connection refused|scripts\//i.test(restoredSpriteReadiness)) {
+      throw new Error(
+        `Common sprite readiness leaked advanced endpoint diagnostics: ${restoredSpriteReadiness}`,
+      );
+    }
     states.settingsPersistence = {
       spriteGeneration: restoredSpriteToggle,
       musicGeneration: restoredMusicToggle,
       comfyUiEndpoint: restoredComfyEndpoint,
       comfyUiCheckpoint: restoredComfyCheckpoint,
       comfyUiLora: restoredComfyLora,
+      spriteReadiness: restoredSpriteReadiness,
     };
+    const settingsBuildLog = await page.getByTestId("chat-build-log").innerText();
+    if (/https?:\/\/|connection refused|scripts\/launch-phase4/i.test(settingsBuildLog)) {
+      throw new Error(`Visible build log leaked advanced sprite diagnostics: ${settingsBuildLog}`);
+    }
 
     await page.getByRole("button", { name: "Test OpenRouter" }).click();
     await page.waitForFunction(() => {

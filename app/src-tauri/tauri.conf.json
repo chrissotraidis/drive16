@@ -20,12 +20,22 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://openrouter.ai; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' data: blob:; script-src 'self' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data:"
     }
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all",
+    "resources": {
+      "../../agent/": "drive16-support/agent",
+      "../../assets/": "drive16-support/assets",
+      "../../corpus/": "drive16-support/corpus",
+      "../../examples/": "drive16-support/examples",
+      "../../mcp-servers/": "drive16-support/mcp-servers",
+      "../../patches/": "drive16-support/patches",
+      "../../scripts/": "drive16-support/scripts",
+      "../../opencode.json": "drive16-support/opencode.json"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

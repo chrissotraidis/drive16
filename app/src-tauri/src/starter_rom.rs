@@ -1,3 +1,4 @@
+use crate::runtime::repo_root;
 use base64::{engine::general_purpose, Engine as _};
 use serde::Serialize;
 use std::{
@@ -495,15 +496,6 @@ fn read_u64(data: &[u8], offset: usize) -> Result<u64, String> {
     Ok(u64::from_le_bytes([
         bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
     ]))
-}
-
-fn repo_root() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .unwrap_or(manifest_dir)
 }
 
 fn repo_relative(repo_root: &Path, path: &Path) -> String {

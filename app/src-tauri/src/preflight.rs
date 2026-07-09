@@ -1,7 +1,8 @@
+use crate::runtime::repo_root;
 use serde::Serialize;
 use std::{
     env,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -156,15 +157,6 @@ fn file_check(name: &str, path: PathBuf, ready_detail: &str, missing_detail: &st
             detail: missing_detail.to_string(),
         }
     }
-}
-
-fn repo_root() -> PathBuf {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .unwrap_or(manifest_dir)
 }
 
 fn opencode_fallbacks() -> Vec<PathBuf> {

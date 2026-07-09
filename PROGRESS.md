@@ -1,13 +1,35 @@
 # Drive16 Progress
 
-Current phase: Builder reliability and playability gate in progress.
+Current phase: Unsigned release bundle verified; owner-controlled release gates
+remain.
 
-Immediate criterion: settings survive refresh, the real native app can complete
-consecutive build/edit chat turns, and MML/ComfyUI can be exercised through the
-same chat path with clear status. The current gate also requires visible chat
-logging, per-project memory notes, honest asset disclosure, and playable
-evidence before a build is called done. Release hardening is paused until this
-gate is credible.
+The builder reliability, four-prompt live audit, first-run UX, game-quality
+contract, and model bakeoff are complete. A release-mode macOS `.app` now runs
+from bundled support files copied into Application Support, with an explicit
+CSP and a user-supplied Play-core policy. Remaining release work requires owner
+input or credentials: confirm the proposed MIT license, sign/notarize with an
+Apple Developer ID, and perform a clean-machine install smoke.
+
+## Local model and packaging proof (2026-07-09)
+
+- Added a live `audit_project_memory` builder tool so local models can repair
+  exact `GAME.md` / `ASSETS.md` / `PLAYTEST.md` contradictions before claiming
+  completion.
+- Removed stale emulator-input leakage between audit runs and fixed
+  `nonSilent=true` evidence normalization.
+- Local Qwen passed a full Snake packet with all eleven run-record checks true:
+  build, screen, directional input, restart, audio, assets, genre rules,
+  project memory, trace, agent completion, and fresh evidence.
+- The three-model/four-prompt bakeoff remains verified. DeepSeek is the quality
+  default; Qwen is the zero-cost local fallback.
+- Tauri bundling is enabled. The release `.app` embeds the 3.7 MB Drive16
+  support runtime, copies it to
+  `~/Library/Application Support/dev.drive16.desktop/runtime`, and initializes
+  the active project there instead of under the git checkout.
+- Release mode no longer enables the development CDN emulator core. The
+  packaged UI reports that a user-supplied core is required.
+- The packaged native window, OpenCode bridge, first-run workspace, settings,
+  and Advanced setup list were inspected successfully.
 
 ## Live-audit contract completed (2026-07-09)
 

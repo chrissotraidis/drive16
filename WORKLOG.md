@@ -1,5 +1,46 @@
 # Drive16 Worklog
 
+## 2026-07-09 - ITERATION 117 - local model closure and packaged runtime
+
+Did:
+
+- Added an `audit_project_memory` MCP tool and required the builder to run it
+  after updating the three project-memory files.
+- Fixed camelCase `nonSilent=true` evidence handling and isolated emulator
+  input scripts so a prior run cannot supply restart evidence to a new game.
+- Completed one bounded local-Qwen Snake proof with every runtime, audio,
+  genre, trace, and project-memory check passing.
+- Added the live Ollama model dropdown, tested Qwen and GPT-OSS locally, and
+  moved the Ollama endpoint behind Advanced setup.
+- Enabled Tauri release bundling with an explicit CSP and bundled Drive16
+  support resources.
+- Added release runtime initialization that copies support files into
+  Application Support while preserving writable project artifacts there.
+- Changed packaged Play policy to require a user-supplied core; the dev CDN is
+  now available only in development or an explicitly flagged debug bundle.
+- Replaced the optional ComfyUI raw endpoint error in common settings with
+  concise setup guidance; technical configuration remains under Advanced.
+
+Evidence:
+
+- Local Qwen proof run `local-qwen-snake-audit-tool-proof` reports `status:
+  pass` with all eleven checks true.
+- `cargo test --manifest-path app/src-tauri/Cargo.toml`: 68 passed, 5 ignored,
+  0 failed.
+- Frontend build, browser smoke, project-memory gates, agent contract, SGDK MCP
+  validation, and the 12-run model-bakeoff report all passed.
+- Release bundle built at
+  `app/src-tauri/target/release/bundle/macos/Drive16.app` (16 MB), with 3.7 MB
+  of bundled support files and executable build scripts.
+- The release app initialized its active project under
+  `~/Library/Application Support/dev.drive16.desktop/runtime` and the native
+  UI showed OpenCode connected plus `No user core` for release-safe Play.
+
+Next:
+
+- Confirm the proposed MIT license, sign/notarize with the owner's Apple
+  Developer ID, build the final DMG, and smoke it on a clean macOS account.
+
 ## 2026-07-09 - ITERATION 116 - guided first run and quieter operations UI
 
 Did:

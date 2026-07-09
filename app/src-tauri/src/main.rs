@@ -4,6 +4,7 @@ mod opencode;
 mod phase4_prompt;
 mod preflight;
 mod project;
+mod runtime;
 mod starter_rom;
 mod v1_prompt;
 
@@ -272,6 +273,10 @@ async fn check_ollama_endpoint(
 
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            runtime::initialize(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             run_preflight,
             launch_starter_rom,
