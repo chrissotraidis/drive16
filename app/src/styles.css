@@ -726,6 +726,135 @@ p {
   min-width: 0;
 }
 
+.first-run-stage {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(20px, 5vw, 64px);
+  overflow-y: auto;
+  border: 1px solid #2f261e;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(240, 119, 34, 0.12), transparent 46%),
+    rgba(7, 5, 4, 0.72);
+}
+
+.first-run-card {
+  width: min(620px, 100%);
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.first-run-eyebrow {
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.first-run-card h2 {
+  margin-top: 8px;
+  color: var(--text);
+  font-size: clamp(22px, 3vw, 32px);
+  line-height: 1.15;
+}
+
+.first-run-card > p {
+  max-width: 520px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.first-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.first-run-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted-2);
+  background: var(--panel-2);
+  font-weight: 800;
+}
+
+.first-run-actions .primary-action {
+  border-color: var(--accent);
+  color: #140b04;
+  background: var(--accent);
+}
+
+.first-run-actions button:hover {
+  border-color: var(--accent-2);
+  color: var(--text);
+}
+
+.first-run-actions .primary-action:hover {
+  color: #140b04;
+  background: var(--accent-2);
+}
+
+.first-run-examples {
+  margin-top: 24px;
+}
+
+.first-run-examples > span {
+  color: var(--quiet);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.first-run-examples > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.first-run-examples button {
+  min-height: 36px;
+  padding: 0 10px;
+  color: var(--muted-2);
+  background: var(--panel-2);
+}
+
+.first-run-examples button:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.first-run-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  color: var(--quiet);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.first-run-note svg {
+  flex: 0 0 auto;
+  color: var(--accent-2);
+}
+
 .screen-bezel {
   display: grid;
   place-items: center;
@@ -1489,6 +1618,22 @@ p {
   line-height: 1.45;
 }
 
+.enhancement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.enhancement-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+
 .comfyui-config {
   display: flex;
   flex-direction: column;
@@ -1546,6 +1691,18 @@ p {
 
 .settings-disclosure .settings-section {
   padding: 0 12px 12px;
+}
+
+.settings-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.settings-advanced-body .settings-section,
+.settings-advanced-body .settings-disclosure .settings-section {
+  padding: 0;
 }
 
 .event-feed {
@@ -1761,6 +1918,18 @@ p {
 
   .screen-bezel {
     padding: 10px;
+  }
+
+  .first-run-stage {
+    padding: 12px;
+  }
+
+  .first-run-card {
+    padding: 18px;
+  }
+
+  .first-run-examples > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .controls-panel {

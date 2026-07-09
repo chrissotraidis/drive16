@@ -1,7 +1,9 @@
 import {
+  FolderOpen,
   Gamepad2,
   KeyRound,
   Maximize2,
+  MessageSquareText,
   Minimize2,
   Monitor,
   Pause,
@@ -83,7 +85,10 @@ export function PlayerPane({
   stateLabel,
   transport,
   viewportRef,
+  buildInProgress,
+  firstRunNote,
   onCloseControls,
+  onOpenProject,
   onPlay,
   onResetPlayer,
   onResetProfile,
@@ -93,6 +98,7 @@ export function PlayerPane({
   onScreenKeyDown,
   onScreenKeyUp,
   onStop,
+  onStartPrompt,
   onToggleControls,
   onToggleFocus,
   onToggleMute,
@@ -127,7 +133,10 @@ export function PlayerPane({
   stateLabel: string;
   transport: TransportState;
   viewportRef: MutableRefObject<HTMLDivElement | null>;
+  buildInProgress: boolean;
+  firstRunNote: string;
   onCloseControls: () => void;
+  onOpenProject: () => void;
   onPlay: () => void;
   onResetPlayer: () => void;
   onResetProfile: () => void;
@@ -137,6 +146,7 @@ export function PlayerPane({
   onScreenKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   onScreenKeyUp: (event: KeyboardEvent<HTMLDivElement>) => void;
   onStop: () => void;
+  onStartPrompt: (prompt?: string) => void;
   onToggleControls: () => void;
   onToggleFocus: () => void;
   onToggleMute: () => void;
@@ -167,6 +177,13 @@ export function PlayerPane({
 
   return (
     <section className="player-pane" aria-label="Game player">
+      {romUnavailable && !starterBusy && !buildInProgress ? (
+        <FirstRunWorkspace
+          note={firstRunNote}
+          onOpenProject={onOpenProject}
+          onStartPrompt={onStartPrompt}
+        />
+      ) : (
       <div className="screen-stage">
         <div className="screen-bezel">
           <div
@@ -210,7 +227,9 @@ export function PlayerPane({
                         {starterBusy
                           ? "LOADING"
                           : romUnavailable
-                            ? "NO ROM"
+                            ? buildInProgress
+                              ? "BUILDING"
+                              : "NO ROM"
                             : playerScreenEvidence === "none"
                             ? "ROM READY"
                             : transport === "running"
@@ -233,6 +252,7 @@ export function PlayerPane({
           </div>
         </div>
       </div>
+      )}
 
       <div className="player-controls" aria-label="Player controls">
         <button
@@ -392,6 +412,75 @@ export function PlayerPane({
         />
       ) : null}
     </section>
+  );
+}
+
+const starterPrompts = [
+  {
+    label: "Snake",
+    prompt: "Build a simple working Genesis-style Snake game with D-pad controls, score, restart, and looping music.",
+  },
+  {
+    label: "Pong",
+    prompt: "Build a simple working Genesis-style Pong game with responsive paddles, scoring, restart, and looping music.",
+  },
+  {
+    label: "Tetris",
+    prompt: "Build a simple working Genesis-style Tetris game with movement, rotation, scoring, restart, and looping music.",
+  },
+  {
+    label: "Asteroids",
+    prompt: "Build a simple working Genesis-style Asteroids game with thrust, rotation, shooting, scoring, restart, and looping music.",
+  },
+];
+
+function FirstRunWorkspace({
+  note,
+  onOpenProject,
+  onStartPrompt,
+}: {
+  note: string;
+  onOpenProject: () => void;
+  onStartPrompt: (prompt?: string) => void;
+}) {
+  return (
+    <div className="first-run-stage" data-testid="first-run-workspace">
+      <div className="first-run-card">
+        <span className="first-run-eyebrow">Start a new game</span>
+        <h2>What should Drive16 build?</h2>
+        <p>
+          Describe the game in chat, start from a proven example, or open one of your projects.
+        </p>
+        <div className="first-run-actions">
+          <button className="primary-action" type="button" onClick={() => onStartPrompt()}>
+            <MessageSquareText size={16} />
+            Describe a game
+          </button>
+          <button type="button" onClick={onOpenProject}>
+            <FolderOpen size={16} />
+            Open a project
+          </button>
+        </div>
+        <div className="first-run-examples" aria-label="Example game prompts">
+          <span>Try an example</span>
+          <div>
+            {starterPrompts.map((example) => (
+              <button
+                key={example.label}
+                type="button"
+                onClick={() => onStartPrompt(example.prompt)}
+              >
+                {example.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <small className="first-run-note">
+          <Wrench size={14} aria-hidden="true" />
+          {note}
+        </small>
+      </div>
+    </div>
   );
 }
 

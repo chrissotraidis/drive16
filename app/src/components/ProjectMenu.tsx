@@ -1,9 +1,7 @@
 import {
-  Download,
   FolderInput,
   Gamepad2,
   Plus,
-  Save,
   ShieldCheck,
   Upload,
   X,
@@ -15,6 +13,7 @@ type ProjectSummaryInfo = {
   projectPath: string;
   romPath: string;
   exportDirectory: string;
+  romStatus: string;
   assetRoles: ProjectAssetRoleInfo[];
 };
 
@@ -42,7 +41,6 @@ type CoreStatusInfo = {
 };
 
 export function ProjectMenu({
-  exportBusy,
   exportResult,
   importBusy,
   importResult,
@@ -50,21 +48,17 @@ export function ProjectMenu({
   interactiveCoreStatus,
   projectActionNotice,
   projectSummary,
-  saveBusy,
   saveResult,
   verifyBusy,
   workspacePath,
   onChooseCore,
   onClose,
-  onExportRom,
   onImportRom,
   onImportTestRom,
   onNewProject,
   onOpenProject,
-  onSaveProject,
   onVerify,
 }: {
-  exportBusy: boolean;
   exportResult?: PathResult;
   importBusy: boolean;
   importResult?: PathResult;
@@ -72,18 +66,15 @@ export function ProjectMenu({
   interactiveCoreStatus: CoreStatusInfo;
   projectActionNotice: ActionNotice;
   projectSummary: ProjectSummaryInfo;
-  saveBusy: boolean;
   saveResult?: PathResult;
   verifyBusy: boolean;
   workspacePath?: string;
   onChooseCore: () => void;
   onClose: () => void;
-  onExportRom: () => void;
   onImportRom: () => void;
   onImportTestRom: () => void;
   onNewProject: () => void;
   onOpenProject: () => void;
-  onSaveProject: () => void;
   onVerify: () => void;
 }) {
   return (
@@ -130,16 +121,6 @@ export function ProjectMenu({
             </button>
             <button
               type="button"
-              data-testid="menu-save-project"
-              title="Copy the current project into a timestamped snapshot"
-              onClick={onSaveProject}
-              disabled={saveBusy}
-            >
-              <Save size={16} />
-              {saveBusy ? "Saving Project" : "Save Project"}
-            </button>
-            <button
-              type="button"
               data-testid="menu-open-project"
               title="Load the most recent saved snapshot"
               onClick={onOpenProject}
@@ -183,16 +164,6 @@ export function ProjectMenu({
             </button>
             <button
               type="button"
-              data-testid="menu-export-rom"
-              title="Copy the current ROM to artifacts/phase3/exports so you can share it"
-              onClick={onExportRom}
-              disabled={exportBusy}
-            >
-              <Download size={16} />
-              {exportBusy ? "Exporting ROM" : "Export ROM"}
-            </button>
-            <button
-              type="button"
               data-testid="verify-rom"
               title="Rebuild the project and check it in the emulator (needs Docker running)"
               onClick={onVerify}
@@ -214,32 +185,28 @@ export function ProjectMenu({
                     : "Created when the agent first builds"
                 }
               >
-                {workspacePath ? shortPath(workspacePath) : "Not created yet"}
-              </strong>
-              <span>Template</span>
-              <strong title={projectSummary.projectPath}>
-                {shortPath(projectSummary.projectPath)}
+                {workspacePath ? "Active workspace" : "Created on first build"}
               </strong>
               <span>ROM</span>
-              <strong title={projectSummary.romPath}>{shortPath(projectSummary.romPath)}</strong>
+              <strong title={projectSummary.romPath}>
+                {projectSummary.romStatus === "ready" ? "Built and ready" : "Not built yet"}
+              </strong>
               <span>Saved</span>
               <strong title={saveResult?.snapshotPath ?? "Not saved yet"}>
-                {saveResult?.snapshotPath ? shortPath(saveResult.snapshotPath) : "Not saved yet"}
+                {saveResult?.snapshotPath ? "Snapshot ready" : "Not saved yet"}
               </strong>
               <span>Exported</span>
               <strong title={exportResult?.exportPath ?? projectSummary.exportDirectory}>
-                {exportResult?.exportPath
-                  ? shortPath(exportResult.exportPath)
-                  : shortPath(projectSummary.exportDirectory)}
+                {exportResult?.exportPath ? "Export ready" : "Not exported yet"}
               </strong>
               <span>Imported</span>
               <strong title={importResult?.importPath ?? "No imported ROM"}>
-                {importResult?.importPath ? shortPath(importResult.importPath) : "Not imported yet"}
+                {importResult?.importPath ? "Imported ROM ready" : "No imported ROM"}
               </strong>
               <span>Play core</span>
               <strong title={interactiveCoreStatus.jsPath ?? "Not set up"}>
                 {interactiveCoreStatus.status === "available" && interactiveCoreStatus.jsPath
-                  ? shortPath(interactiveCoreStatus.jsPath)
+                  ? "Custom core ready"
                   : "Not set up"}
               </strong>
             </div>

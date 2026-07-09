@@ -33,6 +33,7 @@ export function ChatRail({
   draft,
   messages,
   messagesRef,
+  composerInputRef,
   providerSetupHint,
   sendDisabled,
   onDraftChange,
@@ -50,6 +51,7 @@ export function ChatRail({
   draft: string;
   messages: ChatMessage[];
   messagesRef: MutableRefObject<HTMLDivElement | null>;
+  composerInputRef: MutableRefObject<HTMLInputElement | null>;
   providerSetupHint: string;
   sendDisabled: boolean;
   onDraftChange: (value: string) => void;
@@ -177,6 +179,7 @@ export function ChatRail({
         ) : null}
         <form className="composer" onSubmit={onSubmit}>
           <input
+            ref={composerInputRef}
             aria-label="Message Drive16"
             placeholder="Describe what to build…"
             value={draft}

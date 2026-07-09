@@ -27,6 +27,7 @@ that the generated game is good or playable.
 | Capability | Status |
 |---|---|
 | Desktop chat → OpenCode agent → active SGDK project | Working, still being hardened |
+| First-run workspace | Working: one describe-game action, four proven examples, and an open-project route replace the empty ROM canvas |
 | Agent startup | Defaults to local OpenCode; falls back to a Drive16-owned port if another local tool owns 4096, and restarts only the process Drive16 owns |
 | Project lifecycle: New / Save / Open / Import ROM / Export ROM / Verify | Working, with no-ROM/stale-ROM guards |
 | Interactive play: keyboard + gamepad, pause/reset/stop, fullscreen | Working |

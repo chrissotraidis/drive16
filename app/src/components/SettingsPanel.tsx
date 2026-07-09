@@ -314,8 +314,8 @@ export function SettingsPanel({
             )}
           </section>
 
-          <section className="settings-section" aria-label="Enhancements">
-            <SectionTitle icon={<Wrench size={16} />} title="Enhancements" />
+          <section className="settings-section" aria-label="Build options">
+            <SectionTitle icon={<Wrench size={16} />} title="Build options" />
             <div className="enhancement-list">
               <label className="enhancement-toggle" data-testid="sprite-enhancement-toggle">
                 <input
@@ -330,7 +330,7 @@ export function SettingsPanel({
                 <span className="toggle-switch" aria-hidden="true" />
                 <span className="toggle-copy">
                   <strong>AI sprites</strong>
-                  <small>ComfyUI generator</small>
+                  <small>Generated pixel art (optional)</small>
                 </span>
                 <span className={`toggle-status ${spriteReadiness.state}`}>
                   {spriteReadiness.label}
@@ -341,40 +341,49 @@ export function SettingsPanel({
               </p>
 
               {enhancements.spriteGeneration ? (
-                <div className="comfyui-config" data-testid="comfyui-config">
+                <>
+                  <div className="enhancement-actions" data-testid="comfyui-config">
+                    <button
+                      aria-label="Launch ComfyUI"
+                      data-testid="launch-comfyui"
+                      disabled={busyComfyUi}
+                      onClick={onLaunchComfyUi}
+                      type="button"
+                    >
+                      <TerminalSquare size={15} />
+                      {comfyUiConnection.state === "starting" ? "Starting" : "Launch sprite tools"}
+                    </button>
+                    <button
+                      aria-label="Test ComfyUI"
+                      data-testid="test-comfyui"
+                      disabled={busyComfyUi}
+                      onClick={onTestComfyUiConnection}
+                      type="button"
+                    >
+                      <ShieldCheck size={15} />
+                      {comfyUiConnection.state === "testing" ? "Checking" : "Test"}
+                    </button>
+                  </div>
+                  <details className="settings-disclosure" data-testid="advanced-sprite-setup">
+                    <summary>
+                      <Settings size={16} />
+                      <span>
+                        <strong>Advanced sprite setup</strong>
+                        <small>Endpoint, model, and LoRA</small>
+                      </span>
+                    </summary>
+                <div className="comfyui-config">
                   <label className="field-row">
                     <span>ComfyUI endpoint</span>
-                    <div className="endpoint-field">
-                      <input
-                        aria-label="ComfyUI endpoint"
-                        autoComplete="off"
-                        data-testid="comfyui-endpoint-input"
-                        onChange={(event) => onComfyUiEndpointChange(event.target.value)}
-                        spellCheck={false}
-                        type="url"
-                        value={comfyUiEndpoint}
-                      />
-                      <button
-                        aria-label="Launch ComfyUI"
-                        data-testid="launch-comfyui"
-                        disabled={busyComfyUi}
-                        onClick={onLaunchComfyUi}
-                        type="button"
-                      >
-                        <TerminalSquare size={15} />
-                        {comfyUiConnection.state === "starting" ? "Starting" : "Launch"}
-                      </button>
-                      <button
-                        aria-label="Test ComfyUI"
-                        data-testid="test-comfyui"
-                        disabled={busyComfyUi}
-                        onClick={onTestComfyUiConnection}
-                        type="button"
-                      >
-                        <ShieldCheck size={15} />
-                        {comfyUiConnection.state === "testing" ? "Checking" : "Test"}
-                      </button>
-                    </div>
+                    <input
+                      aria-label="ComfyUI endpoint"
+                      autoComplete="off"
+                      data-testid="comfyui-endpoint-input"
+                      onChange={(event) => onComfyUiEndpointChange(event.target.value)}
+                      spellCheck={false}
+                      type="url"
+                      value={comfyUiEndpoint}
+                    />
                   </label>
 
                   <label className="field-row">
@@ -412,6 +421,8 @@ export function SettingsPanel({
                     <small>{comfyUiConnection.detail}</small>
                   </div>
                 </div>
+                  </details>
+                </>
               ) : null}
 
               <label className="enhancement-toggle" data-testid="music-enhancement-toggle">
@@ -426,8 +437,8 @@ export function SettingsPanel({
                 />
                 <span className="toggle-switch" aria-hidden="true" />
                 <span className="toggle-copy">
-                  <strong>MML music</strong>
-                  <small>ctrmml compiler</small>
+                  <strong>Original music</strong>
+                  <small>Generated locally with MML</small>
                 </span>
                 <span className={`toggle-status ${musicReadiness.state}`}>
                   {musicReadiness.label}
@@ -439,6 +450,15 @@ export function SettingsPanel({
             </div>
           </section>
 
+          <details className="settings-disclosure settings-advanced" data-testid="advanced-settings">
+            <summary>
+              <Settings size={16} />
+              <span>
+                <strong>Advanced</strong>
+                <small>Local tools, paths, and diagnostics</small>
+              </span>
+            </summary>
+            <div className="settings-advanced-body">
           <section className="settings-section" aria-label="Setup">
             <div className="settings-section-title">
               <SectionTitle icon={<Wrench size={16} />} title="Setup" />
@@ -505,6 +525,8 @@ export function SettingsPanel({
                 )}
               </div>
             </section>
+          </details>
+            </div>
           </details>
         </div>
 

@@ -767,7 +767,7 @@ const previewInteractiveCoreStatus: InteractiveCoreStatusResult = {
 const initialProjectActionNotice: ProjectActionNotice = {
   state: "warning",
   label: "Project actions ready",
-  detail: "Use New, Save, Open, Import, or Export from this menu.",
+  detail: "Create, open, import, or verify here. Save and Export stay in the top bar.",
 };
 
 const previewV1PromptResult: V1PromptResult = {
@@ -919,6 +919,7 @@ function App() {
         },
   );
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
   const romViewportRef = useRef<HTMLDivElement | null>(null);
   const playerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playerRuntimeRef = useRef<NostalgistPlayerRuntime | undefined>();
@@ -1351,6 +1352,25 @@ function App() {
     () => [interactiveCoreHealthCheck(interactiveCoreReadiness), ...preflight.checks],
     [interactiveCoreReadiness, preflight.checks],
   );
+  const firstRunNote = useMemo(() => {
+    const docker = preflight.checks.find((check) => check.name.toLowerCase().includes("docker"));
+    if (openCodeSource === "checking" || preflightSource === "checking") {
+      return "Checking local build tools…";
+    }
+    if (!agentProviders.includes("openrouter") && !openRouterKey.trim()) {
+      return "Connect OpenRouter in Settings before the first build.";
+    }
+    if (docker && docker.state !== "ready") {
+      return "Docker needs attention before the first ROM build.";
+    }
+    return "Ready to build locally. AI sprites are optional.";
+  }, [agentProviders, openCodeSource, openRouterKey, preflight.checks, preflightSource]);
+
+  function focusComposer(prompt = "") {
+    if (prompt) setDraft(prompt);
+    setConversationCollapsed(false);
+    window.requestAnimationFrame(() => composerInputRef.current?.focus());
+  }
   const keyboardMappings = useMemo(() => visibleKeyboardMappings(inputProfile), [inputProfile]);
   const keyboardBindingRows = useMemo(
     () => visibleKeyboardBindings(inputProfile),
@@ -4452,6 +4472,7 @@ function App() {
           draft={draft}
           messages={messages}
           messagesRef={messagesRef}
+          composerInputRef={composerInputRef}
           providerSetupHint={providerSetupHint}
           sendDisabled={openCodeBusy}
           onDraftChange={setDraft}
@@ -4488,7 +4509,10 @@ function App() {
           stateLabel={playerStateLabel(playerState)}
           transport={transport}
           viewportRef={romViewportRef}
+          buildInProgress={openCodeBusy || buildState === "building"}
+          firstRunNote={firstRunNote}
           onCloseControls={closeControlsPanel}
+          onOpenProject={() => setProjectMenuOpen(true)}
           onPlay={() => {
             void playActiveRom();
           }}
@@ -4500,6 +4524,7 @@ function App() {
           onScreenKeyDown={handleRomKeyDown}
           onScreenKeyUp={handleRomKeyUp}
           onStop={stopInteractivePlayer}
+          onStartPrompt={focusComposer}
           onToggleControls={toggleControlsPanel}
           onToggleFocus={toggleEmulatorFocus}
           onToggleMute={toggleInteractivePlayerMute}
@@ -4581,7 +4606,6 @@ function App() {
 
       {projectMenuOpen ? (
         <ProjectMenu
-          exportBusy={exportBusy}
           exportResult={exportResult}
           importBusy={importBusy}
           importResult={importResult}
@@ -4589,7 +4613,6 @@ function App() {
           interactiveCoreStatus={interactiveCoreStatus}
           projectActionNotice={projectActionNotice}
           projectSummary={projectSummary}
-          saveBusy={saveBusy}
           saveResult={saveResult}
           verifyBusy={starterBusy || buildState === "building"}
           workspacePath={workspacePath}
@@ -4597,9 +4620,6 @@ function App() {
             void chooseInteractiveCore();
           }}
           onClose={() => setProjectMenuOpen(false)}
-          onExportRom={() => {
-            void exportRom();
-          }}
           onImportRom={() => {
             void importRom();
           }}
@@ -4611,9 +4631,6 @@ function App() {
             setProjectMenuOpen(false);
           }}
           onOpenProject={() => openProjectSnapshot()}
-          onSaveProject={() => {
-            void saveProject();
-          }}
           onVerify={() => {
             runCurrentProject();
             setProjectMenuOpen(false);

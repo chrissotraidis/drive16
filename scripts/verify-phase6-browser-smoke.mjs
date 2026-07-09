@@ -291,6 +291,22 @@ async function main() {
       throw new Error("Rendered page did not contain meaningful Drive16 content.");
     }
 
+    const firstRunWorkspace = page.getByTestId("first-run-workspace");
+    await firstRunWorkspace.waitFor();
+    const firstRunText = await firstRunWorkspace.innerText();
+    for (const expected of ["Describe a game", "Open a project", "Snake", "Pong", "Tetris", "Asteroids"]) {
+      if (!firstRunText.includes(expected)) {
+        throw new Error(`First-run workspace is missing ${expected}.`);
+      }
+    }
+    await firstRunWorkspace.getByRole("button", { name: "Snake" }).click();
+    const seededDraft = await page.getByLabel("Message Drive16").inputValue();
+    if (!/Snake game/i.test(seededDraft)) {
+      throw new Error("Snake example did not seed the chat composer.");
+    }
+    await page.getByLabel("Message Drive16").fill("");
+    states.firstRunWorkspace = firstRunText;
+
     states.initialTruthSurface = await playerTruthSurface(page);
     assertNoRomTruthSurface(states.initialTruthSurface, "Initial app load");
     assertRealTimestamps(states.initialTruthSurface, "Initial app load");
@@ -349,6 +365,7 @@ async function main() {
     const smokeComfyUiEndpoint = new URL(args.url).origin;
     await page.getByTestId("sprite-enhancement-input").check({ force: true });
     await page.getByTestId("comfyui-config").waitFor();
+    await page.getByTestId("advanced-sprite-setup").locator("summary").click();
     await page.getByLabel("ComfyUI endpoint").fill(smokeComfyUiEndpoint);
     await page.getByLabel("ComfyUI checkpoint").fill("drive16-smoke-checkpoint.safetensors");
     await page.getByLabel("ComfyUI LoRA").fill("drive16-smoke-lora.safetensors");
@@ -357,6 +374,7 @@ async function main() {
     await page.getByTestId("agent-settings-open").waitFor();
     await page.getByTestId("agent-settings-open").click();
     await page.getByTestId("openrouter-settings").waitFor();
+    await page.getByTestId("advanced-sprite-setup").locator("summary").click();
     const restoredSpriteToggle = await page.getByTestId("sprite-enhancement-input").isChecked();
     const restoredMusicToggle = await page.getByTestId("music-enhancement-input").isChecked();
     const restoredComfyEndpoint = await page.getByLabel("ComfyUI endpoint").inputValue();
@@ -472,11 +490,9 @@ async function main() {
     states.projectMenu = await visibleText(page, "project-menu");
     for (const expectedAction of [
       "New Project",
-      "Save Project",
       "Open Last Save",
       "Import ROM",
       "Import Test ROM",
-      "Export ROM",
       "Verify",
     ]) {
       if (!states.projectMenu.includes(expectedAction)) {
@@ -848,6 +864,9 @@ async function playerTruthSurface(page) {
       screenText:
         document.querySelector('[data-testid="starter-rom-screen"]')?.textContent?.replace(/\s+/g, " ").trim() ??
         "",
+      firstRunText:
+        document.querySelector('[data-testid="first-run-workspace"]')?.textContent?.replace(/\s+/g, " ").trim() ??
+        "",
       playButtonText: playButton?.textContent?.replace(/\s+/g, " ").trim() ?? "",
       playDisabled: playButton instanceof HTMLButtonElement ? playButton.disabled : undefined,
       audioButtonText: audioButton?.textContent?.replace(/\s+/g, " ").trim() ?? "",
@@ -888,8 +907,13 @@ function assertNoRomTruthSurface(surface, label) {
   if (surface.runStatus !== "Ready") {
     throw new Error(`${label} top-level status should be Ready for an idle no-ROM app, saw ${surface.runStatus}`);
   }
-  if (!/NO ROM/i.test(surface.screenText)) {
-    throw new Error(`${label} screen should show NO ROM, saw ${surface.screenText}`);
+  if (
+    !/NO ROM/i.test(surface.screenText) &&
+    !/What should Drive16 build\?.*Describe a game.*Open a project/i.test(surface.firstRunText)
+  ) {
+    throw new Error(
+      `${label} should show the guided no-ROM start state, saw ${surface.screenText || surface.firstRunText}`,
+    );
   }
   if (surface.playButtonText !== "No ROM" || surface.playDisabled !== true) {
     throw new Error(

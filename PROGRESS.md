@@ -31,6 +31,28 @@ gate is credible.
 - Model bakeoff remains deliberately paused while the first-run experience and
   generated-game quality bar are improved.
 
+## First-run and operational UI update (2026-07-09)
+
+- Replaced the dominant empty `NO ROM` canvas with a guided start card: one
+  primary describe-game action, Snake/Pong/Tetris/Asteroids examples that seed
+  the existing composer, and an open-project route.
+- The native card reports concise build readiness (`Ready to build locally` or
+  the one dependency that needs attention) without turning setup into the main
+  experience.
+- Kept Save and Export in the top bar and removed their duplicate project-menu
+  actions.
+- Replaced artifact-path-heavy project metadata with user-facing state such as
+  `Built and ready`, `Snapshot ready`, and `No imported ROM`; exact paths remain
+  available as hover titles for debugging.
+- Settings now keeps provider, model, API key, AI sprite mode, and original
+  music visible. ComfyUI endpoint/model/LoRA values plus local tool paths and
+  diagnostics live behind Advanced disclosures.
+- Browser smoke now proves the guided first-run actions, example-to-composer
+  handoff, settings persistence through the advanced disclosure, and the
+  simplified project menu.
+- The native debug app was rebuilt and visually checked at its real 1440x900
+  window with OpenCode and Docker ready.
+
 ## Next robustness goals (2026-07-08)
 
 Goal 1 - Make project state trustworthy.

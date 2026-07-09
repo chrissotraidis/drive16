@@ -1,5 +1,34 @@
 # Drive16 Worklog
 
+## 2026-07-09 - ITERATION 116 - guided first run and quieter operations UI
+
+Did:
+
+- Replaced the empty ROM screen with a guided first-run card centered on
+  describing a game, trying Snake/Pong/Tetris/Asteroids, or opening a project.
+- Wired example buttons into the existing controlled chat composer instead of
+  creating a second prompt path.
+- Kept the real dependency state concise on the first screen; optional AI
+  sprites no longer dominate the starting experience.
+- Removed duplicate Save/Export actions from the project menu and translated
+  internal artifact paths into plain project states.
+- Kept provider/model/build options visible in Settings while moving ComfyUI
+  endpoint/model values, tool paths, and diagnostics behind Advanced.
+- Updated browser smoke for the new no-ROM contract, example handoff, advanced
+  settings persistence, and simplified project menu.
+
+Evidence:
+
+- `pnpm --dir app build` passed.
+- `pnpm --dir app verify:phase6:browser` passed.
+- Rebuilt and opened the native debug app; the real 1440x900 window shows the
+  guided first run with `Ready to build locally. AI sprites are optional.`
+
+Next:
+
+- Raise the generated-game visual/game-feel quality contract before beginning
+  the cross-model bakeoff.
+
 ## 2026-07-09 - ITERATION 115 - reliability checkpoint and four-prompt live audit
 
 Did:
