@@ -1,8 +1,31 @@
 diff --git a/dist/nostalgist.js b/dist/nostalgist.js
-index 3821fe5d5e46032bf76f764da67c4a0a4dd8fcf6..4e626d2121724cda8e6abaddf3c21b4f5cc271b4 100644
+index 3821fe5d5e46032bf76f764da67c4a0a4dd8fcf6..7fbdfb48120f4c165ac99274908207e9ad85281a 100644
 --- a/dist/nostalgist.js
 +++ b/dist/nostalgist.js
-@@ -2183,7 +2183,8 @@ async function importCoreJsAsESM({ js, name }) {
+@@ -2137,6 +2137,7 @@ async function patchCoreJs({ js, name }) {
+         return {
+           AL: typeof AL === 'undefined' ? null: AL,
+           Browser: typeof Browser === 'undefined' ? null: Browser,
++          RWA: typeof RWA === 'undefined' ? null: RWA,
+           JSEvents,
+           Module,
+           exit: _emscripten_force_exit
+@@ -2145,12 +2146,14 @@ async function patchCoreJs({ js, name }) {
+ 	else if (isEsmScript(jsContent)) jsContent = `${jsContent.replace("var setImmediate", "").replace("readyPromiseResolve(Module)", `readyPromiseResolve({
+           AL: typeof AL === 'undefined' ? null: AL,
+           Browser: typeof Browser === 'undefined' ? null: Browser,
++          RWA: typeof RWA === 'undefined' ? null: RWA,
+           JSEvents,
+           Module,
+           exit: _emscripten_force_exit
+         })`).replace("return moduleRtn;", `return moduleRtn.then((Module) => ({
+           AL: typeof AL === 'undefined' ? null: AL,
+           Browser: typeof Browser === 'undefined' ? null: Browser,
++          RWA: typeof RWA === 'undefined' ? null: RWA,
+           JSEvents,
+           exit: _emscripten_force_exit,
+           ...Module,
+@@ -2183,7 +2186,8 @@ async function importCoreJsAsESM({ js, name }) {
  			jsObjectUrl
  );
  	} catch {
@@ -12,7 +35,7 @@ index 3821fe5d5e46032bf76f764da67c4a0a4dd8fcf6..4e626d2121724cda8e6abaddf3c21b4f
  	} finally {
  		jsResolvable.dispose();
  	}
-@@ -2637,9 +2638,10 @@ var Emulator = class {
+@@ -2637,9 +2641,10 @@ var Emulator = class {
  		const { Module } = this.getEmscripten();
  		const raArgs = Module.arguments || [];
  		const { rom, signal } = this.options;

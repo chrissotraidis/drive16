@@ -32,9 +32,8 @@ export type NostalgistPlayerRuntime = {
 
 type NostalgistLaunchOptions = Parameters<typeof Nostalgist.launch>[0];
 
-export const defaultPlayerVolume = 0;
-const retroarchVolumeCommandSteps = 80;
-const retroarchMutedVolume = -80;
+export const defaultPlayerVolume = 40;
+const retroarchAttenuationSteps = 40;
 
 const inputButtonMap: Record<PlayerInputActionId, string> = {
   "dpad.left": "left",
@@ -77,7 +76,8 @@ export async function launchNostalgistMegadrivePlayer({
         return;
       }
       recordLog(...args);
-      console.error(...args);
+      if (/\[ERROR\]/i.test(message)) console.error(...args);
+      else if (/\[WARN\]/i.test(message)) console.warn(...args);
     },
   } as NonNullable<NostalgistLaunchOptions["emscriptenModule"]>;
 
@@ -99,10 +99,10 @@ export async function launchNostalgistMegadrivePlayer({
     element: canvas,
     retroarchConfig: {
       audio_enable: true,
-      audio_mute_enable: false,
+      audio_mute_enable: true,
       audio_mixer_mute_enable: false,
-      audio_volume: retroarchMutedVolume,
-      audio_mixer_volume: retroarchMutedVolume,
+      audio_volume: 0,
+      audio_mixer_volume: 0,
       log_verbosity: true,
       frontend_log_level: 0,
       video_shader_enable: false,
@@ -127,15 +127,21 @@ export async function launchNostalgistMegadrivePlayer({
     logs,
   };
 
-  forceMinimumRetroarchVolume(runtime);
   return runtime;
 }
 
-// The RetroArch Emscripten build routes audio through OpenAL; browsers keep
-// its AudioContext suspended until a user gesture, so playback starts silent
-// unless we resume it explicitly.
+// RetroArch's Emscripten build exposes its WebAudio context through RWA. Browsers
+// keep that context suspended until a user gesture, so resume it explicitly.
 function findAudioContext(runtime: NostalgistPlayerRuntime): AudioContext | undefined {
   try {
+    const emscripten = runtime.instance.getEmscripten?.() as
+      | { RWA?: { context?: AudioContext } }
+      | undefined;
+    const rwebAudio = emscripten?.RWA?.context;
+    if (rwebAudio && typeof rwebAudio.resume === "function") {
+      return rwebAudio;
+    }
+
     const al = runtime.instance.getEmscriptenAL?.();
     const ctx = al?.currentCtx?.audioCtx;
     if (ctx && typeof ctx.resume === "function") {
@@ -165,11 +171,7 @@ export async function resumeNostalgistAudio(
     return "unavailable";
   }
   if (ctx.state === "suspended") {
-    try {
-      await ctx.resume();
-    } catch {
-      // The browser refused; a later user gesture can retry.
-    }
+    await tryResumeAudioContext(ctx);
   }
   return nostalgistAudioState(runtime);
 }
@@ -186,40 +188,44 @@ export async function setNostalgistVolume(
   const nextVolume = clampPlayerVolume(volume);
 
   if (nextVolume === 0) {
-    forceMinimumRetroarchVolume(runtime);
+    if (!runtime.muted) runtime.instance.sendCommand("MUTE");
     runtime.muted = true;
     runtime.volume = 0;
-    runtime.volumeSteps = 0;
     return nostalgistAudioState(runtime);
   }
 
   const ctx = findAudioContext(runtime);
   if (ctx?.state === "suspended") {
-    try {
-      await ctx.resume();
-    } catch {
-      // The user can retry from the volume control after another gesture.
-    }
+    await tryResumeAudioContext(ctx);
   }
 
-  const nextSteps = Math.round((nextVolume / 100) * retroarchVolumeCommandSteps);
+  if (runtime.muted) {
+    runtime.instance.sendCommand("MUTE");
+    runtime.muted = false;
+  }
+
+  const nextSteps = Math.round((1 - nextVolume / 100) * retroarchAttenuationSteps);
   const stepDelta = nextSteps - runtime.volumeSteps;
   if (stepDelta > 0) {
-    sendRepeatedCommand(runtime, "VOLUME_UP", stepDelta);
+    sendRepeatedCommand(runtime, "VOLUME_DOWN", stepDelta);
   } else if (stepDelta < 0) {
-    sendRepeatedCommand(runtime, "VOLUME_DOWN", Math.abs(stepDelta));
+    sendRepeatedCommand(runtime, "VOLUME_UP", Math.abs(stepDelta));
   }
 
   runtime.volume = nextVolume;
   runtime.volumeSteps = nextSteps;
-  runtime.muted = false;
   return nostalgistAudioState(runtime);
 }
 
-function forceMinimumRetroarchVolume(runtime: NostalgistPlayerRuntime) {
-  // Treat the app volume slider as the source of truth. RetroArch's MUTE command
-  // is a toggle, so repeated safety calls use volume-down commands instead.
-  sendRepeatedCommand(runtime, "VOLUME_DOWN", retroarchVolumeCommandSteps);
+async function tryResumeAudioContext(ctx: AudioContext) {
+  try {
+    await Promise.race([
+      ctx.resume(),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 600)),
+    ]);
+  } catch {
+    // A later click on the sound control can retry the browser gesture gate.
+  }
 }
 
 function sendRepeatedCommand(

@@ -153,7 +153,8 @@ turn is:
 2. Create or update only the short `ASSETS.md` asset plan if it helps the work;
    every early row must say `Planned` or `Pending`, not `Used`, `Built`, or
    `Captured`.
-3. Edit `src/` and `res/`, build the ROM, run the emulator, test input, and
+3. Edit `src/` and `res/`, build the ROM, run the emulator, call
+   `drive16-emulator.verify_screen`, test input, and
    verify audio when expected.
 4. Only after that evidence exists, update `GAME.md`, `ASSETS.md`, and
    `PLAYTEST.md` with the current state.
@@ -181,6 +182,13 @@ playable, verify the relevant checklist and record it in `PLAYTEST.md`:
   panels, borders, palette contrast, and clear object silhouettes. A sparse
   text-glyph prototype is not the default presentation bar unless the user
   explicitly asks for a text-only style.
+- `drive16-emulator.verify_screen` passes the presentation contract. One repair
+  attempt is allowed; a second failure keeps the playability gate failed.
+- Every custom tile index refers to tile data that was actually loaded. Raw VRAM
+  tile numbers are not artwork and can render differently across emulators.
+- Pause/resume is a round trip: Start pauses and a later Start resumes. Action
+  buttons are edge-triggered, and held movement uses deliberate repeat timing
+  instead of moving once per frame.
 - Start and restart behavior work when the game uses Start.
 - Score or state counters start at the intended value.
 - The game does not instantly fail, soft-lock, or hide the player.

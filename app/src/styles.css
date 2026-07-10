@@ -477,6 +477,14 @@ p {
   overflow: hidden;
 }
 
+.chat-build-log.is-expanded {
+  max-height: min(48vh, 420px);
+}
+
+.chat-build-log.is-collapsed {
+  max-height: none;
+}
+
 .chat-build-log-header {
   display: flex;
   align-items: center;
@@ -486,12 +494,37 @@ p {
   border-bottom: 1px solid rgba(255, 177, 95, 0.14);
 }
 
-.chat-build-log-header span {
+.chat-build-log-title {
   color: var(--muted);
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.chat-build-log-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.chat-build-log-status button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.chat-build-log-status button:hover {
+  color: var(--text);
+  background: var(--panel-2);
 }
 
 .chat-build-log-header small {
@@ -527,6 +560,10 @@ p {
   max-height: 148px;
   padding: 8px 9px;
   overflow-y: auto;
+}
+
+.chat-build-log.is-expanded .chat-build-log-items {
+  max-height: min(34vh, 320px);
 }
 
 .chat-build-log-items p {
@@ -615,6 +652,7 @@ p {
   gap: 8px;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--line);
+  flex: 0 0 auto;
 }
 
 .agent-activity {
@@ -872,9 +910,9 @@ p {
 
 .genesis-screen {
   position: relative;
-  width: min(100%, 1024px, calc((100vh - 220px) * 1.3333));
+  width: min(100%, 1024px, calc((100vh - 220px) * 1.4286));
   min-width: 0;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 10 / 7;
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid #16336a;

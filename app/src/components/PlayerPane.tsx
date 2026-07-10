@@ -1,6 +1,7 @@
 import {
   FolderOpen,
   Gamepad2,
+  ImageIcon,
   KeyRound,
   Maximize2,
   MessageSquareText,
@@ -57,6 +58,7 @@ type BindingRow = { id: PlayerInputActionId; label: string; control: string };
 type MappingRow = { control: string; label: string };
 
 export function PlayerPane({
+  assetSummary,
   canvasRef,
   controllerBindings,
   controllerConfigured,
@@ -105,6 +107,7 @@ export function PlayerPane({
   onTogglePause,
   onVolumeChange,
 }: {
+  assetSummary: string;
   canvasRef: MutableRefObject<HTMLCanvasElement | null>;
   controllerBindings: BindingRow[];
   controllerConfigured: boolean;
@@ -259,7 +262,7 @@ export function PlayerPane({
           type="button"
           className="control-primary"
           data-testid="play-active-rom"
-          onClick={onPlay}
+          onClick={playerState === "paused" ? onTogglePause : onPlay}
           disabled={playDisabled || playerState === "loading" || playerState === "playing"}
         >
           <Play size={15} />
@@ -267,6 +270,8 @@ export function PlayerPane({
             ? "Preparing"
             : playerState === "playing"
               ? "Playing"
+              : playerState === "paused"
+                ? "Resume"
               : romUnavailable
                 ? "No ROM"
                 : playDisabled
@@ -275,10 +280,12 @@ export function PlayerPane({
         </button>
         {sessionActive ? (
           <>
-            <button type="button" data-testid="pause-player" onClick={onTogglePause}>
-              {playerState === "paused" ? <Play size={15} /> : <Pause size={15} />}
-              {playerState === "paused" ? "Resume" : "Pause"}
-            </button>
+            {playerState !== "paused" ? (
+              <button type="button" data-testid="pause-player" onClick={onTogglePause}>
+                <Pause size={15} />
+                Pause
+              </button>
+            ) : null}
             <button type="button" data-testid="reset-player" onClick={onResetPlayer}>
               <RefreshCcw size={15} />
               Reset
@@ -356,11 +363,13 @@ export function PlayerPane({
           icon={<ShieldCheck size={14} />}
           label={playabilityGateLabel(gateState, romUnavailable)}
           state={gateState}
+          help={playabilityGateHelp(gateState, romUnavailable)}
         />
         <EvidencePill
           icon={<Monitor size={14} />}
           label={screenEvidenceLabel(playerScreenEvidence, romUnavailable)}
           state={screenEvidenceState(playerScreenEvidence, romUnavailable)}
+          help="Drive16 checks whether the emulator produced a readable frame. You can still preview a ROM when this check is unavailable."
         />
         <EvidencePill
           icon={<KeyRound size={14} />}
@@ -395,6 +404,13 @@ export function PlayerPane({
             playerVolume,
             sessionActive,
           )}
+          help="ROM audio signal and audible browser playback are separate checks."
+        />
+        <EvidencePill
+          icon={<ImageIcon size={14} />}
+          label={assetSummary}
+          state={assetSummary === "Assets: unknown" ? "warning" : "ready"}
+          help="Shows whether the project used ComfyUI art, bundled art, primitive tiles, or an external ROM."
         />
       </div>
 
@@ -502,7 +518,7 @@ function playerAudioTitle(
   volume: number,
 ) {
   if (state === "audible") return "Mute";
-  if (state === "muted" || volume === 0) return "Volume starts at 0%. Use the slider to raise sound.";
+  if (state === "muted" || volume === 0) return "Turn sound on";
   if (state === "needs-gesture") return "Enable player audio";
   if (!sessionActive) return "Start a ROM before changing audio";
   return "Try to enable audio for this player session";
@@ -510,15 +526,17 @@ function playerAudioTitle(
 
 function EvidencePill({
   icon,
+  help,
   label,
   state,
 }: {
   icon: ReactNode;
+  help?: string;
   label: string;
   state: EvidenceState;
 }) {
   return (
-    <span className={`evidence-pill ${state}`}>
+    <span className={`evidence-pill ${state}`} title={help}>
       {icon}
       <strong>{label}</strong>
     </span>
@@ -530,8 +548,8 @@ function screenEvidenceLabel(evidence: PlayerScreenEvidence, romUnavailable: boo
   if (evidence === "checking") return "Screen: checking";
   if (evidence === "captured") return "Screen: frame captured";
   if (evidence === "visible") return "Screen: visible";
-  if (evidence === "inconclusive") return "Screen: inconclusive";
-  return "Screen: unverified";
+  if (evidence === "inconclusive") return "Screen: not confirmed";
+  return "Screen: not checked";
 }
 
 function screenEvidenceState(
@@ -579,16 +597,19 @@ function audioEvidenceLabel(
   sessionActive = false,
 ) {
   if (romUnavailable) return "Audio: no ROM";
-  if (sessionActive && playerVolume === 0) return "Audio: muted";
-  if (evidence === "checking") return "Audio: checking";
-  if (evidence === "captured") return "Audio: captured";
+  if (sessionActive && playerVolume === 0) return "Sound: muted";
+  if (sessionActive && state === "audible") return "Sound: on";
+  if (sessionActive && state === "needs-gesture") return "Sound: enable";
+  if (sessionActive && state === "unavailable") return "Sound: unavailable";
+  if (evidence === "checking") return "Audio file: checking";
+  if (evidence === "captured") return "Audio file: signal found";
   if (evidence === "silent") return "Audio: silent";
   if (evidence === "failed") return "Audio: failed";
-  if (state === "audible") return "Audio: audible";
+  if (state === "audible") return "Sound: on";
   if (state === "muted") return "Audio: muted";
   if (state === "needs-gesture") return "Audio: enable sound";
   if (typeof proofMaxAbs === "number") {
-    return proofMaxAbs > 0 ? "Audio: captured" : "Audio: silent";
+    return proofMaxAbs > 0 ? "Audio file: signal found" : "Audio: silent";
   }
   return "Audio: unverified";
 }
@@ -602,7 +623,11 @@ function audioEvidenceState(
   sessionActive = false,
 ): EvidenceState {
   if (romUnavailable) return "missing";
-  if (sessionActive && playerVolume === 0) return "warning";
+  if (sessionActive) {
+    if (playerVolume === 0 || state === "needs-gesture") return "warning";
+    if (state === "audible") return "ready";
+    return "missing";
+  }
   if (evidence === "captured") return "ready";
   if (evidence === "failed" || evidence === "silent") return "missing";
   if (evidence === "checking") return "warning";
@@ -654,10 +679,19 @@ function playabilityGateState({
 }
 
 function playabilityGateLabel(state: EvidenceState, romUnavailable: boolean) {
-  if (romUnavailable) return "Gate: no ROM";
-  if (state === "ready") return "Gate: verified";
-  if (state === "missing") return "Gate: failed";
-  return "Gate: needs repair";
+  if (romUnavailable) return "Overall: no ROM";
+  if (state === "ready") return "Overall: verified";
+  if (state === "missing") return "Overall: checks failed";
+  return "Overall: review needed";
+}
+
+function playabilityGateHelp(state: EvidenceState, romUnavailable: boolean) {
+  if (romUnavailable) return "Build or import a ROM before Drive16 can check it.";
+  if (state === "ready") return "Drive16 confirmed screen, input, and sound evidence.";
+  if (state === "missing") {
+    return "At least one required check failed. The ROM remains playable as a diagnostic preview.";
+  }
+  return "The ROM can be previewed, but one or more automated checks still need confirmation.";
 }
 
 function InputControlsPanel({

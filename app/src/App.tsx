@@ -1251,7 +1251,7 @@ function App() {
     }
     if (buildState === "error") return { state: "error", label: "Error" };
     if (activeRomPlayable && playabilityGateState === "missing") {
-      return { state: "error", label: "Gate Failed" };
+      return { state: "error", label: "Checks Failed" };
     }
     if (activeRomPlayable && playabilityGateState === "warning") {
       const checking =
@@ -1260,7 +1260,7 @@ function App() {
         playerScreenEvidence === "checking" ||
         playerInputEvidence === "testing" ||
         playerAudioEvidence === "checking";
-      return { state: "warning", label: checking ? "Checking" : "Needs Repair" };
+      return { state: "warning", label: checking ? "Checking" : "Review Needed" };
     }
     return { state: "running", label: "Ready" };
   }, [
@@ -1338,14 +1338,15 @@ function App() {
     if (activeRomPlayable && playabilityGateState === "warning") {
       return {
         state: "warning",
-        label: "Game needs repair",
-        detail: "The ROM runs, but screen, input, audio, or genre checks still need proof.",
+        label: "Verification incomplete",
+        detail:
+          "This ROM can be previewed, but Drive16 has not confirmed every screen, input, sound, or quality check.",
       };
     }
     if (activeRomPlayable && playabilityGateState === "missing") {
       return {
         state: "missing",
-        label: "Playability failed",
+        label: "Verification failed",
         detail: "The ROM exists, but one or more required checks failed.",
       };
     }
@@ -3967,21 +3968,34 @@ function App() {
         `Interactive Play setup timed out after ${formatDurationMs(playerSetupTimeoutMs)}.`,
       );
       playerRuntimeRef.current = runtime;
+      const audioState = await setNostalgistVolume(runtime, defaultPlayerVolume);
       setPlayerState("playing");
-      setPlayerAudio("muted");
+      setPlayerAudio(audioState);
       setPlayerVolume(defaultPlayerVolume);
       schedulePlayerVisibilityCheck(payload.sourcePath);
+      const audioNeedsClick = audioState === "needs-gesture";
+      const audioUnavailable = audioState === "unavailable";
       setProjectActionNotice({
         state: "warning",
-        label: "Player started muted",
+        label: audioNeedsClick
+          ? "Player ready — enable sound"
+          : audioUnavailable
+            ? "Player ready — sound unavailable"
+            : "Player ready",
         detail: `${payload.sourceName} started with ${
           runtime.coreSource === "user" ? "the local core" : "the streamed core"
-        }. App volume is 0%; raise it manually if you want sound.`,
+        }. ${
+          audioNeedsClick
+            ? "Click the sound control if the browser has not started audio."
+            : audioUnavailable
+              ? "Drive16 could not access this browser session's audio output."
+              : `Sound is on at ${defaultPlayerVolume}%.`
+        }`,
       });
       noteAction(
         `Player started for ${payload.sourceName} with ${
           runtime.coreSource === "user" ? "the local core" : "the streamed core"
-        }; app volume is 0%.`,
+        }; sound ${audioState === "audible" ? `on at ${defaultPlayerVolume}%` : audioState}.`,
       );
       appendOpenCodeEvent("player.playing", `${payload.sourcePath} via ${runtime.coreSource}`);
     } catch (error) {
@@ -4064,10 +4078,9 @@ function App() {
           )
           .slice(-4)
           .join(" | ");
-        const detail =
-          mostlyUnknown
-            ? `The player started, but Drive16 could not read enough canvas pixels to prove the screen. Treat playability as unverified.${runtimeLog ? ` RetroArch: ${runtimeLog}` : ""}`
-            : `The player started, but Drive16 could not detect visible non-black frame output. The ROM may be blank or stalled.${runtimeLog ? ` RetroArch: ${runtimeLog}` : ""}`;
+        const detail = mostlyUnknown
+          ? "Drive16 could not automatically confirm this screen. The ROM is still running; treat it as a preview, not a verified build."
+          : "Drive16 could not confirm visible game output. The ROM may be blank or stalled.";
         setProjectActionNotice({
           state: "warning",
           label: mostlyUnknown ? "Screen check inconclusive" : "Screen not verified",
@@ -4080,7 +4093,7 @@ function App() {
         noteAction(detail);
         appendOpenCodeEvent(
           mostlyUnknown ? "player.screen.inconclusive" : "player.screen.unverified",
-          sourcePath,
+          runtimeLog ? `${sourcePath}; ${runtimeLog}` : sourcePath,
         );
       }, delay);
     });
@@ -4405,14 +4418,21 @@ function App() {
       return;
     }
     if (playerVolume === 0) {
-      const detail = "App volume is 0%. Use the volume slider to raise sound deliberately.";
-      setProjectActionNotice({
-        state: "warning",
-        label: "Volume is muted",
-        detail,
+      void setNostalgistVolume(runtime, defaultPlayerVolume).then((state) => {
+        setPlayerVolume(defaultPlayerVolume);
+        setPlayerAudio(state);
+        const detail =
+          state === "audible"
+            ? `Sound is on at ${defaultPlayerVolume}%.`
+            : "The browser has not made this player session audible yet.";
+        setProjectActionNotice({
+          state: state === "audible" ? "ready" : "warning",
+          label: state === "audible" ? "Sound on" : "Sound unavailable",
+          detail,
+        });
+        noteAction(detail);
+        appendOpenCodeEvent("player.audio.volume", `${defaultPlayerVolume}%`);
       });
-      noteAction(detail);
-      appendOpenCodeEvent("player.audio.volume", "0%");
       return;
     }
     if (playerAudio === "unavailable" || playerAudio === "needs-gesture") {
@@ -4445,8 +4465,8 @@ function App() {
       });
       return;
     }
-    void setNostalgistVolume(runtime, defaultPlayerVolume).then(() => {
-      setPlayerVolume(defaultPlayerVolume);
+    void setNostalgistVolume(runtime, 0).then(() => {
+      setPlayerVolume(0);
       setPlayerAudio("muted");
       setProjectActionNotice({
         state: "warning",
@@ -4758,6 +4778,7 @@ function App() {
           onToggleCollapse={toggleConversationPane}
         />
         <PlayerPane
+          assetSummary={projectAssetSummary(projectSummary.assetRoles, activeRomSource.kind)}
           canvasRef={playerCanvasRef}
           controllerBindings={controllerBindingRows}
           controllerConfigured={controllerMappingReady}
@@ -5385,6 +5406,22 @@ function canPlayActiveRom(activeRomSource: ActiveRomSource, projectSummary: Proj
     return true;
   }
   return projectSummary.romStatus === "ready";
+}
+
+function projectAssetSummary(
+  roles: ProjectAssetRole[],
+  romKind: ActiveRomSource["kind"],
+) {
+  if (romKind === "imported") return "Assets: external ROM";
+
+  const sourceText = roles
+    .map((role) => `${role.role} ${role.source} ${role.notes}`)
+    .join(" ")
+    .toLowerCase();
+  if (/comfyui|generated sprite|ai sprite/.test(sourceText)) return "Assets: ComfyUI art";
+  if (/primitive|tile|sgdk text/.test(sourceText)) return "Assets: primitive art";
+  if (/bundled|core pack/.test(sourceText)) return "Assets: bundled art";
+  return "Assets: unknown";
 }
 
 function appPlayabilityGateState({

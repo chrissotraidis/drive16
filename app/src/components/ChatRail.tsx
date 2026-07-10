@@ -1,6 +1,15 @@
-import { ChevronLeft, ChevronRight, Loader2, Send } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Send,
+} from "lucide-react";
 import type { FormEvent, MutableRefObject } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ChatMessage = {
   id: number;
@@ -61,8 +70,11 @@ export function ChatRail({
 }) {
   const visibleBuildEvents = buildEvents
     .filter((event) => !isHeartbeatEvent(event))
-    .slice(-12);
+    .filter((event) => !isLowSignalPlayerEvent(event))
+    .slice(-10);
   const visibleRawEvents = rawBuildEvents.slice(-24);
+  const [buildLogOpen, setBuildLogOpen] = useState(true);
+  const [buildLogExpanded, setBuildLogExpanded] = useState(false);
   const buildLogItemsRef = useRef<HTMLDivElement | null>(null);
   const latestVisibleBuildEventId = visibleBuildEvents[visibleBuildEvents.length - 1]?.id;
 
@@ -116,25 +128,51 @@ export function ChatRail({
         ))}
       </div>
 
-      <div className="chat-build-log" aria-label="Build activity" data-testid="chat-build-log">
+      <div
+        className={`chat-build-log ${buildLogOpen ? "is-open" : "is-collapsed"} ${
+          buildLogExpanded ? "is-expanded" : "is-compact"
+        }`}
+        aria-label="Build activity"
+        data-testid="chat-build-log"
+      >
         <div className="chat-build-log-header">
-          <span>Build log</span>
-          {heartbeat.active ? (
-            <small
-              className="heartbeat-status"
-              data-testid="opencode-heartbeat-status"
-              title="OpenCode is still connected and sending heartbeat events"
+          <span className="chat-build-log-title">Build log</span>
+          <div className="chat-build-log-status">
+            {heartbeat.active ? (
+              <small
+                className="heartbeat-status"
+                data-testid="opencode-heartbeat-status"
+                title="OpenCode is still connected and sending heartbeat events"
+              >
+                <span aria-hidden="true" />
+                Connected {heartbeat.time}
+              </small>
+            ) : busy ? (
+              <small>Live</small>
+            ) : (
+              <small>Recent</small>
+            )}
+            {buildLogOpen ? (
+              <button
+                type="button"
+                aria-label={buildLogExpanded ? "Make build log smaller" : "Make build log larger"}
+                title={buildLogExpanded ? "Make build log smaller" : "Make build log larger"}
+                onClick={() => setBuildLogExpanded((current) => !current)}
+              >
+                {buildLogExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              aria-label={buildLogOpen ? "Hide build log" : "Show build log"}
+              title={buildLogOpen ? "Hide build log" : "Show build log"}
+              onClick={() => setBuildLogOpen((current) => !current)}
             >
-              <span aria-hidden="true" />
-              OpenCode heartbeat active {heartbeat.time}
-            </small>
-          ) : busy ? (
-            <small>Live</small>
-          ) : (
-            <small>Recent</small>
-          )}
+              {buildLogOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            </button>
+          </div>
         </div>
-        {visibleBuildEvents.length > 0 ? (
+        {buildLogOpen && visibleBuildEvents.length > 0 ? (
           <div className="chat-build-log-items" ref={buildLogItemsRef}>
             {visibleBuildEvents.map((event) => (
               <p key={event.id}>
@@ -145,7 +183,7 @@ export function ChatRail({
             ))}
           </div>
         ) : null}
-        <details className="chat-raw-log" data-testid="chat-raw-log">
+        {buildLogOpen ? <details className="chat-raw-log" data-testid="chat-raw-log">
           <summary>
             Raw log
             <span>{rawBuildEvents.length}</span>
@@ -161,7 +199,7 @@ export function ChatRail({
               ))}
             </div>
           ) : null}
-        </details>
+        </details> : null}
       </div>
 
       <div className="composer-dock">
@@ -293,5 +331,15 @@ function isHeartbeatEvent(event: BuildLogEvent) {
   return (
     event.type.toLowerCase().includes("heartbeat") ||
     event.detail.toLowerCase().includes("heartbeat")
+  );
+}
+
+function isLowSignalPlayerEvent(event: BuildLogEvent) {
+  const type = event.type.toLowerCase();
+  return (
+    type.includes("player.audio.volume") ||
+    type.includes("input.focused") ||
+    type.includes("player.input") ||
+    /^(keyboard|controller):/i.test(event.detail)
   );
 }

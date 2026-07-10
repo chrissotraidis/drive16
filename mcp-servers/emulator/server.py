@@ -23,6 +23,8 @@ ARTIFACT_DIR = REPO_ROOT / "artifacts" / "phase1" / "emulator"
 LOG_FILE = ARTIFACT_DIR / "last-run.log"
 STATE_FILE = ARTIFACT_DIR / "state.json"
 SCREENSHOT_FILE = ARTIFACT_DIR / "last-frame.png"
+SCREEN_AUDIT_FILE = ARTIFACT_DIR / "screen-quality.json"
+SCREEN_AUDIT_SCRIPT = REPO_ROOT / "scripts" / "validate-game-screenshot.py"
 FRAME_STREAM_FILE = ARTIFACT_DIR / "last-frames.rgb565"
 INPUT_SCRIPT_FILE = ARTIFACT_DIR / "input-script.csv"
 AUDIO_DUMP_FILE = ARTIFACT_DIR / "last-audio.wav"
@@ -118,6 +120,34 @@ TOOLS: list[dict[str, Any]] = [
         "title": "Capture Frame",
         "description": "Return the latest PNG frame captured by run_rom.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    {
+        "name": "verify_screen",
+        "title": "Verify Screen Quality",
+        "description": "Run a ROM, capture its frame, and enforce Drive16's presentation-quality contract.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "rom_path": {
+                    "type": "string",
+                    "description": "Repo-relative ROM path.",
+                },
+                "frames": {
+                    "type": "integer",
+                    "description": "Number of frames to run before the quality check. Defaults to 180.",
+                    "default": 180,
+                    "minimum": 1,
+                    "maximum": 20000,
+                },
+                "use_input_script": {
+                    "type": "boolean",
+                    "description": "Use the pending input script while capturing the frame.",
+                    "default": False,
+                },
+            },
+            "required": ["rom_path"],
+            "additionalProperties": False,
+        },
     },
     {
         "name": "capture_audio",
@@ -436,6 +466,62 @@ def capture_frame() -> dict[str, Any]:
     )
 
 
+def verify_screen(args: dict[str, Any]) -> dict[str, Any]:
+    frames = bounded_int(args.get("frames"), "frames", 180, 1, 20000)
+    use_input_script = bool_arg(args.get("use_input_script"), "use_input_script", False)
+    run_result = run_rom(
+        {
+            "rom_path": args.get("rom_path"),
+            "frames": frames,
+            "use_input_script": use_input_script,
+            "stream_frames": False,
+            "dump_audio": False,
+        }
+    )
+    run_payload = run_result["structuredContent"]
+    if run_result.get("isError") or not run_payload.get("screenshotPath"):
+        payload = {
+            "ok": False,
+            "action": "verify_screen",
+            "error": "A gameplay screenshot could not be captured for presentation review.",
+            "run": run_payload,
+        }
+        return tool_result(payload, is_error=True)
+
+    if SCREEN_AUDIT_FILE.exists():
+        SCREEN_AUDIT_FILE.unlink()
+
+    process = subprocess.run(
+        [
+            sys.executable,
+            str(SCREEN_AUDIT_SCRIPT),
+            str(SCREENSHOT_FILE),
+            "--out",
+            str(SCREEN_AUDIT_FILE),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    report = (
+        json.loads(SCREEN_AUDIT_FILE.read_text(encoding="utf-8"))
+        if SCREEN_AUDIT_FILE.is_file()
+        else {"status": "failed", "issues": ["Screen-quality report was not created."]}
+    )
+    ok = process.returncode == 0 and report.get("status") == "passed"
+    payload = {
+        "ok": ok,
+        "action": "verify_screen",
+        "screenshotPath": str(SCREENSHOT_FILE),
+        "screenAuditPath": str(SCREEN_AUDIT_FILE),
+        "screen": report,
+        "run": run_payload,
+    }
+    return tool_result(payload, is_error=not ok)
+
+
 def audio_summary(path: Path) -> dict[str, Any]:
     with wave.open(str(path), "rb") as wav:
         channels = wav.getnchannels()
@@ -550,6 +636,8 @@ def call_tool(name: str, arguments: Any) -> dict[str, Any]:
         return run_rom(args)
     if name == "capture_frame":
         return capture_frame()
+    if name == "verify_screen":
+        return verify_screen(args)
     if name == "capture_audio":
         return capture_audio()
     if name == "verify_audio":

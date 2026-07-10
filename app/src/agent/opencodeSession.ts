@@ -169,8 +169,12 @@ export function agentPromptWithProject(
       "- For simple Snake prompts, use examples/game-skeletons/snake-basic/ as the first code/audio shape when available; copy/adapt its src/main.c and res/ files before docs updates, then build.",
       "- For simple Pong prompts, use examples/game-skeletons/pong-basic/ as the first code/audio shape when available; copy/adapt its src/main.c and res/ files before docs updates, then build.",
       "- For simple Tetris prompts, use examples/game-skeletons/tetris-basic/ as the first code/audio shape when available; copy/adapt its src/main.c and res/ files before docs updates, then build.",
-      "- Build the ROM, run it, capture a frame, test input, and capture audio when sound is expected.",
-      "- Immediately after build_rom succeeds, do not inspect or rewrite docs; run_rom, capture_frame, send_input with lowercase p1_buttons such as [\"right\"], run_rom with use_input_script true, capture_frame again, send_input with p1_buttons [\"start\"] when restart applies, then verify_audio if sound is expected.",
+      "- Build the ROM, run it, call verify_screen, test input, and capture audio when sound is expected.",
+      "- Immediately after build_rom succeeds, do not inspect or rewrite docs; run_rom, verify_screen, send_input with lowercase p1_buttons such as [\"right\"], run_rom with use_input_script true, capture_frame again, send_input with p1_buttons [\"start\"] when restart applies, then verify_audio if sound is expected.",
+      "- verify_screen must pass before Playability gate: PASS. If it rejects sparse composition, flat color, or weak scene structure, repair the game and run it once more; a second failure keeps the gate failed.",
+      "- Never use raw VRAM tile numbers as art. Load custom tile data with a proven SGDK API or reuse a validated skeleton that already does so.",
+      "- Pause checks must prove both pause and resume. Do not guard all input with `if (paused) return` before checking Start, because that makes resume impossible.",
+      "- Edge-trigger Start, rotate, and action buttons; held D-pad movement may use deliberate repeat timing, but must not move once per frame.",
       "- Valid send_input button names are lowercase: left, right, up, down, start, a, b, c, x, y, z, mode. Do not use SGDK constants like BUTTON_RIGHT.",
       "- For audio checks after movement tests, call verify_audio with use_input_script false unless the sound specifically requires held input.",
       "- If audio is expected, use drive16-emulator.verify_audio and treat silence as a failed audio check.",
@@ -390,6 +394,13 @@ function toolActivity(
     return {
       eventType: failed ? "agent.screenshot.failed" : completed ? "agent.screenshot.checked" : "agent.screenshot.checking",
       label: failed ? "Screenshot check failed" : completed ? "Screenshot checked" : "Checking screenshot",
+      detail,
+    };
+  }
+  if (normalized.includes("verify_screen")) {
+    return {
+      eventType: failed ? "agent.screenshot.failed" : completed ? "agent.screenshot.checked" : "agent.screenshot.checking",
+      label: failed ? "Screen quality failed" : completed ? "Screen quality passed" : "Checking screen quality",
       detail,
     };
   }

@@ -330,6 +330,7 @@ assert(
 for (const expected of [
   'classicJsContent = jsContent.replace("export function getEmscripten"',
   "if (!raArgs.includes(contentPath)) raArgs.push(contentPath)",
+  "RWA: typeof RWA === 'undefined' ? null: RWA",
 ]) {
   assert(
     nostalgistPatchSource.includes(expected),
@@ -664,6 +665,18 @@ for (const expected of [
 }
 
 for (const expected of [
+  '"name": "verify_screen"',
+  "def verify_screen",
+  '"action": "verify_screen"',
+  "validate-game-screenshot.py",
+]) {
+  assert(
+    emulatorServerSource.includes(expected),
+    `Emulator MCP server is missing verify_screen support: ${expected}`,
+  );
+}
+
+for (const expected of [
   "analyzeOpenCodeAudioTrace",
   "validateOpenCodeAudioTrace",
   "goodOpenCodeAudioTraceFixture",
@@ -846,8 +859,8 @@ for (const expected of [
   'if (eventType === "agent.verification.passed") return "done"',
   'if (eventType === "agent.finished") return "testing"',
   "function appPlayabilityGateState",
-  'return { state: "warning", label: checking ? "Checking" : "Needs Repair" }',
-  'return { state: "error", label: "Gate Failed" }',
+  'return { state: "warning", label: checking ? "Checking" : "Review Needed" }',
+  'return { state: "error", label: "Checks Failed" }',
   'starterBusy || buildState === "building" || !activeRomPlayable',
   "const recentDuplicate = current",
   ".slice(-8)",
@@ -978,10 +991,10 @@ for (const expected of [
   "preview.audio.captured",
   "preview.audio.silent",
   '"agent.rom.built"',
-  'label: "Game needs repair"',
-  'label: "Playability failed"',
-  'label: "Player started muted"',
-  "App volume is 0%",
+  'label: "Verification incomplete"',
+  'label: "Verification failed"',
+  'label: audioNeedsClick',
+  "Sound is on at",
   "setNostalgistVolume",
   "defaultPlayerVolume",
   "seedActiveProjectForPrompt",
@@ -1047,25 +1060,23 @@ for (const expected of [
 }
 
 for (const expected of [
-  "export const defaultPlayerVolume = 0",
-  "const retroarchMutedVolume = -80",
-  "audio_mute_enable: false",
+  "export const defaultPlayerVolume = 40",
+  "const retroarchAttenuationSteps = 40",
+  "audio_mute_enable: true",
   "audio_mixer_mute_enable: false",
-  "audio_volume: retroarchMutedVolume",
-  "audio_mixer_volume: retroarchMutedVolume",
-  "forceMinimumRetroarchVolume(runtime);",
+  "audio_volume: 0",
+  "audio_mixer_volume: 0",
+  "emscripten?.RWA?.context",
+  'if (!runtime.muted) runtime.instance.sendCommand("MUTE")',
+  'runtime.instance.sendCommand("MUTE")',
+  "(1 - nextVolume / 100) * retroarchAttenuationSteps",
   "return runtime.muted || runtime.volume === 0 ? \"muted\" : \"audible\"",
-  "Treat the app volume slider as the source of truth",
 ]) {
   assert(
     nostalgistPlayerSource.includes(expected),
     `Nostalgist player source is missing audio safety guard: ${expected}`,
   );
 }
-assert(
-  !nostalgistPlayerSource.includes('sendCommand("MUTE")'),
-  "Nostalgist player must not use RetroArch's toggle mute command for audio safety.",
-);
 
 for (const expected of [
   'aria-label="Ollama model"',
@@ -1164,14 +1175,14 @@ for (const expected of [
   "type EvidenceState",
   "playabilityGateState",
   "playabilityGateLabel",
-  "Gate: no ROM",
-  "Gate: needs repair",
-  "Gate: failed",
-  "Gate: verified",
+  "Overall: no ROM",
+  "Overall: review needed",
+  "Overall: checks failed",
+  "Overall: verified",
   "Screen: no ROM",
   "Screen: frame captured",
   "Screen: visible",
-  "Screen: unverified",
+  "Screen: not checked",
   "Input: no ROM",
   "Input: untested",
   "Input: testing",
@@ -1180,8 +1191,8 @@ for (const expected of [
   "sessionActive",
   "inputEvidenceState",
   "Audio: no ROM",
-  "Audio: checking",
-  "Audio: captured",
+  "Audio file: checking",
+  "Audio file: signal found",
   "Audio: silent",
   "Audio: failed",
   "Audio: enable sound",
@@ -1191,7 +1202,7 @@ for (const expected of [
   "playerVolume",
   'data-testid="player-volume-slider"',
   'aria-label="Player volume"',
-  "Volume starts at 0%",
+  "Turn sound on",
   "ROM READY",
   'romUnavailable || playerScreenEvidence === "none"',
   'disabled={playerAudio === "unavailable" && !sessionActive}',
@@ -1227,8 +1238,11 @@ for (const expected of [
   'data-testid="opencode-heartbeat-status"',
   "visibleRawEvents",
   ".filter((event) => !isHeartbeatEvent(event))",
-  "OpenCode heartbeat active",
+  "Connected {heartbeat.time}",
   "OpenCode is still connected and sending heartbeat events",
+  'aria-label={buildLogExpanded ? "Make build log smaller" : "Make build log larger"}',
+  'aria-label={buildLogOpen ? "Hide build log" : "Show build log"}',
+  "isLowSignalPlayerEvent",
   "agentPhaseLabel",
   "Raw log",
   "buildLogItemsRef",
@@ -1348,7 +1362,10 @@ for (const expected of [
   "Do not use VDP_drawRect, srand, or C library rand()",
   "VDP_fillTileMapRect",
   "examples/game-skeletons/snake-basic/",
-  "Build the ROM, run it, capture a frame, test input, and capture audio when sound is expected.",
+  "Build the ROM, run it, call verify_screen, test input, and capture audio when sound is expected.",
+  "verify_screen must pass before Playability gate: PASS",
+  "Never use raw VRAM tile numbers as art",
+  "Pause checks must prove both pause and resume",
   "Immediately after build_rom succeeds, do not inspect or rewrite docs",
   "verify_audio with use_input_script false",
   "If audio is expected, use drive16-emulator.verify_audio",

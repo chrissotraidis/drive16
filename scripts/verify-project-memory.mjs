@@ -353,7 +353,34 @@ function groupUsesSharedPrimitiveApi(assetFile, rows) {
   });
 }
 
-function auditProject({ game, assets, playtest, expectGate, romExists }) {
+function sourceQualityIssues(sourceText) {
+  const issues = [];
+  const assignsUnloadedTileNumbers =
+    /tileIndices\s*\[[^\]]+\]\s*=\s*TILE_ATTR_FULL\([^;]*,\s*[a-z_]\w*\s*\)\s*;/i.test(
+      sourceText,
+    );
+  const loadsTileData = /\bVDP_loadTile(?:Data|Set)\b|\bTILE_USER_INDEX\b/.test(sourceText);
+  if (assignsUnloadedTileNumbers && !loadsTileData) {
+    issues.push(
+      "src/main.c assigns raw VRAM tile numbers without loading tile graphics; output can differ across emulators.",
+    );
+  }
+
+  const inputStart = sourceText.search(/\bprocess_input\s*\(/i);
+  const startButton = inputStart >= 0 ? sourceText.indexOf("BUTTON_START", inputStart) : -1;
+  if (inputStart >= 0 && startButton > inputStart) {
+    const beforeStart = sourceText.slice(inputStart, startButton);
+    if (/if\s*\([^)]*\bpaused\b[^)]*\)\s*(?:\{[^}]*\breturn\b|return\s*;)/s.test(beforeStart)) {
+      issues.push(
+        "src/main.c returns from input while paused before checking Start, so Pause cannot resume.",
+      );
+    }
+  }
+
+  return issues;
+}
+
+function auditProject({ game, assets, playtest, source, expectGate, romExists }) {
   const issues = [];
   const warnings = [];
   const rows = assetRows(assets.text);
@@ -361,6 +388,8 @@ function auditProject({ game, assets, playtest, expectGate, romExists }) {
   const allText = `${game.text}\n${assets.text}\n${playtest.text}`;
   const latestEvidence = latestEvidenceText(playtest.text);
   const genre = detectedGenre({ gameText: game.text, playtestText: playtest.text });
+
+  if (gate === "pass") issues.push(...sourceQualityIssues(source.text));
 
   if (gameClaimsBuiltMissingRom(game.text, romExists)) {
     issues.push("GAME.md claims out/rom.bin is built, but out/rom.bin does not exist.");
@@ -508,6 +537,7 @@ function auditProject({ game, assets, playtest, expectGate, romExists }) {
     genre: genre?.id ?? "unknown",
     assetRows: rows.length,
     expectsAudio,
+    sourceChecks: true,
     issues,
     warnings,
   };
@@ -516,10 +546,11 @@ function auditProject({ game, assets, playtest, expectGate, romExists }) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const projectPath = path.resolve(args.project);
-  const [game, assets, playtest] = await Promise.all([
+  const [game, assets, playtest, source] = await Promise.all([
     readProjectFile(projectPath, "GAME.md"),
     readProjectFile(projectPath, "ASSETS.md"),
     readProjectFile(projectPath, "PLAYTEST.md"),
+    readProjectFile(projectPath, path.join("src", "main.c")),
   ]);
   const romExists = await fileExists(path.join(projectPath, "out", "rom.bin"));
 
@@ -527,6 +558,7 @@ async function main() {
     game,
     assets,
     playtest,
+    source,
     expectGate: args.expectGate,
     romExists,
   });

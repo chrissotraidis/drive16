@@ -620,7 +620,7 @@ async function main() {
     states.importFeedback = await visibleText(page, "rom-action-feedback");
     states.importTruthSurface = await playerTruthSurface(page);
     assertStoppedVolumeControl(states.importTruthSurface, "Imported ROM");
-    if (!/Needs Repair|Checking/i.test(states.importTruthSurface.runStatus)) {
+    if (!/Review Needed|Checking/i.test(states.importTruthSurface.runStatus)) {
       throw new Error(
         `Imported ROM should not show top-level Ready before playability evidence passes: ${states.importTruthSurface.runStatus}`,
       );
@@ -630,7 +630,7 @@ async function main() {
         `Imported ROM did not leave the player in a ROM-capable state: ${states.importTruthSurface.playButtonText}`,
       );
     }
-    if (!states.importTruthSurface.evidenceText.includes("Gate: needs repair")) {
+    if (!states.importTruthSurface.evidenceText.includes("Overall: review needed")) {
       throw new Error(
         `Imported ROM should show a needs-repair playability gate until input/audio pass: ${states.importTruthSurface.evidenceText}`,
       );
@@ -712,12 +712,12 @@ async function main() {
     await page.getByTestId("play-active-rom").click();
     await page.waitForFunction(() => {
       const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /Interactive player started|Play setup failed|Play setup needed/i.test(feedback);
+      return /Player ready|Play setup failed|Play setup needed/i.test(feedback);
     });
     states.playFeedback = await visibleText(page, "rom-action-feedback");
     if (
       canCoreStatusPlay(args.coreStatus, args.userCorePath) &&
-      !/Interactive player started/i.test(states.playFeedback ?? "")
+      !/Player ready/i.test(states.playFeedback ?? "")
     ) {
       throw new Error(`Interactive Play did not start: ${states.playFeedback}`);
     }
@@ -730,17 +730,17 @@ async function main() {
 
     if (canCoreStatusPlay(args.coreStatus, args.userCorePath)) {
       states.activePlayerTruthSurface = await playerTruthSurface(page);
-      if (states.activePlayerTruthSurface.volumeSliderValue !== "0") {
+      if (states.activePlayerTruthSurface.volumeSliderValue !== "40") {
         throw new Error(
-          `Interactive Play should start with app volume at 0%, saw ${states.activePlayerTruthSurface.volumeSliderValue}%.`,
+          `Interactive Play should start at the audible default of 40%, saw ${states.activePlayerTruthSurface.volumeSliderValue}%.`,
         );
       }
       if (states.activePlayerTruthSurface.volumeSliderDisabled !== false) {
         throw new Error("Interactive Play volume slider should be enabled for deliberate user opt-in.");
       }
-      if (!/Muted|Volume 0%/i.test(states.activePlayerTruthSurface.audioButtonText)) {
+      if (!/Volume 40%/i.test(states.activePlayerTruthSurface.audioButtonText)) {
         throw new Error(
-          `Interactive Play should show muted audio at startup, saw ${states.activePlayerTruthSurface.audioButtonText}.`,
+          `Interactive Play should expose the 40% sound default, saw ${states.activePlayerTruthSurface.audioButtonText}.`,
         );
       }
 
@@ -751,7 +751,7 @@ async function main() {
       });
       states.pauseFeedback = await visibleText(page, "rom-action-feedback");
 
-      await page.getByTestId("pause-player").click();
+      await page.getByTestId("play-active-rom").click();
       await page.waitForFunction(() => {
         const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
         return /resumed/i.test(feedback);
@@ -994,7 +994,7 @@ function assertNoRomTruthSurface(surface, label) {
     );
   }
   assertStoppedVolumeControl(surface, label);
-  for (const expected of ["Gate: no ROM", "Screen: no ROM", "Input: no ROM", "Audio: no ROM"]) {
+  for (const expected of ["Overall: no ROM", "Screen: no ROM", "Input: no ROM", "Audio: no ROM"]) {
     if (!surface.evidenceText.includes(expected)) {
       throw new Error(`${label} evidence row is missing "${expected}": ${surface.evidenceText}`);
     }
@@ -1008,9 +1008,9 @@ function assertNoRomTruthSurface(surface, label) {
 }
 
 function assertStoppedVolumeControl(surface, label) {
-  if (surface.volumeSliderValue !== "0" || surface.volumeSliderDisabled !== true) {
+  if (surface.volumeSliderValue !== "40" || surface.volumeSliderDisabled !== true) {
     throw new Error(
-      `${label} should keep the app volume slider at disabled 0%, saw ${JSON.stringify({
+      `${label} should keep the app volume slider at the disabled 40% default, saw ${JSON.stringify({
         value: surface.volumeSliderValue,
         disabled: surface.volumeSliderDisabled,
       })}`,

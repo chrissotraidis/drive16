@@ -14,6 +14,8 @@ It exposes:
   mode, captures a PNG frame, and can write an RGB565 frame stream or WAV audio
   dump.
 - `capture_frame()`: returns the latest PNG frame captured by `run_rom`.
+- `verify_screen(rom_path, frames = 180)`: captures a fresh frame and fails when
+  Drive16's presentation-quality contract rejects the composition.
 - `capture_audio()`: inspects the latest WAV audio dump captured by `run_rom`
   with `dump_audio = true` and reports whether it is non-silent.
 - `verify_audio(rom_path, frames = 300)`: runs the ROM with audio dumping forced
