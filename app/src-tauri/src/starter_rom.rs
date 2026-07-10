@@ -31,6 +31,7 @@ pub struct StarterRomPreview {
     pub screenshot_path: String,
     pub frame_stream_path: String,
     pub audio_dump_path: String,
+    pub input_script_path: String,
     pub screenshot_data_url: String,
     pub frames: u32,
     pub stream_every: u32,
@@ -39,6 +40,8 @@ pub struct StarterRomPreview {
     pub frame_height: u16,
     pub framebuffer_frames: Vec<FramebufferFrame>,
     pub audio_max_abs: i16,
+    pub input_changed: bool,
+    pub input_change_ratio: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -59,8 +62,11 @@ struct StarterPaths {
     screenshot_path: PathBuf,
     frame_stream_path: PathBuf,
     audio_dump_path: PathBuf,
+    input_script_path: PathBuf,
+    input_frame_stream_path: PathBuf,
     build_sgdk_script: PathBuf,
     build_genteel_script: PathBuf,
+    bundled_genteel_bin: PathBuf,
     local_genteel_bin: PathBuf,
 }
 
@@ -119,6 +125,8 @@ fn launch_rom_for_paths(
     remove_if_exists(&paths.screenshot_path)?;
     remove_if_exists(&paths.frame_stream_path)?;
     remove_if_exists(&paths.audio_dump_path)?;
+    remove_if_exists(&paths.input_script_path)?;
+    remove_if_exists(&paths.input_frame_stream_path)?;
 
     let mut command = Command::new(&genteel_bin);
     command
@@ -138,6 +146,31 @@ fn launch_rom_for_paths(
     run_command_with_timeout(
         &mut command,
         "Genteel starter ROM launch",
+        GENTEEL_RUN_TIMEOUT,
+    )?;
+
+    fs::write(&paths.input_script_path, b"0,...R....,........\n").map_err(|error| {
+        format!(
+            "Could not create input proof script {}: {}",
+            paths.input_script_path.display(),
+            error
+        )
+    })?;
+    let mut input_command = Command::new(&genteel_bin);
+    input_command
+        .current_dir(&paths.repo_root)
+        .arg("--script")
+        .arg(&paths.input_script_path)
+        .arg("--headless")
+        .arg(STARTER_FRAMES.to_string())
+        .arg("--stream-frames")
+        .arg(&paths.input_frame_stream_path)
+        .arg("--stream-every")
+        .arg(STREAM_EVERY.to_string())
+        .arg(&rom_path);
+    run_command_with_timeout(
+        &mut input_command,
+        "Genteel ROM input check",
         GENTEEL_RUN_TIMEOUT,
     )?;
 
@@ -163,6 +196,15 @@ fn launch_rom_for_paths(
     let frame_height = first_frame.height;
     let streamed_frames = framebuffer_frames.len();
     let audio_max_abs = wav_max_abs(&paths.audio_dump_path)?;
+    let input_frames = read_frame_stream(&paths.input_frame_stream_path)?;
+    let input_change_ratio = frame_change_ratio(
+        framebuffer_frames
+            .last()
+            .ok_or_else(|| "Neutral frame stream was empty".to_string())?,
+        input_frames
+            .last()
+            .ok_or_else(|| "Input frame stream was empty".to_string())?,
+    )?;
     let screenshot_data_url = format!(
         "data:image/png;base64,{}",
         general_purpose::STANDARD.encode(screenshot_bytes)
@@ -177,6 +219,7 @@ fn launch_rom_for_paths(
         screenshot_path: repo_relative(&paths.repo_root, &paths.screenshot_path),
         frame_stream_path: repo_relative(&paths.repo_root, &paths.frame_stream_path),
         audio_dump_path: repo_relative(&paths.repo_root, &paths.audio_dump_path),
+        input_script_path: repo_relative(&paths.repo_root, &paths.input_script_path),
         screenshot_data_url,
         frames: STARTER_FRAMES,
         stream_every: STREAM_EVERY,
@@ -185,6 +228,8 @@ fn launch_rom_for_paths(
         frame_height,
         framebuffer_frames,
         audio_max_abs,
+        input_changed: input_change_ratio > 0.0001,
+        input_change_ratio,
     })
 }
 
@@ -196,8 +241,12 @@ impl StarterPaths {
             screenshot_path: repo_root.join("artifacts/phase3/starter-rom/starter-frame.png"),
             frame_stream_path: repo_root.join("artifacts/phase3/starter-rom/starter-frames.rgb565"),
             audio_dump_path: repo_root.join("artifacts/phase3/starter-rom/starter-audio.wav"),
+            input_script_path: repo_root.join("artifacts/phase3/starter-rom/hold-right.csv"),
+            input_frame_stream_path: repo_root
+                .join("artifacts/phase3/starter-rom/starter-input-frames.rgb565"),
             build_sgdk_script: repo_root.join("scripts/build-sgdk.sh"),
             build_genteel_script: repo_root.join("scripts/build-genteel.sh"),
+            bundled_genteel_bin: repo_root.join("bin/genteel"),
             local_genteel_bin: repo_root
                 .join("artifacts/phase0/genteel-src/target/release/genteel"),
             repo_root,
@@ -256,6 +305,9 @@ fn find_genteel_bin(paths: &StarterPaths) -> Result<PathBuf, String> {
         }
     }
 
+    if paths.bundled_genteel_bin.is_file() {
+        return Ok(paths.bundled_genteel_bin.clone());
+    }
     if paths.local_genteel_bin.is_file() {
         return Ok(paths.local_genteel_bin.clone());
     }
@@ -475,6 +527,30 @@ fn wav_max_abs(path: &Path) -> Result<i16, String> {
     Err("WAV file did not include a data chunk".to_string())
 }
 
+fn frame_change_ratio(neutral: &FramebufferFrame, input: &FramebufferFrame) -> Result<f64, String> {
+    if neutral.frame_index != input.frame_index {
+        return Err(format!(
+            "Input-check frames did not match: neutral frame {}, input frame {}",
+            neutral.frame_index, input.frame_index
+        ));
+    }
+    let neutral_data = general_purpose::STANDARD
+        .decode(&neutral.rgb565_data)
+        .map_err(|error| format!("Could not decode neutral input-check frame: {}", error))?;
+    let input_data = general_purpose::STANDARD
+        .decode(&input.rgb565_data)
+        .map_err(|error| format!("Could not decode input-check frame: {}", error))?;
+    if neutral_data.len() != input_data.len() || neutral_data.is_empty() {
+        return Err("Input-check frames did not have matching dimensions".to_string());
+    }
+    let changed = neutral_data
+        .chunks_exact(2)
+        .zip(input_data.chunks_exact(2))
+        .filter(|(left, right)| left != right)
+        .count();
+    Ok(changed as f64 / (neutral_data.len() / 2) as f64)
+}
+
 fn read_u16(data: &[u8], offset: usize) -> Result<u16, String> {
     let bytes = data
         .get(offset..offset + 2)
@@ -609,6 +685,33 @@ mod tests {
             paths.audio_dump_path,
             PathBuf::from("/tmp/drive16/artifacts/phase3/starter-rom/starter-audio.wav")
         );
+        assert_eq!(
+            paths.input_script_path,
+            PathBuf::from("/tmp/drive16/artifacts/phase3/starter-rom/hold-right.csv")
+        );
+        assert_eq!(
+            paths.input_frame_stream_path,
+            PathBuf::from("/tmp/drive16/artifacts/phase3/starter-rom/starter-input-frames.rgb565")
+        );
+    }
+
+    #[test]
+    fn frame_change_ratio_reports_changed_pixels() {
+        let neutral = FramebufferFrame {
+            frame_index: 0,
+            width: 2,
+            height: 1,
+            format: "RGB565".to_string(),
+            rgb565_data: general_purpose::STANDARD.encode([0, 0, 1, 0]),
+        };
+        let input = FramebufferFrame {
+            frame_index: 0,
+            width: 2,
+            height: 1,
+            format: "RGB565".to_string(),
+            rgb565_data: general_purpose::STANDARD.encode([0, 0, 2, 0]),
+        };
+        assert_eq!(frame_change_ratio(&neutral, &input).unwrap(), 0.5);
     }
 
     #[test]
@@ -626,6 +729,8 @@ mod tests {
         assert_eq!(preview.streamed_frames, preview.framebuffer_frames.len());
         assert!(preview.audio_max_abs >= 0);
         assert!(preview.audio_dump_path.ends_with("starter-audio.wav"));
+        assert!(preview.input_changed);
+        assert!(preview.input_change_ratio > 0.0001);
         assert!(preview
             .framebuffer_frames
             .iter()

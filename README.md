@@ -28,9 +28,9 @@ that the generated game is good or playable.
 |---|---|
 | Desktop chat → OpenCode agent → active SGDK project | Working, still being hardened |
 | First-run workspace | Working: one describe-game action, four proven examples, and an open-project route replace the empty ROM canvas |
-| Agent startup | Defaults to local OpenCode; falls back to a Drive16-owned port if another local tool owns 4096, and restarts only the process Drive16 owns |
-| Project lifecycle: New / Save / Open / Import ROM / Export ROM / Verify | Working, with no-ROM/stale-ROM guards |
-| Interactive play: keyboard + gamepad, pause/reset/stop, fullscreen | Working |
+| Agent startup | Drive16 always launches its own OpenCode process inside the writable app runtime; if port 4096 belongs to another process, it chooses another local port instead of attaching to it |
+| Project lifecycle: New / Save / Open / Import ROM / Export ROM / Verify | Working, with no-ROM/stale-ROM guards plus deterministic screen, input, and audio proof |
+| Interactive play: keyboard + gamepad, pause/reset/stop, fullscreen | Working in the browser with the real recovered ROM. The packaged macOS WKWebView starts the core and receives input but currently renders a black canvas; this is a release blocker. |
 | Audio in the player | Working with safe default volume: ROM playback starts muted/0% |
 | Original music through MML | Tooling works; chat-built games must still prove it was wired and captured |
 | AI sprites through ComfyUI | Working locally; when AI sprites are enabled, the desktop app starts ComfyUI automatically and the agent must disclose fallback art if setup is unavailable |
@@ -40,7 +40,7 @@ that the generated game is good or playable.
 | Presentation baseline | Snake, Pong, Tetris, and Asteroids now build with custom tile art, composed panels, stronger palettes, and verified non-silent audio |
 | Model bakeoff | Three models × four prompts complete and rescored under presentation v2: all 12 historical outputs need visual repair, so DeepSeek is only the operational default |
 | Ollama as the agent brain | Working locally; Qwen passed the full Snake build/runtime/audio/project-memory gate, while DeepSeek remains the stronger default |
-| Distributable .app/.dmg | Ad-hoc-signed direct-download `.app` and `.dmg` pass strict signature, disk-image, isolated install, writable-runtime, and first-project checks; this project does not target the App Store or Apple-notarized distribution |
+| Distributable .app/.dmg | The ad-hoc-signed `.app` and `.dmg` pass signature, disk-image, isolated install, writable-runtime, and native Verify checks. Treat them as a test build until packaged interactive Play no longer renders black. |
 | LICENSE file | MIT |
 
 Recent history: the app was overhauled on 2026-07-05 — the agent loop was
@@ -223,6 +223,10 @@ used) run as separate processes and are never linked into the app binary.
 Genteel (MIT) is the verification emulator. Drive16's app code is released
 under the repository's MIT `LICENSE` (`DECISIONS.md`).
 
+The streamed browser player core is not bundled with Drive16. Genesis Plus GX
+has a non-commercial core license, so this test-build path is for free,
+non-commercial use and must be revisited before monetization.
+
 The macOS DMG is ad-hoc signed, not Apple notarized. A copy downloaded from the
 internet may therefore require **Open Anyway** in macOS Privacy & Security on
 first launch. Developer ID signing/notarization can remove that Gatekeeper
@@ -236,6 +240,6 @@ friction later without changing the project's no-App-Store distribution plan.
    beyond the single active workspace + snapshots.
 3. **Local-model quality** — extend the passing Qwen proof across the remaining
    audit prompts and keep improving completion discipline.
-4. **Play-core policy** — bundle or fetch a licensed Genesis core instead of
-   the development CDN fallback.
+4. **Packaged Play** — replace or repair the current RetroArch/WebAssembly path
+   so the macOS WKWebView renders the same visible frames as the browser.
 5. **Release hardening** — continue clean-machine and broader prompt testing.

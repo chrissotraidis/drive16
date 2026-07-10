@@ -1,0 +1,27 @@
+diff --git a/dist/nostalgist.js b/dist/nostalgist.js
+index 3821fe5d5e46032bf76f764da67c4a0a4dd8fcf6..4e626d2121724cda8e6abaddf3c21b4f5cc271b4 100644
+--- a/dist/nostalgist.js
++++ b/dist/nostalgist.js
+@@ -2183,7 +2183,8 @@ async function importCoreJsAsESM({ js, name }) {
+ 			jsObjectUrl
+ );
+ 	} catch {
+-		return await new Function(`return import('${jsObjectUrl}')`)();
++		const classicJsContent = jsContent.replace("export function getEmscripten", "function getEmscripten");
++		return new Function(`${classicJsContent}\nreturn { getEmscripten };`)();
+ 	} finally {
+ 		jsResolvable.dispose();
+ 	}
+@@ -2637,9 +2638,10 @@ var Emulator = class {
+ 		const { Module } = this.getEmscripten();
+ 		const raArgs = Module.arguments || [];
+ 		const { rom, signal } = this.options;
+-		if (!Module.arguments && rom.length > 0) {
++		if (rom.length > 0) {
+ 			const [{ name }] = rom;
+-			raArgs.push(path.join(EmulatorFileSystem.contentDirectory, name));
++			const contentPath = path.join(EmulatorFileSystem.contentDirectory, name);
++			if (!raArgs.includes(contentPath)) raArgs.push(contentPath);
+ 		}
+ 		raArgs.push("-c", EmulatorFileSystem.configPath);
+ 		installSetImmediatePolyfill();

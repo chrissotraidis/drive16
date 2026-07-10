@@ -1,15 +1,39 @@
 # Drive16 Progress
 
-Current phase: Direct-download release baseline complete; broader product
-iteration remains.
+Current phase: Direct-download packaging baseline complete; packaged
+interactive Play remains a release blocker.
 
 The builder reliability, four-prompt functional audit, first-run UX, stricter
 presentation baseline, and three-model comparison are complete. A release-mode
 macOS `.app` now runs from bundled support files copied into Application
-Support, with an explicit CSP and a user-supplied Play-core policy. The owner
+Support, with an explicit CSP and a streamed-or-local Play-core policy. The owner
 confirmed MIT and chose direct download rather than App Store or Apple-notarized
-distribution. The current ad-hoc-signed DMG is therefore the completed release
-baseline; downloaded copies may require macOS **Open Anyway** on first launch.
+distribution. The ad-hoc-signed DMG passes install and native Verify checks,
+but it is still a test build because interactive Play is black in the packaged
+WKWebView. Downloaded copies may require macOS **Open Anyway** on first launch.
+
+## Stalled-build recovery and packaged verification (2026-07-10)
+
+- Diagnosed the failed Tetris run: the packaged app attached to an older
+  OpenCode server rooted in the git checkout, so three successful ROM builds
+  landed outside the Application Support project watched by the UI.
+- Drive16 now always launches and stops its own OpenCode child, passes the
+  absolute active-project path to the agent, and refuses to silently reuse an
+  unrelated healthy server on port 4096.
+- Agent runs now have an absolute six-minute ceiling, explicitly abort the
+  OpenCode session, enforce the two-attempt music limit, and recover a current
+  ROM when verification stalls after a successful build.
+- Recovered Tetris from the proven deterministic skeleton without another
+  model call. It builds, presents a composed game screen, responds to scripted
+  Right input, restarts cleanly, and emits non-silent music.
+- The DMG now bundles the native Genteel verifier. In the release app, Verify
+  completed in about three seconds with screen capture, a same-frame 0.333%
+  input change, and audio max-absolute sample 10922; the UI reported `Ready`.
+- Direct-download releases enable the existing streamed interactive core path
+  without asking the user to find `.zip`, `.js`, or `.wasm` files. The browser
+  renders the recovered Tetris ROM and records Right/Up input. The packaged
+  WKWebView starts the same core and records input, but its canvas remains black;
+  the screen check now times out honestly instead of staying on `Checking`.
 
 ## Local model and packaging proof (2026-07-09)
 
@@ -37,8 +61,8 @@ baseline; downloaded copies may require macOS **Open Anyway** on first launch.
   support runtime, copies it to
   `~/Library/Application Support/dev.drive16.desktop/runtime`, and initializes
   the active project there instead of under the git checkout.
-- Release mode no longer enables the development CDN emulator core. The
-  packaged UI reports that a user-supplied core is required.
+- Release mode enables the streamed interactive core for the direct-download
+  build while keeping the core out of the package itself.
 - The packaged native window, OpenCode bridge, first-run workspace, settings,
   and Advanced setup list were inspected successfully.
 - The whole `.app` is now ad-hoc signed instead of using `--no-sign`, so strict
@@ -529,16 +553,17 @@ Current recovery evidence from this pass:
   via automatic server restart; saved keys are detected on launch (no
   re-pasting); action results show as visible toasts; real error strings
   are preserved; silent provider rejections surface as re-test-key errors;
-  Play works in the native app via the CDN core fallback; New Project
-  resets the agent workspace; desktop chat has exactly one path (the
-  agent) — the freeform gate path is browser-preview-only.
+  Browser Play works via the streamed core fallback; the current packaged
+  macOS WKWebView starts that player and receives input but renders black.
+  New Project resets the agent workspace; desktop chat has exactly one path
+  (the agent) — the freeform gate path is browser-preview-only.
 - [x] Structure formalized: `docs/project-structure.md`, starter template
   ships `res/` scaffold, project menu shows the Workspace folder, agent
   skill carries identity/capabilities and a no-tools-for-greetings rule.
-- [x] Track E (rest) - app-data paths, Tauri bundling, CSP, the user-core
+- [~] Track E (rest) - app-data paths, Tauri bundling, CSP, the user-core
   policy, MIT licensing, and ad-hoc direct-download packaging are implemented;
-  the isolated install smoke passes. Apple notarization is optional future
-  Gatekeeper polish.
+  the isolated install smoke passes. Packaged interactive rendering remains a
+  release blocker. Apple notarization is optional future Gatekeeper polish.
 
 Older phase history follows below.
 

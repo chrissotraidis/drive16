@@ -67,7 +67,7 @@ for _ in {1..120}; do
   sleep 0.1
 done
 
-for entry in agent assets corpus examples mcp-servers patches scripts LICENSE opencode.json; do
+for entry in agent assets corpus examples mcp-servers patches scripts bin LICENSE opencode.json; do
   if [[ ! -e "$RUNTIME_ROOT/$entry" ]]; then
     printf 'Clean runtime is missing: %s\n' "$entry" >&2
     exit 1
@@ -82,6 +82,11 @@ fi
 
 if [[ ! -x "$RUNTIME_ROOT/scripts/build-sgdk.sh" ]]; then
   printf 'Packaged SGDK build script is not executable.\n' >&2
+  exit 1
+fi
+
+if [[ ! -x "$RUNTIME_ROOT/bin/genteel" ]]; then
+  printf 'Packaged Genteel verifier is missing or not executable.\n' >&2
   exit 1
 fi
 

@@ -8,16 +8,28 @@ Date: 2026-07-10
 - The local package is ad-hoc signed as a complete bundle; strict verification
   covers its executable, Info.plist, and packaged resources.
 - The release `.app` embeds the Drive16 agent, assets, corpus, starter projects,
-  MCP servers, patches, scripts, and OpenCode configuration.
+  MCP servers, patches, scripts, OpenCode configuration, and an executable
+  arm64 Genteel verifier.
 - On first release launch, support files are copied to the app-data runtime and
   the active project is created there. The installed app does not write inside
   its signed bundle or require the git checkout for project storage.
 - The packaged frontend uses an explicit CSP.
-- Release builds require a user-supplied interactive Genesis core. The
-  Nostalgist CDN fallback is restricted to development or an explicit debug
-  override.
+- Direct-download builds enable the Nostalgist streamed Genesis core for Play
+  and permit its pinned jsDelivr origin in the CSP. The core is fetched on
+  demand rather than bundled; a user-supplied local core remains supported.
 - The packaged native window opens, connects to OpenCode, shows the first-run
-  workspace, opens Settings, and reports the release-safe core state.
+  workspace, and opens Settings.
+- The packaged app launches a Drive16-owned OpenCode process rooted in the
+  writable runtime even when another healthy OpenCode server owns port 4096.
+- Native Verify shows the recovered Tetris frame, proves same-frame scripted
+  input changed 0.333% of pixels, captures non-silent audio (`maxAbs=10922`),
+  and reports `Ready` without compiling Genteel at first use.
+- Browser-first interactive testing loads the real recovered Tetris ROM,
+  renders a visible frame, and records Right/Up input through the shared React
+  and Nostalgist player code.
+- **Release blocker:** packaged macOS interactive Play starts RetroArch and
+  records Right/Up input, but the WKWebView canvas remains black. The screen
+  probe now times out and reports the failure instead of spinning forever.
 - Common Settings and Build activity keep endpoint, file-path, and raw
   connection diagnostics inside Advanced setup.
 - Native tests, frontend build, browser smoke, agent contract, project-memory
@@ -30,9 +42,11 @@ Date: 2026-07-10
 
 - App bundle: `app/src-tauri/target/release/bundle/macos/Drive16.app`
 - DMG: `app/src-tauri/target/release/bundle/dmg/Drive16_0.1.0_aarch64.dmg`
-- DMG SHA-256: `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`
+- DMG SHA-256: `0a1594c08d0cb0bc964ea962537f1517f0ee6adbbdc7c6459f50a35f54c53ca5`
 - Packaged resources: `Drive16.app/Contents/Resources/drive16-support/`
+- Bundled verifier: `Drive16.app/Contents/Resources/drive16-support/bin/genteel`
 - Writable runtime: `~/Library/Application Support/dev.drive16.desktop/runtime/`
+- Recovered Tetris proof: `artifacts/phase9/tetris-recovery/`
 - Local Qwen pass: `artifacts/phase9/model-bakeoff/runs/local-qwen-snake-audit-tool-proof/run-record.json`
 - Native ComfyUI auto-start proof: the enabled release app reached
   `http://127.0.0.1:8188` readiness in nine seconds.
@@ -43,6 +57,9 @@ Date: 2026-07-10
 
 - The owner confirmed the MIT license; the repository includes `LICENSE`.
 - Drive16 targets source and direct-download distribution, not the App Store.
+- The streamed Genesis Plus GX path is not bundled and is limited to free,
+  non-commercial use under the core's upstream license. Revisit the player
+  choice before monetization.
 - The current DMG is intentionally ad-hoc signed rather than Apple notarized.
 - A quarantined internet download may require **Open Anyway** in macOS Privacy
   & Security on first launch. Developer ID signing/notarization remains optional
@@ -50,5 +67,6 @@ Date: 2026-07-10
 - A broader clean-machine game-build pass remains useful follow-up evidence,
   but the isolated empty-home install/runtime smoke already passes.
 
-Describe the current artifact as a verified ad-hoc-signed direct-download
-release. Do not describe it as Apple notarized or App Store distributed.
+Describe the current artifact as a verified ad-hoc-signed direct-download test
+build. Do not describe interactive Play as working in the packaged macOS app,
+and do not describe it as Apple notarized or App Store distributed.

@@ -9,6 +9,7 @@ export type ActiveProject = {
   status: string;
   detail: string;
   projectPath: string;
+  agentProjectPath: string;
   romPath: string;
   romExists: boolean;
   created: boolean;
@@ -40,6 +41,10 @@ export async function ensureActiveProject(): Promise<ActiveProject> {
 
 export async function resetActiveProject(): Promise<ActiveProject> {
   return invoke<ActiveProject>("reset_active_project");
+}
+
+export async function abortAgentSession(sessionId: string): Promise<boolean> {
+  return invoke<boolean>("abort_opencode_session", { sessionId });
 }
 
 export async function seedActiveProjectForPrompt(prompt: string): Promise<PromptSeedResult> {
@@ -176,6 +181,7 @@ export function agentPromptWithProject(
       "- If Known Issues lists limitations, do not write Next Intended Change: none.",
       "- Before compiling MML music, read or query corpus/mml/ctrmml-megadrive.md; if two compile attempts fail, record audio as failed and finish the gameplay checks.",
       "- The two-attempt MML cap is strict; do not call compile_music a third time in the same turn.",
+      "- If a seeded starter already includes a VGM/XGM resource, use it and verify audio; do not compile replacement music.",
       "- If any screen, input, or audio check is missing or failed, say the playability gate failed and explain why.",
     ].join("\n"),
     contextLines.length ? `Drive16 settings:\n${contextLines.join("\n")}` : "",

@@ -1,2 +1,4 @@
 allowBuilds:
   esbuild: true
+patchedDependencies:
+  nostalgist@0.21.1: patches/nostalgist@0.21.1.patch

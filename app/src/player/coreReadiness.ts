@@ -19,16 +19,15 @@ type DetectInteractiveCoreReadinessOptions = {
   storage?: InteractiveCoreStorageSummary;
 };
 
-const devCdnReadiness: InteractiveCoreReadiness = {
+const streamedCoreReadiness: InteractiveCoreReadiness = {
   status: "dev-only",
   policy: "dev-cdn",
-  label: "Dev preview only",
+  label: "Play ready online",
   detail:
-    "Interactive Play uses Nostalgist/RetroArch with a Genesis Plus GX core loaded from the dev CDN. Drive16 does not bundle that core.",
+    "Interactive Play streams the Genesis Plus GX core on first use. Drive16 does not bundle that core.",
   verifyDetail: "Verify still uses local Genteel capture and does not depend on the interactive core.",
-  setupAction:
-    "For release-clean Play, choose a compatible local Genesis core. Dev CDN fallback is only for local development.",
-  source: "Nostalgist dev CDN",
+  setupAction: "Press Play ROM while online, or choose a compatible local Genesis core.",
+  source: "Streamed Genesis core",
   canPlay: true,
   releaseSafe: false,
 };
@@ -45,7 +44,7 @@ const readinessByOverride: Record<InteractiveCoreStatus, InteractiveCoreReadines
     canPlay: true,
     releaseSafe: true,
   },
-  "dev-only": devCdnReadiness,
+  "dev-only": streamedCoreReadiness,
   missing: {
     status: "missing",
     policy: "disabled",
@@ -114,7 +113,7 @@ export function detectInteractiveCoreReadiness({
     return readinessByOverride.unsupported;
   }
 
-  if (allowDevCdn) return devCdnReadiness;
+  if (allowDevCdn) return streamedCoreReadiness;
 
   return storage?.status === "missing"
     ? {

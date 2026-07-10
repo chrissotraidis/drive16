@@ -13,6 +13,7 @@ export type LoadedPlayerRom = {
   loadedAt: string;
   sourcePath: string;
   sourceName: string;
+  blob: Blob;
   objectUrl: string;
   bytes: number;
 };

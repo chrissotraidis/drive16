@@ -111,71 +111,91 @@ struct HttpResponse {
 }
 
 pub fn connect_opencode() -> OpenCodeBridgeStatus {
-    let initial_endpoint = current_endpoint();
-    match wait_for_health(Duration::from_millis(250), Duration::from_millis(250)) {
-        Ok(health) => status(
-            "ready",
-            "OpenCode server already running",
-            Some(health),
-            false,
-        ),
-        Err(error) => {
-            let conflict = port_conflict_detail(&initial_endpoint, &error);
-            if conflict.is_some() {
-                match reserve_ephemeral_endpoint() {
-                    Ok(endpoint) => set_current_endpoint(endpoint),
-                    Err(error) => {
-                        return status(
-                            "missing",
-                            &format!(
-                                "{} Could not choose an alternate build-agent port: {}",
-                                conflict.unwrap_or_default(),
-                                error
-                            ),
-                            None,
-                            false,
-                        );
-                    }
-                }
-            }
-
-            match start_opencode() {
-                Ok(()) => match wait_for_health(Duration::from_secs(8), Duration::from_millis(250))
-                {
-                    Ok(health) => {
-                        let detail = conflict
-                            .map(|value| {
-                                format!(
-                                    "{} Drive16 launched its own OpenCode server at {}.",
-                                    value,
-                                    current_endpoint().base_url
-                                )
-                            })
-                            .unwrap_or_else(|| "OpenCode server launched".to_string());
-                        status("ready", &detail, Some(health), true)
-                    }
-                    Err(error) => status(
-                        "warning",
-                        &format!("OpenCode launched but did not become ready: {}", error),
-                        None,
-                        true,
-                    ),
-                },
-                Err(error) => status("missing", &error, None, false),
-            }
+    match managed_child_is_running() {
+        Ok(true) => {
+            return match wait_for_health(Duration::from_secs(3), Duration::from_millis(200)) {
+                Ok(health) => status(
+                    "ready",
+                    "Drive16 build agent already running",
+                    Some(health),
+                    false,
+                ),
+                Err(error) => status(
+                    "warning",
+                    &format!("Drive16 build agent stopped responding: {}", error),
+                    None,
+                    false,
+                ),
+            };
         }
+        Ok(false) => {}
+        Err(error) => return status("missing", &error, None, false),
+    }
+
+    // Never attach the desktop app to an arbitrary healthy OpenCode server.
+    // Its working directory determines where relative project paths and MCP
+    // tools operate. Reusing a repo-root debug server from a packaged app can
+    // build a valid ROM in the wrong workspace while the UI continues to show
+    // "No ROM". Reserve a port for a child this app owns instead.
+    let endpoint = match reserve_owned_endpoint(DEFAULT_PORT) {
+        Ok(endpoint) => endpoint,
+        Err(error) => {
+            return status(
+                "missing",
+                &format!(
+                    "Could not choose a Drive16-owned build-agent port: {}",
+                    error
+                ),
+                None,
+                false,
+            );
+        }
+    };
+    let alternate_port = endpoint.port != DEFAULT_PORT;
+    set_current_endpoint(endpoint);
+
+    match start_opencode() {
+        Ok(()) => match wait_for_health(Duration::from_secs(8), Duration::from_millis(250)) {
+            Ok(health) => {
+                let detail = if alternate_port {
+                    format!(
+                        "Drive16 launched its own build agent at {} because the default port was already in use.",
+                        current_endpoint().base_url
+                    )
+                } else {
+                    "Drive16 build agent launched".to_string()
+                };
+                status("ready", &detail, Some(health), true)
+            }
+            Err(error) => status(
+                "warning",
+                &format!("OpenCode launched but did not become ready: {}", error),
+                None,
+                true,
+            ),
+        },
+        Err(error) => status("missing", &error, None, false),
     }
 }
 
-fn port_conflict_detail(endpoint: &OpenCodeEndpoint, error: &str) -> Option<String> {
-    if !error.contains("HTTP 401") && !error.to_lowercase().contains("requires authentication") {
-        return None;
+fn managed_child_is_running() -> Result<bool, String> {
+    let child_slot = OPENCODE_CHILD.get_or_init(|| Mutex::new(None));
+    let mut guard = child_slot
+        .lock()
+        .map_err(|_| "OpenCode process lock was poisoned".to_string())?;
+    let Some(child) = guard.as_mut() else {
+        return Ok(false);
+    };
+    match child
+        .try_wait()
+        .map_err(|error| format!("Could not inspect OpenCode process: {}", error))?
+    {
+        None => Ok(true),
+        Some(_) => {
+            *guard = None;
+            Ok(false)
+        }
     }
-
-    Some(format!(
-        "Another local tool is using the build-agent port at {}.",
-        endpoint.base_url
-    ))
 }
 
 fn reserve_ephemeral_endpoint() -> Result<OpenCodeEndpoint, String> {
@@ -187,6 +207,16 @@ fn reserve_ephemeral_endpoint() -> Result<OpenCodeEndpoint, String> {
         .port();
     drop(listener);
     Ok(endpoint_for_port(port))
+}
+
+fn reserve_owned_endpoint(preferred_port: u16) -> Result<OpenCodeEndpoint, String> {
+    match TcpListener::bind((HOST, preferred_port)) {
+        Ok(listener) => {
+            drop(listener);
+            Ok(endpoint_for_port(preferred_port))
+        }
+        Err(_) => reserve_ephemeral_endpoint(),
+    }
 }
 
 fn endpoint_for_port(port: u16) -> OpenCodeEndpoint {
@@ -414,6 +444,22 @@ pub fn drain_background_errors() -> Vec<OpenCodeBackgroundError> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+pub fn abort_opencode_session(session_id: String) -> Result<bool, String> {
+    let session_id = session_id.trim();
+    if session_id.is_empty()
+        || !session_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+    {
+        return Err("OpenCode session id is invalid".to_string());
+    }
+    let path = format!("/session/{}/abort", session_id);
+    let response = http_request("POST", &path, None)?;
+    require_success(response.status, &response.body, "abort session")?;
+    serde_json::from_str::<bool>(&response.body)
+        .map_err(|error| format!("OpenCode abort response was invalid: {}", error))
 }
 
 fn push_background_error(detail: String) {
@@ -791,16 +837,22 @@ mod tests {
     }
 
     #[test]
-    fn detects_authenticated_port_conflict() {
-        let endpoint = endpoint_for_port(4096);
-        let detail = port_conflict_detail(
-            &endpoint,
-            "OpenCode health check failed with HTTP 401: authentication required",
-        )
-        .expect("401 should be treated as a port conflict");
+    fn owned_endpoint_avoids_an_occupied_preferred_port() {
+        let listener = TcpListener::bind((HOST, 0)).expect("test port should be available");
+        let occupied_port = listener
+            .local_addr()
+            .expect("test listener should have an address")
+            .port();
+        let endpoint = reserve_owned_endpoint(occupied_port)
+            .expect("Drive16 should choose an alternate owned port");
+        assert_ne!(endpoint.port, occupied_port);
+    }
 
-        assert!(detail.contains("Another local tool is using the build-agent port"));
-        assert!(detail.contains("http://127.0.0.1:4096"));
+    #[test]
+    fn abort_rejects_invalid_session_id_before_network_access() {
+        let error = abort_opencode_session("../wrong".to_string())
+            .expect_err("invalid session ids must be rejected");
+        assert!(error.contains("session id is invalid"));
     }
 
     #[test]

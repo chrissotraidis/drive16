@@ -15,7 +15,7 @@ export const nostalgistProviderReady: PlayerProvider = {
   state: "dev-only",
   label: "Play ready",
   detail:
-    "Nostalgist/RetroArch loads Genesis Plus GX from the dev CDN at play time; Drive16 does not vendor the core.",
+    "Nostalgist/RetroArch streams Genesis Plus GX at play time; Drive16 does not vendor the core.",
 };
 
 export type NostalgistPlayerRuntime = {
@@ -27,6 +27,7 @@ export type NostalgistPlayerRuntime = {
   muted: boolean;
   volume: number;
   volumeSteps: number;
+  logs: string[];
 };
 
 type NostalgistLaunchOptions = Parameters<typeof Nostalgist.launch>[0];
@@ -59,13 +60,23 @@ export async function launchNostalgistMegadrivePlayer({
   canvas.dataset.playerCoreSource = core ? "user" : "dev-cdn";
   canvas.dataset.romSource = rom.sourcePath;
 
-  const fileContent = await fetchRomBlob(rom);
+  const fileContent = rom.blob;
+  const logs: string[] = [];
+  const recordLog = (...args: unknown[]) => {
+    const message = args.join(" ").trim();
+    if (message) logs.push(message);
+    if (logs.length > 80) logs.shift();
+  };
   const emscriptenModule = {
+    print(...args: unknown[]) {
+      recordLog(...args);
+    },
     printErr(...args: unknown[]) {
       const message = args.join(" ");
       if (message.includes("Canvas size should be set using CSS properties")) {
         return;
       }
+      recordLog(...args);
       console.error(...args);
     },
   } as NonNullable<NostalgistLaunchOptions["emscriptenModule"]>;
@@ -92,6 +103,11 @@ export async function launchNostalgistMegadrivePlayer({
       audio_mixer_mute_enable: false,
       audio_volume: retroarchMutedVolume,
       audio_mixer_volume: retroarchMutedVolume,
+      log_verbosity: true,
+      frontend_log_level: 0,
+      video_shader_enable: false,
+      video_smooth: false,
+      video_threaded: false,
     },
     rom: {
       fileContent,
@@ -108,6 +124,7 @@ export async function launchNostalgistMegadrivePlayer({
     muted: true,
     volume: defaultPlayerVolume,
     volumeSteps: 0,
+    logs,
   };
 
   forceMinimumRetroarchVolume(runtime);
@@ -242,12 +259,4 @@ export function sendNostalgistInput(
   } else {
     runtime.instance.pressUp({ button, player: 1 });
   }
-}
-
-async function fetchRomBlob(rom: LoadedPlayerRom) {
-  const response = await fetch(rom.objectUrl);
-  if (!response.ok) {
-    throw new Error(`Could not prepare ${rom.sourceName} for interactive Play.`);
-  }
-  return response.blob();
 }

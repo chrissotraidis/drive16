@@ -95,6 +95,7 @@ pub struct ActiveProjectResult {
     pub status: String,
     pub detail: String,
     pub project_path: String,
+    pub agent_project_path: String,
     pub rom_path: String,
     pub rom_exists: bool,
     pub created: bool,
@@ -436,6 +437,7 @@ fn ensure_active_project_for_repo(repo_root: PathBuf) -> Result<ActiveProjectRes
             "Active project is ready".to_string()
         },
         project_path: repo_relative(&repo_root, &active),
+        agent_project_path: active.to_string_lossy().into_owned(),
         rom_path: repo_relative(&repo_root, &rom_path),
         rom_exists: rom_current,
         created,
@@ -2159,6 +2161,7 @@ mod tests {
         fs::write(active_project.join("src/main.c"), "int changed(){}").unwrap();
 
         let result = ensure_active_project_for_repo(temp_dir.clone()).unwrap();
+        assert_eq!(result.agent_project_path, active_project.to_string_lossy());
         fs::remove_dir_all(temp_dir).unwrap();
 
         assert_eq!(result.status, "stale");

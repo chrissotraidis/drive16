@@ -7,7 +7,7 @@ APP_BUNDLE="$APP_DIR/src-tauri/target/debug/bundle/macos/Drive16.app"
 
 pkill -x drive16 2>/dev/null || true
 
-VITE_DRIVE16_ALLOW_DEV_CDN=1 pnpm --dir "$APP_DIR" tauri build --debug --bundles app
+VITE_DRIVE16_ALLOW_STREAMED_CORE=1 pnpm --dir "$APP_DIR" tauri build --debug --bundles app
 open "$APP_BUNDLE"
 
 printf 'Opened %s\n' "$APP_BUNDLE"

@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  nostalgist@0.21.1: 4b2fbd2396396681b550c72b4840fe8f5fc7151321bbbb09d58ab4d53ea5cf5b
+
 importers:
 
   .:
@@ -19,7 +22,7 @@ importers:
         version: 0.468.0(react@18.3.1)
       nostalgist:
         specifier: 0.21.1
-        version: 0.21.1
+        version: 0.21.1(patch_hash=4b2fbd2396396681b550c72b4840fe8f5fc7151321bbbb09d58ab4d53ea5cf5b)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -1261,7 +1264,7 @@ snapshots:
 
   node-releases@2.0.50: {}
 
-  nostalgist@0.21.1:
+  nostalgist@0.21.1(patch_hash=4b2fbd2396396681b550c72b4840fe8f5fc7151321bbbb09d58ab4d53ea5cf5b):
     dependencies:
       '@types/emscripten': 1.41.5
       '@types/ini': 4.1.1

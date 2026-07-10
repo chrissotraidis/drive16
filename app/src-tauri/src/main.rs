@@ -59,6 +59,13 @@ fn drain_opencode_background_errors() -> Vec<opencode::OpenCodeBackgroundError> 
 }
 
 #[tauri::command]
+async fn abort_opencode_session(session_id: String) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || opencode::abort_opencode_session(session_id))
+        .await
+        .map_err(|error| format!("OpenCode abort task failed: {}", error))?
+}
+
+#[tauri::command]
 async fn set_opencode_auth(
     request: opencode::OpenCodeAuthRequest,
 ) -> Result<opencode::OpenCodeAuthResult, String> {
@@ -284,6 +291,7 @@ fn main() {
             connect_opencode,
             send_opencode_message,
             drain_opencode_background_errors,
+            abort_opencode_session,
             set_opencode_auth,
             ensure_active_project,
             seed_active_project_for_prompt,

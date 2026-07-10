@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "pnpm build",
+    "beforeBuildCommand": "../scripts/prepare-drive16-tauri-build.sh",
     "frontendDist": "../dist"
   },
   "app": {
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://openrouter.ai; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' data: blob:; script-src 'self' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data:"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:* https://openrouter.ai https://cdn.jsdelivr.net; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' data: blob:; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data:"
     }
   },
   "bundle": {
@@ -34,6 +34,7 @@
       "../../mcp-servers/": "drive16-support/mcp-servers",
       "../../patches/": "drive16-support/patches",
       "../../scripts/": "drive16-support/scripts",
+      "generated/genteel": "drive16-support/bin/genteel",
       "../../LICENSE": "drive16-support/LICENSE",
       "../../opencode.json": "drive16-support/opencode.json"
     },

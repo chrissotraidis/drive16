@@ -40,11 +40,17 @@ type CoreStatusInfo = {
   acceptedExtensions: string[];
 };
 
+type CoreReadinessInfo = {
+  canPlay: boolean;
+  source: string;
+};
+
 export function ProjectMenu({
   exportResult,
   importBusy,
   importResult,
   interactiveCoreBusy,
+  interactiveCoreReadiness,
   interactiveCoreStatus,
   projectActionNotice,
   projectSummary,
@@ -63,6 +69,7 @@ export function ProjectMenu({
   importBusy: boolean;
   importResult?: PathResult;
   interactiveCoreBusy: boolean;
+  interactiveCoreReadiness: CoreReadinessInfo;
   interactiveCoreStatus: CoreStatusInfo;
   projectActionNotice: ActionNotice;
   projectSummary: ProjectSummaryInfo;
@@ -160,7 +167,9 @@ export function ProjectMenu({
                 ? "Setting Up Play"
                 : interactiveCoreStatus.status === "available"
                   ? "Replace Play Core"
-                  : "Set Up Play"}
+                  : interactiveCoreReadiness.canPlay
+                    ? "Use Local Core"
+                    : "Set Up Play"}
             </button>
             <button
               type="button"
@@ -204,10 +213,14 @@ export function ProjectMenu({
                 {importResult?.importPath ? "Imported ROM ready" : "No imported ROM"}
               </strong>
               <span>Play core</span>
-              <strong title={interactiveCoreStatus.jsPath ?? "Not set up"}>
+              <strong
+                title={interactiveCoreStatus.jsPath ?? interactiveCoreReadiness.source}
+              >
                 {interactiveCoreStatus.status === "available" && interactiveCoreStatus.jsPath
                   ? "Custom core ready"
-                  : "Not set up"}
+                  : interactiveCoreReadiness.canPlay
+                    ? "Ready online"
+                    : "Not set up"}
               </strong>
             </div>
           </div>

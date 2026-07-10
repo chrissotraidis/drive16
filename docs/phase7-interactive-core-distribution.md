@@ -1,7 +1,7 @@
 # Phase 7 Interactive Core Distribution
 
-Status: policy implemented in Slice 1; user-supplied setup implemented in
-Slice 2.
+Status: distribution policy and browser player implemented; packaged macOS
+rendering remains blocked.
 
 ## Goal
 
@@ -27,15 +27,17 @@ opinion.
 
 ## Decision
 
-Use the current Nostalgist/RetroArch path as a local-development interactive
-adapter only when a user core is not configured:
+Use the current Nostalgist/RetroArch path as a streamed browser interactive
+adapter when a user core is not configured:
 
 - Preferred status in the app: `Play ready` with `User core`.
-- Development fallback status in the app: `Dev preview only` with `Dev CDN`.
+- Streamed fallback status in the app: `Play ready online`.
 - Do not commit Genesis Plus GX, RetroArch Emscripten, or other emulator core
   binaries into the repo.
 - Do not claim the public/distributable app bundles a Genesis core.
 - Keep Genteel as the local `Verify/Capture Proof` path.
+- Do not call the packaged macOS player ready while its WKWebView canvas is
+  black, even though the same ROM/core/input path works in the browser.
 - Treat a future public release as requiring either:
   - the current user-supplied core flow,
   - a license-reviewed installer-managed flow, or
@@ -134,11 +136,12 @@ scripts/verify-phase6-browser-smoke.mjs --user-core /path/to/genesis_plus_gx_lib
 Expected behavior:
 
 - `--user-core`: imported ROM Play starts through the selected local core.
-- `dev-only`: imported ROM Play starts through the development fallback.
+- `dev-only`: imported ROM Play starts through the streamed fallback in the
+  browser.
 - `missing`: Play reports setup needed, and Verify still captures proof.
-- Native app: accessibility text showed `Play ready`, `Dev CDN`,
-  `Interactive Play`, `Verify still uses local Genteel`, and the setup hints in
-  the desktop window.
+- Native app: the packaged core starts and accepts controls, but the current
+  macOS WKWebView canvas remains black. Treat this as a release blocker; native
+  Genteel Verify remains the working deterministic proof path.
 
 The broader loop can keep using:
 

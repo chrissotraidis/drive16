@@ -144,6 +144,14 @@ const nostalgistPlayerSource = await readFile(
   path.join(rootDir, "app", "src", "player", "nostalgist.ts"),
   "utf8",
 );
+const nostalgistPatchSource = await readFile(
+  path.join(rootDir, "app", "patches", "nostalgist@0.21.1.patch"),
+  "utf8",
+);
+const viteConfigSource = await readFile(
+  path.join(rootDir, "app", "vite.config.ts"),
+  "utf8",
+);
 const projectSource = await readFile(
   path.join(rootDir, "app", "src-tauri", "src", "project.rs"),
   "utf8",
@@ -218,6 +226,14 @@ const nativeMainSource = await readFile(
 );
 const runtimeSource = await readFile(
   path.join(rootDir, "app", "src-tauri", "src", "runtime.rs"),
+  "utf8",
+);
+const tauriBuildPreparationSource = await readFile(
+  path.join(rootDir, "scripts", "prepare-drive16-tauri-build.sh"),
+  "utf8",
+);
+const nativeBuildSource = await readFile(
+  path.join(rootDir, "app", "src-tauri", "build.rs"),
   "utf8",
 );
 const screenshotQualitySource = await readFile(
@@ -304,6 +320,68 @@ for (const expected of [
   assert(
     normalizedBuilderSkill.includes(expected),
     `Builder skill is missing contract text: ${expected}`,
+  );
+}
+assert(
+  nostalgistPlayerSource.includes("const fileContent = rom.blob") &&
+    !nostalgistPlayerSource.includes("fetch(rom.objectUrl)"),
+  "Interactive Play must pass the ROM Blob directly in Tauri WebKit.",
+);
+for (const expected of [
+  'classicJsContent = jsContent.replace("export function getEmscripten"',
+  "if (!raArgs.includes(contentPath)) raArgs.push(contentPath)",
+]) {
+  assert(
+    nostalgistPatchSource.includes(expected),
+    `Nostalgist WebKit/content patch is missing: ${expected}`,
+  );
+}
+assert(
+  viteConfigSource.includes("/__drive16_test_rom.bin") &&
+    appSource.includes('fetch("/__drive16_test_rom.bin")'),
+  "Browser development must expose and load the real recovered ROM for shared player tests.",
+);
+
+for (const expected of [
+  "ensure_generated_genteel_placeholder",
+  "Run the Drive16 Tauri build preparation step.",
+]) {
+  assert(
+    nativeBuildSource.includes(expected),
+    `Tauri build script is missing generated verifier fallback: ${expected}`,
+  );
+}
+
+for (const expected of [
+  "scripts/build-genteel.sh",
+  "app/src-tauri/generated",
+  'chmod +x "$GENERATED_DIR/genteel"',
+]) {
+  assert(
+    tauriBuildPreparationSource.includes(expected),
+    `Tauri build preparation is missing bundled verifier guard: ${expected}`,
+  );
+}
+
+for (const expected of [
+  'bundled_genteel_bin: repo_root.join("bin/genteel")',
+  "if paths.bundled_genteel_bin.is_file()",
+  'arg("--script")',
+  "input_changed: input_change_ratio > 0.0001",
+]) {
+  assert(
+    starterRomSource.includes(expected),
+    `Starter ROM runtime is missing bundled Genteel support: ${expected}`,
+  );
+}
+
+for (const expected of [
+  'setPlayerInputEvidence(preview.inputChanged ? "tested" : "failed")',
+  'playerScreenEvidence === "visible" || playerScreenEvidence === "captured"',
+]) {
+  assert(
+    appSource.includes(expected),
+    `App Verify flow is missing deterministic evidence handling: ${expected}`,
   );
 }
 
@@ -556,11 +634,16 @@ for (const expected of [
 }
 
 for (const expected of [
-  "Another local tool is using the build-agent port",
+  "fn managed_child_is_running",
+  "fn reserve_owned_endpoint",
   "fn reserve_ephemeral_endpoint",
+  "Never attach the desktop app to an arbitrary healthy OpenCode server",
+  "Drive16 launched its own build agent",
   "Stop only the child we own",
   "move Drive16 to a fresh local port",
   "OpenCode restart needs a free owned port",
+  "pub fn abort_opencode_session",
+  'format!("/session/{}/abort", session_id)',
   "set_current_endpoint(endpoint)",
 ]) {
   assert(opencodeSource.includes(expected), `OpenCode startup ownership is missing: ${expected}`);
@@ -806,6 +889,13 @@ for (const expected of [
   "sawScreenCheck",
   "sawInputTest",
   "sawAudioCheck",
+  "agentRunHardLimitMs = 6 * 60_000",
+  "hardStopTimer",
+  "abortAgentSession(sessionId)",
+  "agent.stalled.rom_recovered",
+  "musicCompileAttempts",
+  "exceeded the two-attempt music compile limit",
+  "project.agentProjectPath || project.projectPath",
   "edited game source/resources but did not rebuild the ROM afterward",
   "hit a build failure and did not complete the repair/rebuild loop",
   "built a ROM but did not capture a screen check afterward",
@@ -936,9 +1026,13 @@ assert(
   "Native startup must initialize the packaged runtime before commands run.",
 );
 assert(
-  appSource.includes("VITE_DRIVE16_ALLOW_DEV_CDN") &&
-    !appSource.includes("if (isTauriRuntime()) return true"),
-  "Release builds must require a user-supplied Play core unless the dev override is explicit.",
+  appSource.includes("import.meta.env.VITE_DRIVE16_ALLOW_STREAMED_CORE") &&
+    appSource.includes("downloadStreamedInteractiveCore()") &&
+    appSource.includes("unzipSync(new Uint8Array(await response.arrayBuffer()))") &&
+    tauriBuildPreparationSource.includes("VITE_DRIVE16_ALLOW_STREAMED_CORE=1") &&
+    String(tauriConfig.app?.security?.csp ?? "").includes("https://cdn.jsdelivr.net") &&
+    String(tauriConfig.app?.security?.csp ?? "").includes("'wasm-unsafe-eval'"),
+  "Direct-download releases must explicitly enable and permit the streamed Play core.",
 );
 for (const expected of [
   "disposeInteractivePlayer();",
@@ -1262,6 +1356,7 @@ for (const expected of [
   "if two compile attempts fail, record audio as failed",
   "The two-attempt MML cap is strict",
   "do not call compile_music a third time",
+  "If a seeded starter already includes a VGM/XGM resource",
   "If any screen, input, or audio check is missing or failed",
   "Drive16 settings:",
   "AI sprites: enabled",

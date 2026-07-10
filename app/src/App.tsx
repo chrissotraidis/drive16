@@ -8,6 +8,7 @@ import {
   sendOpenRouterFreeformReply,
 } from "./agent/openrouter";
 import {
+  abortAgentSession,
   agentActivityFromEvent,
   agentPromptWithProject,
   createAgentActivityRepairState,
@@ -28,6 +29,7 @@ import {
   detectInteractiveCoreReadiness,
   detectGamepadReadiness,
   firstConnectedGamepad,
+  GENESIS_PLUS_GX_CORE,
   launchNostalgistMegadrivePlayer,
   loadInputProfile,
   pauseNostalgistPlayer,
@@ -98,9 +100,11 @@ type PendingAgentRun = {
   sawScreenCheck?: boolean;
   sawInputTest?: boolean;
   sawAudioCheck?: boolean;
+  musicCompileAttempts?: number;
   waitingTimer?: number;
   stallTimer?: number;
   backgroundErrorTimer?: number;
+  hardStopTimer?: number;
 };
 
 type ConversationMode = {
@@ -141,6 +145,7 @@ type StarterRomPreview = {
   screenshotPath: string;
   frameStreamPath: string;
   audioDumpPath?: string;
+  inputScriptPath?: string;
   screenshotDataUrl: string;
   frames: number;
   streamEvery: number;
@@ -149,6 +154,8 @@ type StarterRomPreview = {
   frameHeight: number;
   framebufferFrames: FramebufferFrame[];
   audioMaxAbs?: number;
+  inputChanged?: boolean;
+  inputChangeRatio?: number;
 };
 
 type ProjectFileEntry = {
@@ -445,6 +452,7 @@ const defaultOllamaModel = "qwen2.5-coder:7b";
 const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
 const playerSetupTimeoutMs = 20_000;
 const openCodeHeartbeatTimeoutMs = 15_000;
+const agentRunHardLimitMs = 6 * 60_000;
 
 const preferredOpenRouterModels = [
   defaultOpenRouterModel,
@@ -1677,7 +1685,8 @@ function App() {
       setWorkspacePath(project.projectPath);
       setProjectSummary(projectSummaryFromActiveProject(project, projectName));
       setProjectSource("tauri");
-      appendOpenCodeEvent("agent.workspace", project.projectPath);
+      const agentProjectPath = project.agentProjectPath || project.projectPath;
+      appendOpenCodeEvent("agent.workspace", agentProjectPath);
       try {
         const seed = await seedActiveProjectForPrompt(trimmed);
         if (seed.applied) {
@@ -1699,7 +1708,7 @@ function App() {
         // OpenCode session reuse currently makes later turns repeat the first
         // instruction. Keep continuity in the project workspace instead.
         sessionId: undefined,
-        text: agentPromptWithProject(project.projectPath, trimmed, {
+        text: agentPromptWithProject(agentProjectPath, trimmed, {
           spriteGeneration: enhancements.spriteGeneration,
           musicGeneration: enhancements.musicGeneration,
           comfyUiEndpoint,
@@ -1769,11 +1778,17 @@ function App() {
       noteAction("The agent request was accepted, but no build activity has started yet.");
     }, 45_000);
     pending.stallTimer = window.setTimeout(() => {
-      failPendingAgentRun(
+      void failPendingAgentRun(
         sessionId,
         pendingAgentStallDetail(pending),
       );
     }, 120_000);
+    pending.hardStopTimer = window.setTimeout(() => {
+      void failPendingAgentRun(
+        sessionId,
+        `Drive16 stopped the build after ${formatDurationMs(agentRunHardLimitMs)} to prevent a runaway model loop.`,
+      );
+    }, agentRunHardLimitMs);
     pending.backgroundErrorTimer = window.setInterval(() => {
       void drainOpenCodeBackgroundErrors(sessionId);
     }, 3_000);
@@ -1788,7 +1803,7 @@ function App() {
       const errors = await invoke<OpenCodeBackgroundError[]>("drain_opencode_background_errors");
       const latest = errors[errors.length - 1];
       if (!latest) return;
-      failPendingAgentRun(
+      await failPendingAgentRun(
         sessionId,
         `OpenCode stopped the background request: ${latest.detail}`,
       );
@@ -1813,7 +1828,7 @@ function App() {
       window.clearTimeout(pending.stallTimer);
     }
     pending.stallTimer = window.setTimeout(() => {
-      failPendingAgentRun(
+      void failPendingAgentRun(
         pending.sessionId,
         pendingAgentStallDetail(pending),
       );
@@ -1859,6 +1874,16 @@ function App() {
     if (activity.eventType === "agent.input.tested") {
       pending.sawInputTest = true;
     }
+    if (activity.eventType === "agent.assets.music.started") {
+      pending.musicCompileAttempts = (pending.musicCompileAttempts ?? 0) + 1;
+      if (pending.musicCompileAttempts > 2) {
+        void failPendingAgentRun(
+          pending.sessionId,
+          "Drive16 stopped the build because the agent exceeded the two-attempt music compile limit.",
+        );
+        return;
+      }
+    }
     if (
       activity.eventType === "agent.audio.checked" ||
       activity.eventType === "agent.audio.failed"
@@ -1893,28 +1918,86 @@ function App() {
     return /(?:^|[/:])(src|res)\/.+\.(c|h|s|res|png|vgm|wav|bin)\b/i.test(detail);
   }
 
-  function failPendingAgentRun(sessionId: string, detail: string) {
+  async function failPendingAgentRun(sessionId: string, detail: string) {
     const pending = pendingAgentRunRef.current;
     if (!pending || pending.sessionId !== sessionId) return;
 
     clearPendingAgentRunTimers(pending);
     pendingAgentRunRef.current = undefined;
+    setOpenCodeBusy(false);
+    setAgentPhase("failed");
+
+    if (isTauriRuntime()) {
+      try {
+        await abortAgentSession(sessionId);
+        appendOpenCodeEvent("agent.aborted", sessionId);
+      } catch (error) {
+        appendOpenCodeEvent(
+          "agent.abort.failed",
+          errorDetail(error, "Could not stop the stalled OpenCode session"),
+        );
+      }
+
+      try {
+        const after = await ensureActiveProject();
+        saveActiveProjectName(pending.projectName);
+        setWorkspacePath(after.projectPath);
+        setProjectSummary(projectSummaryFromActiveProject(after, pending.projectName));
+        setProjectSource("tauri");
+        if (after.romExists) {
+          resetActiveRomSession();
+          setAgentRom({ path: after.romPath, stamp: Date.now() });
+          setPlayerScreenEvidence("checking");
+          setPlayerInputEvidence("none");
+          setPlayerAudioEvidence("checking");
+          setMessages((current) => [
+            ...current,
+            makeMessage(
+              "agent",
+              `${detail} I stopped the runaway session and recovered its latest built ROM. Verification may still be incomplete.`,
+              "system",
+            ),
+          ]);
+          setProjectActionNotice({
+            state: "warning",
+            label: "ROM recovered",
+            detail: "The build produced a ROM before the agent stopped; remaining checks are incomplete.",
+          });
+          appendOpenCodeEvent(
+            "agent.stalled.rom_recovered",
+            `${after.romPath}; after ${formatDurationMs(Date.now() - pending.startedAt)}`,
+          );
+          noteAction("Recovered the latest ROM after stopping a stalled agent run.");
+          setBuildState("running");
+          return;
+        }
+      } catch (error) {
+        appendOpenCodeEvent(
+          "agent.recovery.failed",
+          errorDetail(error, "Could not inspect the active project after the agent stopped"),
+        );
+      }
+    }
+
     setMessages((current) => [
       ...current,
-      makeMessage("agent", `${detail} Try again, or open Settings and re-test OpenRouter.`, "system"),
+      makeMessage(
+        "agent",
+        `${detail} No current ROM was produced. Try again after checking the build log.`,
+        "system",
+      ),
     ]);
     setProjectActionNotice({
       state: "missing",
-      label: "Agent stalled",
+      label: "Agent stopped",
       detail,
     });
     appendOpenCodeEvent(
       "agent.stalled",
       `${detail}; after ${formatDurationMs(Date.now() - pending.startedAt)}`,
     );
-    noteAction("The agent stalled before producing build activity.");
+    noteAction("The agent stopped without producing a current ROM.");
     setBuildState("error");
-    setOpenCodeBusy(false);
   }
 
   function clearPendingAgentRunTimers(pending: PendingAgentRun | undefined) {
@@ -1927,6 +2010,9 @@ function App() {
     }
     if (pending.backgroundErrorTimer) {
       window.clearInterval(pending.backgroundErrorTimer);
+    }
+    if (pending.hardStopTimer) {
+      window.clearTimeout(pending.hardStopTimer);
     }
   }
 
@@ -3762,7 +3848,20 @@ function App() {
       const result = isTauriRuntime()
         ? await invoke<RomImportResult>("import_test_rom")
         : previewTestRomImport();
+      let browserTestRomBytes: Uint8Array | undefined;
+      if (!isTauriRuntime()) {
+        const response = await fetch("/__drive16_test_rom.bin");
+        if (!response.ok) {
+          throw new Error(`Browser test ROM could not be loaded (HTTP ${response.status}).`);
+        }
+        browserTestRomBytes = new Uint8Array(await response.arrayBuffer());
+      }
       activateImportedRom(result);
+      if (browserTestRomBytes) {
+        setLoadedPlayerRom(
+          playerRomFromBytes(result.importPath, result.sourceName, browserTestRomBytes),
+        );
+      }
       appendOpenCodeEvent("rom.imported.test", result.importPath);
       void launchRom(result.importPath, "Test ROM preview captured.");
     } catch (error) {
@@ -3876,17 +3975,17 @@ function App() {
         state: "warning",
         label: "Player started muted",
         detail: `${payload.sourceName} started with ${
-          runtime.coreSource === "user" ? "the user core" : "the dev CDN core"
+          runtime.coreSource === "user" ? "the local core" : "the streamed core"
         }. App volume is 0%; raise it manually if you want sound.`,
       });
       noteAction(
         `Player started for ${payload.sourceName} with ${
-          runtime.coreSource === "user" ? "the user core" : "the dev CDN core"
+          runtime.coreSource === "user" ? "the local core" : "the streamed core"
         }; app volume is 0%.`,
       );
       appendOpenCodeEvent("player.playing", `${payload.sourcePath} via ${runtime.coreSource}`);
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "Interactive Play setup failed";
+      const detail = interactivePlayerErrorDetail(error);
       const launchFailure = coreLaunchFailureReadiness(detail);
       if (launchFailure) {
         setInteractiveCoreReadiness(launchFailure);
@@ -3913,7 +4012,7 @@ function App() {
     let reported = false;
 
     sampleDelays.forEach((delay) => {
-      window.setTimeout(() => {
+      window.setTimeout(async () => {
         const runtime = playerRuntimeRef.current;
         if (!runtime || runtime.rom.sourcePath !== sourcePath || reported) return;
 
@@ -3935,15 +4034,40 @@ function App() {
         }
         if (samples.length < sampleDelays.length) return;
 
+        const runtimeCapture = await readRuntimeScreenshotVisibility(runtime);
+        if (runtimeCapture === "visible") {
+          reported = true;
+          setPlayerScreenEvidence("visible");
+          const detail =
+            "The interactive core produced a visible game frame. Controls and audio still need evidence before calling this game playable.";
+          setProjectActionNotice({
+            state: "warning",
+            label: "Screen visible, playtest incomplete",
+            detail,
+          });
+          noteAction(detail);
+          appendOpenCodeEvent("player.screen.visible", `${sourcePath}; RetroArch screenshot`);
+          return;
+        }
+
         reported = true;
         const unknownCount = samples.filter((sample) => sample === "unknown").length;
         const mostlyUnknown = unknownCount >= Math.ceil(samples.length / 2);
         setPlayerScreenEvidence(mostlyUnknown ? "inconclusive" : "unverified");
 
+        const runtimeLog = runtime?.logs
+          .filter((line) => /\[error\]|\[warn/i.test(line))
+          .filter(
+            (line) =>
+              !/Cannot push NULL or empty core path into the playlist/i.test(line) &&
+              !/Could not get screen dimensions/i.test(line),
+          )
+          .slice(-4)
+          .join(" | ");
         const detail =
           mostlyUnknown
-            ? "The player started, but Drive16 could not read enough canvas pixels to prove the screen. Treat playability as unverified."
-            : "The player started, but Drive16 could not detect visible non-black frame output. The ROM may be blank, stalled, or missing a readable first state.";
+            ? `The player started, but Drive16 could not read enough canvas pixels to prove the screen. Treat playability as unverified.${runtimeLog ? ` RetroArch: ${runtimeLog}` : ""}`
+            : `The player started, but Drive16 could not detect visible non-black frame output. The ROM may be blank or stalled.${runtimeLog ? ` RetroArch: ${runtimeLog}` : ""}`;
         setProjectActionNotice({
           state: "warning",
           label: mostlyUnknown ? "Screen check inconclusive" : "Screen not verified",
@@ -3962,10 +4086,52 @@ function App() {
     });
   }
 
+  async function readRuntimeScreenshotVisibility(
+    runtime: NostalgistPlayerRuntime,
+  ): Promise<"visible" | "blank" | "unknown"> {
+    try {
+      const screenshot = await withTimeout(
+        runtime.instance.screenshot(),
+        4_000,
+        "Interactive player screenshot timed out.",
+      );
+      const bitmap = await createImageBitmap(screenshot);
+      const sample = document.createElement("canvas");
+      sample.width = Math.min(96, bitmap.width);
+      sample.height = Math.min(72, bitmap.height);
+      const context = sample.getContext("2d", { willReadFrequently: true });
+      if (!context) return "unknown";
+      context.drawImage(bitmap, 0, 0, sample.width, sample.height);
+      bitmap.close();
+      return pixelBufferVisibility(
+        context.getImageData(0, 0, sample.width, sample.height).data,
+      );
+    } catch {
+      return "unknown";
+    }
+  }
+
   function readCanvasVisibility(canvas: HTMLCanvasElement | null): "visible" | "blank" | "unknown" {
     if (!canvas || canvas.width <= 0 || canvas.height <= 0) return "unknown";
 
     try {
+      const webgl =
+        (canvas.getContext("webgl2") as WebGL2RenderingContext | null) ??
+        (canvas.getContext("webgl") as WebGLRenderingContext | null);
+      if (webgl) {
+        const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+        webgl.readPixels(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+          webgl.RGBA,
+          webgl.UNSIGNED_BYTE,
+          pixels,
+        );
+        return pixelBufferVisibility(pixels);
+      }
+
       const width = Math.min(96, canvas.width);
       const height = Math.min(72, canvas.height);
       const sample = document.createElement("canvas");
@@ -3975,26 +4141,7 @@ function App() {
       if (!context) return "unknown";
       context.drawImage(canvas, 0, 0, width, height);
       const pixels = context.getImageData(0, 0, width, height).data;
-      let opaquePixels = 0;
-      let nonBlackPixels = 0;
-      let minBrightness = 255;
-      let maxBrightness = 0;
-      for (let index = 0; index < pixels.length; index += 16) {
-        const alpha = pixels[index + 3];
-        const brightness = Math.max(pixels[index], pixels[index + 1], pixels[index + 2]);
-        if (alpha > 0) {
-          opaquePixels += 1;
-          minBrightness = Math.min(minBrightness, brightness);
-          maxBrightness = Math.max(maxBrightness, brightness);
-          if (brightness > 8) {
-            nonBlackPixels += 1;
-          }
-        }
-      }
-      if (opaquePixels < 20) return "unknown";
-      if (nonBlackPixels > 12) return "visible";
-      if (maxBrightness - minBrightness > 8) return "visible";
-      return "blank";
+      return pixelBufferVisibility(pixels);
     } catch {
       return "unknown";
     }
@@ -4025,15 +4172,25 @@ function App() {
   }
 
   async function readConfiguredInteractiveCoreForPlayer() {
+    if (loadedInteractiveCore) {
+      return loadedInteractiveCore;
+    }
+
+    if (interactiveCoreReadiness.policy === "dev-cdn") {
+      const core = await withTimeout(
+        downloadStreamedInteractiveCore(),
+        playerSetupTimeoutMs,
+        `Interactive Play core download timed out after ${formatDurationMs(playerSetupTimeoutMs)}.`,
+      );
+      setLoadedInteractiveCore(core);
+      return core;
+    }
+
     if (
       interactiveCoreReadiness.status !== "available" ||
       interactiveCoreReadiness.policy !== "user-supplied"
     ) {
       return undefined;
-    }
-
-    if (loadedInteractiveCore) {
-      return loadedInteractiveCore;
     }
 
     if (!isTauriRuntime()) {
@@ -4474,6 +4631,18 @@ function App() {
               : "silent"
             : "none",
         );
+        setPlayerInputEvidence(preview.inputChanged ? "tested" : "failed");
+        setLastInputAction(
+          preview.inputChanged
+            ? "Scripted Right input changed the frame"
+            : "Scripted Right input did not change the frame",
+        );
+        appendOpenCodeEvent(
+          preview.inputChanged ? "preview.input.tested" : "preview.input.failed",
+          `${preview.inputScriptPath ?? "input script"}; changed=${(
+            (preview.inputChangeRatio ?? 0) * 100
+          ).toFixed(3)}%`,
+        );
         appendOpenCodeEvent(
           preview.audioMaxAbs && preview.audioMaxAbs > 0
             ? "preview.audio.captured"
@@ -4727,6 +4896,7 @@ function App() {
           importBusy={importBusy}
           importResult={importResult}
           interactiveCoreBusy={interactiveCoreBusy}
+          interactiveCoreReadiness={interactiveCoreReadiness}
           interactiveCoreStatus={interactiveCoreStatus}
           projectActionNotice={projectActionNotice}
           projectSummary={projectSummary}
@@ -4778,20 +4948,17 @@ function comfyUiActivityDetail(connection: ComfyUiEndpointStatus) {
   return "Sprite tools need attention. Open Advanced sprite setup for details.";
 }
 
-// Streamed-CDN core fallback is development-only. Packaged releases require a
-// user-supplied core so Drive16 never silently redistributes or downloads one.
+// Direct-download packages may stream the interactive core at Play time. The
+// core is not bundled; user-supplied local cores remain supported.
 function allowDevCoreCdnFallback() {
-  const meta = import.meta as ImportMeta & {
-    env?: { DEV?: unknown; VITE_DRIVE16_ALLOW_DEV_CDN?: unknown };
-  };
-  const dev = meta.env?.DEV;
-  const explicitDevBundle = meta.env?.VITE_DRIVE16_ALLOW_DEV_CDN;
+  const dev = import.meta.env.DEV;
+  const streamedCore = import.meta.env.VITE_DRIVE16_ALLOW_STREAMED_CORE;
   return (
     dev === true ||
     String(dev) === "true" ||
-    explicitDevBundle === true ||
-    String(explicitDevBundle) === "true" ||
-    String(explicitDevBundle) === "1"
+    streamedCore === true ||
+    String(streamedCore) === "true" ||
+    String(streamedCore) === "1"
   );
 }
 
@@ -4800,6 +4967,47 @@ function errorDetail(error: unknown, fallback: string): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string" && error.trim()) return error;
   return fallback;
+}
+
+function interactivePlayerErrorDetail(error: unknown): string {
+  if (!(error instanceof Error)) return errorDetail(error, "Interactive Play setup failed");
+  const cause = "cause" in error ? error.cause : undefined;
+  const causeDetail =
+    cause instanceof Error
+      ? cause.message
+      : typeof cause === "string"
+        ? cause
+        : cause
+          ? JSON.stringify(cause)
+          : "";
+  const stackLine = error.stack
+    ?.split("\n")
+    .slice(1, 3)
+    .map((line) => line.trim())
+    .join(" | ");
+  return [error.message, causeDetail, stackLine].filter(Boolean).join(" — ");
+}
+
+function pixelBufferVisibility(
+  pixels: Uint8Array | Uint8ClampedArray,
+): "visible" | "blank" | "unknown" {
+  let opaquePixels = 0;
+  let nonBlackPixels = 0;
+  let minBrightness = 255;
+  let maxBrightness = 0;
+  for (let index = 0; index < pixels.length; index += 16) {
+    const alpha = pixels[index + 3];
+    const brightness = Math.max(pixels[index], pixels[index + 1], pixels[index + 2]);
+    if (alpha > 0) {
+      opaquePixels += 1;
+      minBrightness = Math.min(minBrightness, brightness);
+      maxBrightness = Math.max(maxBrightness, brightness);
+      if (brightness > 8) nonBlackPixels += 1;
+    }
+  }
+  if (opaquePixels < 20) return "unknown";
+  if (nonBlackPixels > 12 || maxBrightness - minBrightness > 8) return "visible";
+  return "blank";
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -5200,7 +5408,10 @@ function appPlayabilityGateState({
 }): HealthState {
   if (!activeRomPlayable) return "missing";
 
-  const screenState: HealthState = playerScreenEvidence === "visible" ? "ready" : "warning";
+  const screenState: HealthState =
+    playerScreenEvidence === "visible" || playerScreenEvidence === "captured"
+      ? "ready"
+      : "warning";
   const inputState: HealthState =
     playerInputEvidence === "failed"
       ? "missing"
@@ -5294,6 +5505,52 @@ async function normalizeInteractiveCoreSelection(
       })),
     ),
     false,
+  );
+}
+
+const streamedInteractiveCoreUrl =
+  "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/genesis_plus_gx_libretro.zip";
+
+async function downloadStreamedInteractiveCore(): Promise<LoadedInteractiveCore> {
+  const response = await fetch(streamedInteractiveCoreUrl);
+  if (!response.ok) {
+    throw new Error(`Could not download the Play core (HTTP ${response.status}).`);
+  }
+
+  let entries: Record<string, Uint8Array>;
+  try {
+    entries = unzipSync(new Uint8Array(await response.arrayBuffer()));
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? `Could not unpack the Play core: ${error.message}`
+        : "Could not unpack the Play core.",
+    );
+  }
+
+  const files = selectInteractiveCorePair(
+    Object.entries(entries)
+      .filter(([name, bytes]) => !name.endsWith("/") && bytes.byteLength > 0)
+      .map(([name, bytes]) => ({
+        fileName: name.split("/").filter(Boolean).pop() ?? name,
+        bytes,
+      })),
+    true,
+  );
+  const jsFile = files.find((file) => interactiveCoreStorageExtension(file.fileName) === ".js");
+  const wasmFile = files.find(
+    (file) => interactiveCoreStorageExtension(file.fileName) === ".wasm",
+  );
+  if (!jsFile || !wasmFile) {
+    throw new Error("The downloaded Play core did not contain a JS/WASM pair.");
+  }
+
+  return loadedInteractiveCoreFromBytes(
+    GENESIS_PLUS_GX_CORE,
+    `streamed/${jsFile.fileName}`,
+    `streamed/${wasmFile.fileName}`,
+    jsFile.bytes,
+    wasmFile.bytes,
   );
 }
 
@@ -5665,6 +5922,7 @@ function playerRomFromBytes(
     loadedAt: new Date().toISOString(),
     sourcePath,
     sourceName,
+    blob,
     objectUrl: URL.createObjectURL(blob),
     bytes: bytes.byteLength,
   };

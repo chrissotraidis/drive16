@@ -1,5 +1,84 @@
 # Drive16 Worklog
 
+## 2026-07-10 - ITERATION 123 - browser-first Play recovery and native truth
+
+Did:
+
+- Adopted browser-first testing for shared React, player, ROM, and asset code;
+  the desktop app is now reserved for final native-boundary checks.
+- Added a real recovered-ROM route to the local browser preview and repaired
+  Nostalgist's Blob-module fallback plus missing RetroArch content argument.
+- Made the direct-download build fetch and unpack the pinned core on first Play
+  without bundling it, and pass ROM bytes directly to the player.
+- Added a RetroArch screenshot fallback for WebGL frame proof, a four-second
+  screenshot timeout, and accurate `Ready online` / `Use Local Core` wording.
+
+Evidence:
+
+- The clean local browser loads the recovered Tetris ROM, renders the composed
+  playfield, reports `Screen: visible`, and records Right/Up as `Input: seen`.
+- Native Verify remains green: composed Tetris frame, 0.333% same-frame input
+  change, and non-silent audio with `maxAbs=10922`.
+- Final packaged Play exposed a real remaining boundary: RetroArch starts and
+  receives Right/Up in the macOS WKWebView, but its canvas stays black. This is
+  now recorded as a release blocker instead of being described as working.
+- Frontend build, browser smoke, agent contract, strict signature, valid DMG,
+  isolated install, writable runtime, and active-project smoke all pass.
+- DMG SHA-256:
+  `0a1594c08d0cb0bc964ea962537f1517f0ee6adbbdc7c6459f50a35f54c53ca5`.
+
+Next:
+
+- Replace or repair the packaged WebAssembly/WebGL player boundary before
+  calling the DMG release-ready. Keep shared feature iteration browser-first.
+
+## 2026-07-10 - ITERATION 122 - stalled-build diagnosis and Tetris recovery
+
+Did:
+
+- Diagnosed the failed packaged Tetris session instead of treating the model
+  timeout as an unexplained provider error. Drive16 had attached to a healthy
+  older OpenCode server whose working directory was the git checkout, while
+  the packaged UI watched its Application Support runtime.
+- Changed the native bridge to always launch a Drive16-owned OpenCode child,
+  choose a free local port when 4096 is occupied, and root the child in the
+  writable packaged runtime. Agent prompts now receive the absolute active
+  project path as an additional containment guard.
+- Added explicit OpenCode session abort, an absolute six-minute run limit, a
+  strict two-attempt music cap, and ROM recovery when compilation succeeded but
+  later proof stalled.
+- Bundled the arm64 Genteel verifier into the app so Verify no longer performs
+  a hidden first-run Rust build.
+- Extended Verify to capture the screen, compare neutral and scripted-Right
+  runs at the same frame, and capture audio before reporting the project ready.
+- Recovered the user's Tetris project from the proven deterministic skeleton
+  without another OpenRouter or local-model call. The failed model ROM remains
+  archived as evidence rather than being presented as a successful recovery.
+
+Evidence:
+
+- Failed session `ses_0b6c8d1a9ffeAPBZsXWXmQ48o1` made 36 assistant turns
+  and 36 tool calls, including six music compiles, three successful ROM builds,
+  two emulator runs, two input calls, no audio verification, and a final read
+  left running. It consumed 780,112 input tokens, 2,082,432 cache-read tokens,
+  16,712 output tokens, and `$0.4477`.
+- The wrong-workspace ROM was at the repo-root active project while the UI
+  correctly watched the Application Support active project. The stuck session
+  was explicitly aborted.
+- Recovered ROM SHA-256:
+  `5a01bf44dedf4c120ef12a451c020e7effafefd96ad3753b26661ff214159a81`.
+- Recovery evidence under `artifacts/phase9/tetris-recovery/` passes the
+  presentation-v2 screenshot check, scripted input, clean restart, non-silent
+  audio (`maxAbs=10922`), and project-memory audit.
+- Final native Verify completed in about three seconds, measured a same-frame
+  input change of 0.333%, captured audio, rendered Tetris, and changed the app
+  status to `Ready` without a Genteel compiler process.
+- Native tests: 70 passed, 5 ignored, 0 failed. The focused live Genteel test,
+  frontend build, agent contract, signature checks, valid DMG check, and
+  isolated install/runtime smoke all passed.
+- Final DMG SHA-256:
+  `0a1594c08d0cb0bc964ea962537f1517f0ee6adbbdc7c6459f50a35f54c53ca5`.
+
 ## 2026-07-10 - ITERATION 121 - automatic native sprite tools
 
 Did:
@@ -22,7 +101,7 @@ Evidence:
 - Frontend build, browser smoke, agent contract, 68 native tests, release
   signature/DMG checks, and the isolated install/runtime smoke pass.
 - Final DMG SHA-256:
-  `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`.
+  `ca2c3b147a78217a98cf29f763bf85072f715f26fe7e6b12958f59795c363045`.
 
 ## 2026-07-10 - ITERATION 120 - MIT and direct-download release closure
 
@@ -43,7 +122,7 @@ Evidence:
 - The rebuilt package contains `drive16-support/LICENSE`; its isolated runtime
   copy is required by the release smoke.
 - Final DMG SHA-256:
-  `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`.
+  `ca2c3b147a78217a98cf29f763bf85072f715f26fe7e6b12958f59795c363045`.
 
 Next:
 
@@ -105,7 +184,7 @@ Evidence:
 - The isolated first launch created all packaged support entries and
   `artifacts/phase3/active-project/Makefile` under its clean app-data runtime.
 - DMG SHA-256:
-  `ef0251bb6f9c3b8f88b122f62b8ccccf1a6ab1ef7d32370d6382bf596f1ee948`.
+  `ca2c3b147a78217a98cf29f763bf85072f715f26fe7e6b12958f59795c363045`.
 
 Note:
 

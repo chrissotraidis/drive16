@@ -5,7 +5,7 @@ use std::{
 };
 use tauri::Manager;
 
-const SUPPORT_ENTRIES: [&str; 9] = [
+const SUPPORT_ENTRIES: [&str; 10] = [
     "agent",
     "assets",
     "corpus",
@@ -13,6 +13,7 @@ const SUPPORT_ENTRIES: [&str; 9] = [
     "mcp-servers",
     "patches",
     "scripts",
+    "bin",
     "LICENSE",
     "opencode.json",
 ];
