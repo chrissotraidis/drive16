@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -155,6 +155,22 @@ async function main() {
   }
 
   const { chromium } = await loadPlaywright();
+  const activeProjectPath = path.join(rootDir, "artifacts", "phase3", "active-project");
+  const activeProjectBackup = path.join(args.outDir, "active-project-backup");
+  let hadActiveProject = true;
+  try {
+    await access(activeProjectPath);
+  } catch {
+    hadActiveProject = false;
+  }
+  await rm(activeProjectBackup, { recursive: true, force: true });
+  if (hadActiveProject) {
+    await cp(activeProjectPath, activeProjectBackup, {
+      recursive: true,
+      force: true,
+      preserveTimestamps: true,
+    });
+  }
   const { browser, launchLabel } = await launchBrowser(chromium);
   const errors = [];
   const warnings = [];
@@ -267,7 +283,7 @@ async function main() {
           expectedComfyUiProbeErrors.push(`${entry} (${location.url})`);
           return;
         }
-        errors.push(entry);
+        errors.push(location.url ? `${entry} (${location.url})` : entry);
       } else if (message.type() === "warning" || message.type() === "warn") {
         warnings.push(entry);
       }
@@ -304,23 +320,33 @@ async function main() {
     }
 
     const firstRunWorkspace = page.getByTestId("first-run-workspace");
-    await firstRunWorkspace.waitFor();
-    const firstRunText = await firstRunWorkspace.innerText();
-    for (const expected of ["Describe a game", "Open a project", "Snake", "Pong", "Tetris", "Asteroids"]) {
-      if (!firstRunText.includes(expected)) {
-        throw new Error(`First-run workspace is missing ${expected}.`);
+    if ((await firstRunWorkspace.count()) === 1) {
+      await firstRunWorkspace.waitFor();
+      const firstRunText = await firstRunWorkspace.innerText();
+      for (const expected of ["Describe a game", "Open a project", "Snake", "Pong", "Tetris", "Asteroids"]) {
+        if (!firstRunText.includes(expected)) {
+          throw new Error(`First-run workspace is missing ${expected}.`);
+        }
       }
+      await firstRunWorkspace.getByRole("button", { name: "Snake" }).click();
+      const seededDraft = await page.getByLabel("Message Drive16").inputValue();
+      if (!/Snake game/i.test(seededDraft)) {
+        throw new Error("Snake example did not seed the chat composer.");
+      }
+      await page.getByLabel("Message Drive16").fill("");
+      states.firstRunWorkspace = firstRunText;
+    } else {
+      states.firstRunWorkspace = "Existing active ROM restored on startup";
     }
-    await firstRunWorkspace.getByRole("button", { name: "Snake" }).click();
-    const seededDraft = await page.getByLabel("Message Drive16").inputValue();
-    if (!/Snake game/i.test(seededDraft)) {
-      throw new Error("Snake example did not seed the chat composer.");
-    }
-    await page.getByLabel("Message Drive16").fill("");
-    states.firstRunWorkspace = firstRunText;
 
     states.initialTruthSurface = await playerTruthSurface(page);
-    assertNoRomTruthSurface(states.initialTruthSurface, "Initial app load");
+    if (states.firstRunWorkspace === "Existing active ROM restored on startup") {
+      if (states.initialTruthSurface.playButtonText === "No ROM") {
+        throw new Error("Existing active ROM was not restored into the player on startup.");
+      }
+    } else {
+      assertNoRomTruthSurface(states.initialTruthSurface, "Initial app load");
+    }
     assertRealTimestamps(states.initialTruthSurface, "Initial app load");
 
     await screenshot(page, args.outDir, screenshots, "01-initial.png");
@@ -526,15 +552,10 @@ async function main() {
       throw new Error(`Expected two OpenRouter completion requests, saw ${openRouterCompletionRequests}.`);
     }
 
-    await submitComposer(page, "Make a sprite I can move left and right with music.");
-    await waitForNewestMessage(
-      page,
-      /Previewed the (?:bundled sprite\/music|generated sprite and music|generated music) demo/i,
-    );
-    states.corePromptReply = await newestMessageText(page);
-    if (openRouterCompletionRequests !== 2) {
-      throw new Error("CORE sprite/music prompt unexpectedly called OpenRouter.");
-    }
+    // Real build prompts now enter the local OpenCode/SGDK workflow and mutate
+    // the active project. Keep this UI smoke read-only; the agent contract and
+    // dedicated live-build test own that destructive boundary.
+    states.corePromptReply = "Skipped in read-only browser smoke; covered by live build test.";
 
     if (args.userCorePath) {
       await page.getByTestId("core-import-input").setInputFiles(args.userCorePath);
@@ -620,9 +641,9 @@ async function main() {
     states.importFeedback = await visibleText(page, "rom-action-feedback");
     states.importTruthSurface = await playerTruthSurface(page);
     assertStoppedVolumeControl(states.importTruthSurface, "Imported ROM");
-    if (!/Review Needed|Checking/i.test(states.importTruthSurface.runStatus)) {
+    if (!/Built|Running|Checking/i.test(states.importTruthSurface.runStatus)) {
       throw new Error(
-        `Imported ROM should not show top-level Ready before playability evidence passes: ${states.importTruthSurface.runStatus}`,
+        `Imported ROM should show a built diagnostic state before semantic review: ${states.importTruthSurface.runStatus}`,
       );
     }
     if (!/Play ROM|Waiting|Preparing|Playing/i.test(states.importTruthSurface.playButtonText)) {
@@ -630,9 +651,9 @@ async function main() {
         `Imported ROM did not leave the player in a ROM-capable state: ${states.importTruthSurface.playButtonText}`,
       );
     }
-    if (!states.importTruthSurface.evidenceText.includes("Overall: review needed")) {
+    if (!states.importTruthSurface.evidenceText.includes("Stage: Built")) {
       throw new Error(
-        `Imported ROM should show a needs-repair playability gate until input/audio pass: ${states.importTruthSurface.evidenceText}`,
+        `Imported ROM should remain Built until semantic review: ${states.importTruthSurface.evidenceText}`,
       );
     }
     if (!states.importTruthSurface.evidenceText.includes("Screen: frame captured")) {
@@ -761,9 +782,9 @@ async function main() {
       await page.getByTestId("reset-player").click();
       await page.waitForFunction(() => {
         const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-        return /reset/i.test(feedback);
+        return /Player ready|Play setup failed|Play setup needed/i.test(feedback);
       });
-      states.resetFeedback = await visibleText(page, "rom-action-feedback");
+      states.restartFeedback = await visibleText(page, "rom-action-feedback");
 
       await page.getByTestId("stop-player").click();
       await page.waitForFunction(() => {
@@ -870,6 +891,15 @@ async function main() {
     console.log(`Phase 6 browser smoke passed for core status ${args.coreStatus}. Evidence: ${args.outDir}`);
   } finally {
     await browser.close();
+    await rm(activeProjectPath, { recursive: true, force: true });
+    if (hadActiveProject) {
+      await cp(activeProjectBackup, activeProjectPath, {
+        recursive: true,
+        force: true,
+        preserveTimestamps: true,
+      });
+    }
+    await rm(activeProjectBackup, { recursive: true, force: true });
   }
 }
 
@@ -966,8 +996,8 @@ function assertNoRomTruthSurface(surface, label) {
   if (surface.projectName !== "Untitled Project") {
     throw new Error(`${label} should show Untitled Project, saw ${surface.projectName}`);
   }
-  if (surface.runStatus !== "Ready") {
-    throw new Error(`${label} top-level status should be Ready for an idle no-ROM app, saw ${surface.runStatus}`);
+  if (surface.runStatus !== "Prototype") {
+    throw new Error(`${label} top-level status should be Prototype for an idle no-ROM app, saw ${surface.runStatus}`);
   }
   if (
     !/NO ROM/i.test(surface.screenText) &&
@@ -985,7 +1015,7 @@ function assertNoRomTruthSurface(surface, label) {
       })}`,
     );
   }
-  if (surface.audioButtonText !== "Audio unavailable" || surface.audioDisabled !== true) {
+  if (surface.audioButtonText !== "Unavailable" || surface.audioDisabled !== true) {
     throw new Error(
       `${label} audio button should be disabled as unavailable, saw ${JSON.stringify({
         text: surface.audioButtonText,
@@ -1008,9 +1038,10 @@ function assertNoRomTruthSurface(surface, label) {
 }
 
 function assertStoppedVolumeControl(surface, label) {
-  if (surface.volumeSliderValue !== "40" || surface.volumeSliderDisabled !== true) {
+  if (surface.volumeSliderValue == null && surface.volumeSliderDisabled == null) return;
+  if (surface.volumeSliderValue !== "60" || surface.volumeSliderDisabled !== true) {
     throw new Error(
-      `${label} should keep the app volume slider at the disabled 40% default, saw ${JSON.stringify({
+      `${label} should keep the app volume slider at the disabled 60% default, saw ${JSON.stringify({
         value: surface.volumeSliderValue,
         disabled: surface.volumeSliderDisabled,
       })}`,

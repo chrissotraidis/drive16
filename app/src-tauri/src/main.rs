@@ -91,6 +91,13 @@ async fn seed_active_project_for_prompt(
 }
 
 #[tauri::command]
+async fn build_active_project() -> Result<project::ActiveProjectResult, String> {
+    tauri::async_runtime::spawn_blocking(project::build_active_project)
+        .await
+        .map_err(|error| format!("Active project build failed: {}", error))?
+}
+
+#[tauri::command]
 async fn reset_active_project() -> Result<project::ActiveProjectResult, String> {
     tauri::async_runtime::spawn_blocking(project::reset_active_project)
         .await
@@ -295,6 +302,7 @@ fn main() {
             set_opencode_auth,
             ensure_active_project,
             seed_active_project_for_prompt,
+            build_active_project,
             reset_active_project,
             audit_active_project_memory,
             load_project_summary,

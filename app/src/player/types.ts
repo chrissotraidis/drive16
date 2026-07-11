@@ -66,7 +66,12 @@ export type PlayerProvider = {
 
 export type PlayerSessionState = "idle" | "loading" | "playing" | "paused" | "stopped" | "error";
 
-export type PlayerAudioState = "unavailable" | "needs-gesture" | "muted" | "audible";
+export type PlayerAudioState =
+  | "unavailable"
+  | "needs-gesture"
+  | "muted"
+  | "enabled"
+  | "signal";
 
 export type PlayerInputActionId =
   | "dpad.left"

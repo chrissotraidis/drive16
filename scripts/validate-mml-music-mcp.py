@@ -19,6 +19,7 @@ SAMPLE_MML = """#title Drive16 Tiny
 #platform megadrive
 A t120 @0 v12 o4 l8 cdefgab>c L c4 r4
 """
+QUALITY_MML_PATH = REPO_ROOT / "examples" / "game-skeletons" / "asteroids-basic" / "res" / "asteroids_music.mml"
 
 
 def read_json_lines(text: str) -> list[dict[str, Any]]:
@@ -52,6 +53,7 @@ def structured_payload(response: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> int:
+    quality_mml = QUALITY_MML_PATH.read_text(encoding="utf-8")
     payload = "\n".join(
         [
             json.dumps(
@@ -78,6 +80,20 @@ def main() -> int:
                         "arguments": {
                             "mml_text": SAMPLE_MML,
                             "symbol": "drive16_generated_music",
+                        },
+                    },
+                }
+            ),
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "compile_music",
+                        "arguments": {
+                            "mml_text": quality_mml,
+                            "symbol": "drive16_quality_music",
                         },
                     },
                 }
@@ -124,6 +140,17 @@ def main() -> int:
         raise RuntimeError(f"compile_music returned invalid VGM metadata: {compile_payload}")
     if "XGM drive16_generated_music" not in str(compile_payload.get("rescomp", "")):
         raise RuntimeError(f"compile_music did not return the SGDK XGM resource line: {compile_payload}")
+    if compile_payload.get("quality", {}).get("pass") is not False:
+        raise RuntimeError(f"Tiny one-channel loop unexpectedly passed the music-quality baseline: {compile_payload}")
+
+    quality_response = require_response(messages, 4)
+    if quality_response.get("result", {}).get("isError"):
+        raise RuntimeError(f"Quality fixture compile returned error: {quality_response}")
+    quality_payload = structured_payload(quality_response)
+    if quality_payload.get("quality", {}).get("pass") is not True:
+        raise RuntimeError(f"Developed fixture failed the music-quality baseline: {quality_payload}")
+    vgm_path = quality_payload.get("vgmPath")
+    vgm = quality_payload.get("vgm")
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     validation = {
@@ -132,7 +159,8 @@ def main() -> int:
         "requiredTools": sorted(required_tools),
         "vgmPath": vgm_path,
         "vgm": vgm,
-        "rescomp": compile_payload.get("rescomp"),
+        "quality": quality_payload.get("quality"),
+        "rescomp": quality_payload.get("rescomp"),
     }
     VALIDATION_FILE.write_text(json.dumps(validation, indent=2) + "\n", encoding="utf-8")
     print(

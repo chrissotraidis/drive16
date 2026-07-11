@@ -8,6 +8,24 @@ SRC_DIR="${DRIVE16_GENTEEL_SRC_DIR:-$ROOT/artifacts/phase0/genteel-src}"
 RUSTUP_HOME_DIR="${DRIVE16_RUSTUP_HOME:-$ROOT/artifacts/phase0/rustup}"
 CARGO_HOME_DIR="${DRIVE16_CARGO_HOME:-$ROOT/artifacts/phase0/cargo}"
 PATCH_FILE="${DRIVE16_GENTEEL_PATCH:-$ROOT/patches/genteel/phase0-frame-stream.patch}"
+GENTEEL_BIN="$SRC_DIR/target/release/genteel"
+BUILD_STAMP="$SRC_DIR/.drive16-build-stamp"
+
+if [ -f "$PATCH_FILE" ]; then
+  PATCH_SHA="$(shasum -a 256 "$PATCH_FILE" | awk '{print $1}')"
+else
+  PATCH_SHA="none"
+fi
+EXPECTED_STAMP="$COMMIT:$PATCH_SHA"
+
+# Genteel is pinned to one commit and one Drive16 patch. Reusing that exact
+# binary avoids a full git reset, patch, and Rust relink for every screenshot,
+# input, or audio check in the same test cycle.
+if [ -f "$GENTEEL_BIN" ] && [ -f "$BUILD_STAMP" ] && \
+  [ "$(cat "$BUILD_STAMP")" = "$EXPECTED_STAMP" ]; then
+  echo "$GENTEEL_BIN"
+  exit 0
+fi
 
 if ! command -v git >/dev/null 2>&1; then
   echo "git is required to fetch Genteel." >&2
@@ -46,4 +64,5 @@ RUSTUP_HOME="$RUSTUP_HOME_DIR" CARGO_HOME="$CARGO_HOME_DIR" \
 RUSTUP_HOME="$RUSTUP_HOME_DIR" CARGO_HOME="$CARGO_HOME_DIR" \
   rustup run stable cargo build --release --manifest-path "$SRC_DIR/Cargo.toml" >&2
 
-echo "$SRC_DIR/target/release/genteel"
+printf '%s' "$EXPECTED_STAMP" > "$BUILD_STAMP"
+echo "$GENTEEL_BIN"

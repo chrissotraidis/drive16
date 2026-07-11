@@ -58,6 +58,7 @@ pub struct OpenCodeSendRequest {
     pub text: String,
     pub provider_id: Option<String>,
     pub model_id: Option<String>,
+    pub agent_name: Option<String>,
     pub no_reply: Option<bool>,
     pub background: Option<bool>,
     pub comfy_ui_endpoint: Option<String>,
@@ -282,6 +283,9 @@ pub fn send_opencode_message(request: OpenCodeSendRequest) -> Result<OpenCodeSen
             "providerID": provider_id,
             "modelID": model_id
         });
+    }
+    if let Some(agent_name) = request.agent_name.as_ref().filter(|value| !value.trim().is_empty()) {
+        body["agent"] = json!(agent_name);
     }
 
     let path = format!("/session/{}/message", session_id);
@@ -865,6 +869,7 @@ mod tests {
             text: "test".to_string(),
             provider_id: None,
             model_id: None,
+            agent_name: None,
             no_reply: None,
             background: None,
             comfy_ui_endpoint: Some("http://127.0.0.1:8288".to_string()),
@@ -890,6 +895,7 @@ mod tests {
             text: "Reply with the single word PONG. Do not use any tools.".to_string(),
             provider_id: Some("opencode".to_string()),
             model_id: Some("big-pickle".to_string()),
+            agent_name: None,
             no_reply: Some(false),
             background: Some(false),
             comfy_ui_endpoint: None,

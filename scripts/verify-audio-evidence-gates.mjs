@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -170,9 +170,14 @@ const scenarios = [
 ];
 
 async function writeProject(projectPath, scenario) {
+  await mkdir(path.join(projectPath, "src"), { recursive: true });
   await writeFile(path.join(projectPath, "GAME.md"), scenario.game);
   await writeFile(path.join(projectPath, "ASSETS.md"), scenario.assets);
   await writeFile(path.join(projectPath, "PLAYTEST.md"), scenario.playtest);
+  await writeFile(
+    path.join(projectPath, "src", "main.c"),
+    "/* Audio-gate fixture source. */\nint main(void) { return 0; }\n",
+  );
 }
 
 async function runVerifier(projectPath) {

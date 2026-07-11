@@ -22,6 +22,12 @@ LOG_FILE = ARTIFACT_DIR / "last-compile.log"
 STATE_FILE = ARTIFACT_DIR / "state.json"
 LAST_MML = ARTIFACT_DIR / "last.mml"
 LAST_VGM = ARTIFACT_DIR / "last.vgm"
+MIN_MUSIC_LOOP_SECONDS = 16.0
+MIN_MUSIC_CHANNELS = 5
+MIN_MELODIC_CHANNELS = 4
+MIN_MUSIC_INSTRUMENTS = 4
+MIN_NOTE_EVENTS = 96
+MIN_UNIQUE_PITCHES = 7
 
 
 class ToolExecutionError(Exception):
@@ -32,7 +38,11 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "compile_music",
         "title": "Compile MML Music",
-        "description": "Compile MML text to a VGM file with ctrmml for SGDK XGM resources.",
+        "description": (
+            "Compile Megadrive MML to VGM and report composition-quality diagnostics. "
+            "A successful compile only proves validity; quality.pass must also be true before "
+            "a generated complete-game track is treated as finished."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -136,6 +146,7 @@ def validate_vgm(path: Path) -> dict[str, Any]:
         raise ToolExecutionError(f"ctrmml output is not a VGM file: {path}")
     version = struct.unpack_from("<I", data, 0x08)[0]
     ym2612_clock = struct.unpack_from("<I", data, 0x2C)[0] if len(data) >= 0x30 else 0
+    total_samples = struct.unpack_from("<I", data, 0x18)[0]
     loop_offset = struct.unpack_from("<I", data, 0x1C)[0]
     loop_samples = struct.unpack_from("<I", data, 0x20)[0]
     if version < 0x00000150:
@@ -146,9 +157,69 @@ def validate_vgm(path: Path) -> dict[str, Any]:
         "size": len(data),
         "version": f"0x{version:08x}",
         "ym2612Clock": ym2612_clock,
+        "totalSamples": total_samples,
         "loopOffset": loop_offset,
         "loopSamples": loop_samples,
-        "hasLoop": loop_offset != 0 and loop_samples != 0,
+        "hasLoop": loop_offset != 0 and (loop_samples != 0 or total_samples != 0),
+    }
+
+
+def analyze_music_quality(mml_text: str, vgm: dict[str, Any]) -> dict[str, Any]:
+    """Return a conservative structural check; this never pretends to judge taste."""
+    channels: set[str] = set()
+    melodic_channels: set[str] = set()
+    instruments: set[str] = set()
+    pitches: set[str] = set()
+    note_events = 0
+    percussion = False
+
+    for raw_line in mml_text.splitlines():
+        line = raw_line.split(";", 1)[0].strip()
+        if not line:
+            continue
+        match = re.match(r"^([A-J]+)\s+(.+)$", line)
+        if not match:
+            continue
+        track_names, body = match.groups()
+        channels.update(track_names)
+        melodic_channels.update(channel for channel in track_names if channel in "ABCDEFGHI")
+        instruments.update(re.findall(r"@(\d+)", body))
+        melodic_body = re.sub(r"'[^']*'", "", body.lower())
+        melodic_body = re.sub(r"(?:@|[tlovpkmd])\s*-?\d+", "", melodic_body, flags=re.IGNORECASE)
+        track_pitches = re.findall(r"[a-g](?:[+#-])?", melodic_body)
+        if "J" not in track_names:
+            pitches.update(track_pitches)
+            note_events += len(track_pitches)
+        if "J" in track_names or re.search(r"(?:'mode\s+1'|D\d+)", body, re.IGNORECASE):
+            percussion = True
+
+    loop_samples = int(vgm.get("loopSamples", 0) or vgm.get("totalSamples", 0) or 0)
+    loop_seconds = loop_samples / 44_100
+    issues: list[str] = []
+    if len(channels) < MIN_MUSIC_CHANNELS:
+        issues.append("Use at least five active channels so the track has a full arrangement, not a lone riff.")
+    if len(melodic_channels) < MIN_MELODIC_CHANNELS:
+        issues.append("Use distinct melody, bass, harmony/pad, and counterline or arpeggio parts.")
+    if len(instruments) < MIN_MUSIC_INSTRUMENTS:
+        issues.append("Use at least four contrasting instruments.")
+    if len(pitches) < MIN_UNIQUE_PITCHES or note_events < MIN_NOTE_EVENTS:
+        issues.append("Write developed A/B musical phrases with more melodic and rhythmic variation.")
+    if not percussion:
+        issues.append("Add a deliberate rhythm/percussion part for complete arcade-game music.")
+    if loop_seconds < MIN_MUSIC_LOOP_SECONDS:
+        issues.append(f"Make the repeating section at least {MIN_MUSIC_LOOP_SECONDS:.0f} seconds long.")
+
+    return {
+        "pass": not issues,
+        "channelCount": len(channels),
+        "melodicChannelCount": len(melodic_channels),
+        "instrumentCount": len(instruments),
+        "uniquePitchCount": len(pitches),
+        "noteEventCount": note_events,
+        "hasPercussion": percussion,
+        "loopSeconds": round(loop_seconds, 2),
+        "issues": issues,
+        "scope": "Structural baseline only; human listening still decides whether the music is good.",
     }
 
 
@@ -203,6 +274,7 @@ def compile_music(args: dict[str, Any]) -> dict[str, Any]:
     }
     if ok:
         payload["vgm"] = validate_vgm(LAST_VGM)
+        payload["quality"] = analyze_music_quality(mml_text, payload["vgm"])
     write_state(payload, log_text)
     return tool_result(payload, is_error=not ok)
 

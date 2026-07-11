@@ -8,9 +8,10 @@
 
 Drive16 is an open-source desktop app: a conversation on the left, your game
 running on the right. You describe what you want in plain language; an agent
-writes the SGDK C code, generates sprites and music if you ask, compiles the
-ROM, checks the result in an emulator, fixes its own mistakes, and the app
-plays the finished ROM immediately — with sound, keyboard, and gamepad.
+writes SGDK C code, can generate sprites and music, compiles the ROM, and
+checks the result in an emulator. A bounded repair pass may fix one specific
+failure; if it still fails, the app reports the blocker instead of presenting
+the ROM as finished.
 
 ```text
 You:      make a sprite I can move around, with upbeat music
@@ -39,7 +40,7 @@ that the generated game is good or playable.
 | Live game-quality audit | Functional four-prompt audit complete; its sparse historical frames are now rejected by presentation contract v2 |
 | Presentation baseline | Snake, Pong, Tetris, and Asteroids now build with custom tile art, composed panels, stronger palettes, and verified non-silent audio |
 | Model bakeoff | Three models × four prompts complete and rescored under presentation v2: all 12 historical outputs need visual repair, so DeepSeek is only the operational default |
-| Ollama as the agent brain | Working locally; Qwen passed the full Snake build/runtime/audio/project-memory gate, while DeepSeek remains the stronger default |
+| Ollama | Local questions, summaries, and diagnostics only; ROM-changing work is routed through bounded DeepSeek V3.1 calls on OpenRouter |
 | Distributable .app/.dmg | The ad-hoc-signed `.app` and `.dmg` pass signature, disk-image, isolated install, writable-runtime, and native Verify checks. Treat them as a test build until packaged interactive Play no longer renders black. |
 | LICENSE file | MIT |
 
@@ -57,7 +58,7 @@ Four swappable layers (full detail in `drive16-architecture.md`):
 ```text
 App shell (Tauri 2 + React)          — two-pane UI, player, project actions
   └── Agent spine (OpenCode, local)  — the agent loop, spawned on a local Drive16-owned port
-        └── Model (BYOK/local)       — OpenRouter or Ollama
+        └── Model                    — OpenRouter for ROM changes; Ollama for local questions/diagnostics
         └── MCP tool servers         — the agent's hands:
               drive16-sgdk-build     — compile C + assets → rom.bin (Docker)
               drive16-emulator       — run ROM, screenshot, input, audio dump
@@ -105,13 +106,13 @@ Requirements (macOS today; the toolchain itself is cross-platform):
 - Docker Desktop (runs the SGDK compiler image — no local cross-compiler)
 - Node 22+ and pnpm, Rust + Cargo
 - [OpenCode CLI](https://opencode.ai) (`opencode` on PATH — the agent spine)
-- An OpenRouter API key (BYOK; default `deepseek/deepseek-chat-v3.1`) or a
-  supported local Ollama model
+- An OpenRouter API key (BYOK; default `deepseek/deepseek-chat-v3.1`) for ROM-changing work
+- Optional Ollama for local questions, summaries, and diagnostics
 
 ```sh
 pnpm --dir app install
 
-# Browser preview (limited: no agent bridge)
+# Browser-first development surface
 pnpm --dir app dev            # → http://127.0.0.1:1420/
 
 # The real app (macOS debug bundle, rebuilds then opens)
@@ -121,8 +122,8 @@ scripts/launch-drive16-native.sh
 First run, in the app:
 
 1. Start Docker Desktop.
-2. Settings → choose OpenRouter and test your key, or choose Ollama and select
-   one of the installed local models.
+2. Settings → choose OpenRouter and test your key. Ollama remains available for
+   local questions and diagnostics, but it does not change ROMs.
 3. Type what you want to build. Watch the right pane.
 
 If something is missing (Docker down, no key), the agent tells you in one
@@ -211,9 +212,26 @@ Key documents:
 
 ## Model stance
 
-Bring-your-own-key or local-only. OpenRouter is the hosted default, and Ollama
-can run the builder agent with an installed local model. No Drive16 flow asks
-you to log into a consumer AI subscription.
+Bring your own OpenRouter key for bounded ROM-changing calls. Ollama remains a
+local-only option for questions, summaries, and diagnostics, but cannot enter
+the ROM-changing execution path. No Drive16 flow asks you to log into a
+consumer AI subscription.
+
+## Local reference runs
+
+Drive16 can capture behavioral evidence from a user-supplied or permissively
+licensed Genesis ROM without treating it as training data or extracting its
+assets. Import the ROM into the repository workspace, then run:
+
+```sh
+python3 scripts/capture-reference-run.py path/to/reference.bin \
+  --out /tmp/drive16-reference --action-button a
+node scripts/verify-reference-run.mjs /tmp/drive16-reference/reference-run.json
+```
+
+The report records local title/start, matched action/no-action frames, a
+15-second idle run, restart behavior, and an audio signal summary. Human review
+is still required for control semantics, pacing, composition, and music taste.
 
 ## Asset and license hygiene
 

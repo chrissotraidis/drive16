@@ -46,12 +46,20 @@ static s16 next_dir_x;
 static s16 next_dir_y;
 static u16 frame_counter;
 static u16 previous_joy;
+static bool started;
+static bool paused;
 static bool game_over;
-static bool presentation_ready;
 
 static void draw_at(s16 x, s16 y, const char *text)
 {
     VDP_drawText(text, (u16)x, (u16)y);
+}
+
+static void draw_at_palette(s16 x, s16 y, const char *text, u16 palette)
+{
+    VDP_setTextPalette(palette);
+    draw_at(x, y, text);
+    VDP_setTextPalette(PAL3);
 }
 
 static u16 art_tile(u16 palette, u16 tile)
@@ -86,6 +94,16 @@ static void draw_score(void)
     draw_at(BOARD_X, 2, text);
 }
 
+static void draw_title(void)
+{
+    VDP_fillTileMapRect(BG_A, 0, BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
+    VDP_fillTileMapRect(BG_A, art_tile(PAL1, TILE_INSET), BOARD_X + 3, BOARD_Y + 3, 5, 1);
+    VDP_fillTileMapRect(BG_A, art_tile(PAL2, TILE_INSET), BOARD_X + 12, BOARD_Y + 3, 5, 1);
+    draw_at_palette(BOARD_X + 7, BOARD_Y + 5, "SNAKE", PAL1);
+    draw_at(BOARD_X + 4, BOARD_Y + 8, "EAT FOOD, GROW");
+    draw_at_palette(BOARD_X + 4, BOARD_Y + 11, "PRESS START", PAL2);
+}
+
 static void place_food(void)
 {
     food = food_path[food_index % (sizeof(food_path) / sizeof(food_path[0]))];
@@ -103,21 +121,13 @@ static void draw_snake(void)
 
 static void reset_game(void)
 {
-    if (!presentation_ready)
-    {
-        VDP_clearPlane(BG_A, TRUE);
-        VDP_clearPlane(BG_B, TRUE);
-        VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 0, 40, 4);
-        VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 24, 40, 4);
-        draw_at(BOARD_X, 1, "DRIVE16 // SNAKE");
-        draw_at(BOARD_X, 25, "D-PAD MOVE   START RESET");
-        draw_border();
-        presentation_ready = TRUE;
-    }
-    else
-    {
-        VDP_fillTileMapRect(BG_A, 0, BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
-    }
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 0, 40, 4);
+    VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 24, 40, 4);
+    draw_at(BOARD_X, 1, "DRIVE16 // SNAKE");
+    draw_at(BOARD_X - 2, 25, "D-PAD MOVE  C PAUSE  START RESET");
+    draw_border();
 
     snake_len = START_SNAKE;
     snake[0].x = BOARD_W / 2;
@@ -135,6 +145,7 @@ static void reset_game(void)
     score = 0;
     food_index = 0;
     game_over = FALSE;
+    paused = FALSE;
 
     draw_score();
     draw_snake();
@@ -207,13 +218,37 @@ static void step_game(void)
 static void read_input(void)
 {
     const u16 joy = JOY_readJoypad(JOY_1);
+    const u16 pressed = joy & (u16)~previous_joy;
 
-    if ((joy & BUTTON_START) && !(previous_joy & BUTTON_START))
+    if (!started)
+    {
+        if (pressed & BUTTON_START)
+        {
+            started = TRUE;
+            reset_game();
+        }
+        previous_joy = joy;
+        return;
+    }
+
+    if ((pressed & BUTTON_C) && !game_over)
+    {
+        paused = !paused;
+        if (paused) draw_at(BOARD_X + 7, BOARD_Y + 8, "PAUSED");
+        else
+        {
+            VDP_fillTileMapRect(BG_A, 0, BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
+            draw_snake();
+            draw_cell(food, PAL2, TILE_INSET);
+        }
+    }
+
+    if (pressed & BUTTON_START)
     {
         reset_game();
     }
 
-    if (!game_over)
+    if (!game_over && !paused)
     {
         if ((joy & BUTTON_LEFT) && dir_x != 1)
         {
@@ -262,12 +297,14 @@ int main(bool hardReset)
     XGM_startPlay(snake_loop);
 
     reset_game();
+    started = FALSE;
+    draw_title();
 
     while (TRUE)
     {
         read_input();
 
-        if (!game_over)
+        if (started && !paused && !game_over)
         {
             frame_counter++;
             if (frame_counter >= MOVE_FRAMES)

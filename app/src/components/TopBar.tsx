@@ -2,6 +2,9 @@ import { ChevronDown, Download, Save, Settings } from "lucide-react";
 import drive16Mark from "../assets/brand/drive16-mark.png";
 
 export function TopBar({
+  actionDetail,
+  actionLabel,
+  actionState,
   buildLabel,
   buildState,
   exportBusy,
@@ -13,6 +16,9 @@ export function TopBar({
   onSave,
   onToggleMenu,
 }: {
+  actionDetail: string;
+  actionLabel: string;
+  actionState: string;
   buildLabel: string;
   buildState: string;
   exportBusy: boolean;
@@ -40,11 +46,20 @@ export function TopBar({
           <span>{projectName}</span>
           <ChevronDown size={14} />
         </button>
+        <div className="build-status" data-testid="run-status">
+          <span className={`status-dot ${buildState}`} aria-hidden="true" />
+          <span>{buildLabel}</span>
+        </div>
       </div>
 
-      <div className="build-status" data-testid="run-status">
-        <span className={`status-dot ${buildState}`} aria-hidden="true" />
-        <span>{buildLabel}</span>
+      <div
+        className={`top-feedback ${actionState}`}
+        role="status"
+        data-testid="action-status"
+        title={`${actionLabel}: ${actionDetail}`}
+      >
+        <strong>{actionLabel}</strong>
+        <span>{actionDetail}</span>
       </div>
 
       <nav className="top-actions" aria-label="Project actions">

@@ -1,0 +1,12 @@
+#title Skyline Intercept
+#platform megadrive
+
+@80 fm ; drive16_round_bass
+  3   1
+ 31   7   0   8   3  28   0   1   0   0
+ 31  12   0   8   5  42   0   1   0   0
+ 31   7   0   8   3  18   0   2   0   0
+ 31  16   0   9   1   0   0   1   0   0
+
+A t132 @80 v12 o3 l8 c r g r a r g r L c2 r2
+B t132 @0 v9 o4 l8 e g b >e< b g e L e2 r2

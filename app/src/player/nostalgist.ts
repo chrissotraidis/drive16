@@ -27,22 +27,29 @@ export type NostalgistPlayerRuntime = {
   muted: boolean;
   volume: number;
   volumeSteps: number;
+  audioSignalDetected: boolean;
+  audioProbe?: AnalyserNode;
   logs: string[];
 };
 
 type NostalgistLaunchOptions = Parameters<typeof Nostalgist.launch>[0];
 
-export const defaultPlayerVolume = 40;
-const retroarchAttenuationSteps = 40;
+export const defaultPlayerVolume = 60;
+const retroarchVolumeStepDb = 0.5;
+const retroarchMaxAttenuationDb = 60;
+const playerVolumeCurveExponent = 2;
 
 const inputButtonMap: Record<PlayerInputActionId, string> = {
   "dpad.left": "left",
   "dpad.right": "right",
   "dpad.up": "up",
   "dpad.down": "down",
-  "button.a": "a",
+  // Genesis Plus GX maps the three-button pad onto RetroPad as A->Y,
+  // B->B, C->A. Using the face-button names directly sends the wrong
+  // Genesis control for A and C.
+  "button.a": "y",
   "button.b": "b",
-  "button.c": "x",
+  "button.c": "a",
   "button.start": "start",
 };
 
@@ -76,6 +83,13 @@ export async function launchNostalgistMegadrivePlayer({
         return;
       }
       recordLog(...args);
+      if (
+        /Cannot push NULL or empty core path into the playlist|Could not get screen dimensions/i.test(
+          message,
+        )
+      ) {
+        return;
+      }
       if (/\[ERROR\]/i.test(message)) console.error(...args);
       else if (/\[WARN\]/i.test(message)) console.warn(...args);
     },
@@ -124,8 +138,11 @@ export async function launchNostalgistMegadrivePlayer({
     muted: true,
     volume: defaultPlayerVolume,
     volumeSteps: 0,
+    audioSignalDetected: false,
     logs,
   };
+
+  runtime.audioProbe = installAudioProbe(runtime);
 
   return runtime;
 }
@@ -133,6 +150,8 @@ export async function launchNostalgistMegadrivePlayer({
 // RetroArch's Emscripten build exposes its WebAudio context through RWA. Browsers
 // keep that context suspended until a user gesture, so resume it explicitly.
 function findAudioContext(runtime: NostalgistPlayerRuntime): AudioContext | undefined {
+  if (!browserAudioOutputSupported()) return undefined;
+
   try {
     const emscripten = runtime.instance.getEmscripten?.() as
       | { RWA?: { context?: AudioContext } }
@@ -153,6 +172,16 @@ function findAudioContext(runtime: NostalgistPlayerRuntime): AudioContext | unde
   return undefined;
 }
 
+function browserAudioOutputSupported() {
+  const browserGlobal = globalThis as typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+  return (
+    typeof browserGlobal.AudioContext === "function" ||
+    typeof browserGlobal.webkitAudioContext === "function"
+  );
+}
+
 export function nostalgistAudioState(runtime: NostalgistPlayerRuntime): PlayerAudioState {
   const ctx = findAudioContext(runtime);
   if (!ctx) {
@@ -160,7 +189,64 @@ export function nostalgistAudioState(runtime: NostalgistPlayerRuntime): PlayerAu
   }
   if (ctx.state === "suspended") return "needs-gesture";
   if (ctx.state !== "running") return "unavailable";
-  return runtime.muted || runtime.volume === 0 ? "muted" : "audible";
+  if (runtime.muted || runtime.volume === 0) return "muted";
+  return runtime.audioSignalDetected ? "signal" : "enabled";
+}
+
+export async function detectNostalgistAudioSignal(
+  runtime: NostalgistPlayerRuntime,
+  durationMs = 2_000,
+): Promise<boolean> {
+  const analyser = runtime.audioProbe;
+  if (!analyser) return false;
+
+  const samples = new Float32Array(analyser.fftSize);
+  const deadline = performance.now() + durationMs;
+  while (performance.now() < deadline) {
+    analyser.getFloatTimeDomainData(samples);
+    for (const sample of samples) {
+      if (Math.abs(sample) > 0.0005) {
+        runtime.audioSignalDetected = true;
+        return true;
+      }
+    }
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
+  }
+  return false;
+}
+
+function installAudioProbe(runtime: NostalgistPlayerRuntime): AnalyserNode | undefined {
+  const ctx = findAudioContext(runtime);
+  if (!ctx) return undefined;
+
+  try {
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0;
+    analyser.connect(ctx.destination);
+
+    // This RetroArch build creates a fresh AudioBufferSourceNode for every
+    // audio block and connects it directly to the destination. Route future
+    // blocks through an analyser so Drive16 can distinguish an enabled context
+    // from a real signal reaching the browser output graph.
+    const originalCreateBufferSource = ctx.createBufferSource.bind(ctx);
+    const contextFactory = ctx as unknown as {
+      createBufferSource: () => AudioBufferSourceNode;
+    };
+    contextFactory.createBufferSource = () => {
+      const source = originalCreateBufferSource();
+      const originalConnect = source.connect.bind(source) as (
+        destination: AudioNode,
+        ...args: number[]
+      ) => AudioNode;
+      source.connect = ((destination: AudioNode, ...args: number[]) =>
+        originalConnect(destination === ctx.destination ? analyser : destination, ...args)) as typeof source.connect;
+      return source;
+    };
+    return analyser;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function resumeNostalgistAudio(
@@ -181,6 +267,24 @@ export function clampPlayerVolume(volume: number) {
   return Math.max(0, Math.min(100, Math.round(volume)));
 }
 
+export function playerVolumeToAttenuationSteps(volume: number) {
+  const normalized = clampPlayerVolume(volume) / 100;
+  if (normalized <= 0) {
+    return Math.round(retroarchMaxAttenuationDb / retroarchVolumeStepDb);
+  }
+
+  // A percentage is a listening-level control, not a decibel control. Square
+  // the normalized value before converting it to dB so 5% and 10% are
+  // genuinely quiet and audibly distinct instead of adjacent near-full-scale
+  // RetroArch steps. The slider label remains the saved user percentage.
+  const amplitude = normalized ** playerVolumeCurveExponent;
+  const attenuationDb = Math.min(
+    retroarchMaxAttenuationDb,
+    Math.max(0, -20 * Math.log10(amplitude)),
+  );
+  return Math.round(attenuationDb / retroarchVolumeStepDb);
+}
+
 export async function setNostalgistVolume(
   runtime: NostalgistPlayerRuntime,
   volume: number,
@@ -194,17 +298,17 @@ export async function setNostalgistVolume(
     return nostalgistAudioState(runtime);
   }
 
-  const ctx = findAudioContext(runtime);
-  if (ctx?.state === "suspended") {
-    await tryResumeAudioContext(ctx);
-  }
-
   if (runtime.muted) {
     runtime.instance.sendCommand("MUTE");
     runtime.muted = false;
   }
 
-  const nextSteps = Math.round((1 - nextVolume / 100) * retroarchAttenuationSteps);
+  const ctx = findAudioContext(runtime);
+  if (ctx?.state === "suspended") {
+    await tryResumeAudioContext(ctx);
+  }
+
+  const nextSteps = playerVolumeToAttenuationSteps(nextVolume);
   const stepDelta = nextSteps - runtime.volumeSteps;
   if (stepDelta > 0) {
     sendRepeatedCommand(runtime, "VOLUME_DOWN", stepDelta);
@@ -214,17 +318,47 @@ export async function setNostalgistVolume(
 
   runtime.volume = nextVolume;
   runtime.volumeSteps = nextSteps;
-  return nostalgistAudioState(runtime);
+  const state = nostalgistAudioState(runtime);
+  // `On` is the explicit player setting; signal detection is reported
+  // separately. Some embedded browser sessions play RetroArch audio without
+  // exposing its AudioContext back through the core, so do not relabel a
+  // successful unmute command as Unavailable merely because probing failed.
+  return state === "unavailable" || state === "needs-gesture" ? "enabled" : state;
+}
+
+export async function setNostalgistMuted(
+  runtime: NostalgistPlayerRuntime,
+  muted: boolean,
+): Promise<PlayerAudioState> {
+  const ctx = findAudioContext(runtime);
+  if (runtime.muted !== muted) {
+    runtime.instance.sendCommand("MUTE");
+    runtime.muted = muted;
+  }
+  if (!muted && ctx?.state === "suspended") {
+    await tryResumeAudioContext(ctx);
+  }
+  const state = nostalgistAudioState(runtime);
+  return !muted && (state === "unavailable" || state === "needs-gesture")
+    ? "enabled"
+    : state;
 }
 
 async function tryResumeAudioContext(ctx: AudioContext) {
   try {
+    // Some WebViews keep an otherwise valid RetroArch context suspended until
+    // a source is started during the same user gesture. Prime the existing
+    // graph with one silent sample; ROM audio still supplies all audible data.
+    const unlockSource = ctx.createBufferSource();
+    unlockSource.buffer = ctx.createBuffer(1, 1, 22_050);
+    unlockSource.connect(ctx.destination);
+    unlockSource.start(0);
     await Promise.race([
       ctx.resume(),
-      new Promise<void>((resolve) => window.setTimeout(resolve, 600)),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 2_000)),
     ]);
   } catch {
-    // A later click on the sound control can retry the browser gesture gate.
+    // A later explicit click can retry the browser gesture gate.
   }
 }
 
@@ -246,8 +380,16 @@ export function resumeNostalgistPlayer(runtime: NostalgistPlayerRuntime) {
   runtime.instance.resume();
 }
 
-export function resetNostalgistPlayer(runtime: NostalgistPlayerRuntime) {
-  runtime.instance.restart();
+export async function restartNostalgistPlayer(
+  runtime: NostalgistPlayerRuntime,
+  action?: PlayerInputAction,
+) {
+  if (!action) throw new Error("This project does not document a game recovery control.");
+  const button = inputButtonMap[action.id];
+  // Use Nostalgist's complete key press helper so the recovery control remains
+  // down across several emulated frames and is always released. A short pair
+  // of synthetic down/up calls was unreliable at pause and game-over edges.
+  await runtime.instance.press({ button, player: 1, time: 220 });
 }
 
 export function stopNostalgistPlayer(runtime: NostalgistPlayerRuntime) {

@@ -14,7 +14,9 @@ const SNAKE_BASIC_SKELETON: &str = "examples/game-skeletons/snake-basic";
 const PONG_BASIC_SKELETON: &str = "examples/game-skeletons/pong-basic";
 const TETRIS_BASIC_SKELETON: &str = "examples/game-skeletons/tetris-basic";
 const ASTEROIDS_BASIC_SKELETON: &str = "examples/game-skeletons/asteroids-basic";
+const MISSILE_COMMAND_BASIC_SKELETON: &str = "examples/game-skeletons/missile-command-basic";
 const ACTIVE_PROJECT_DIRECTORY: &str = "artifacts/phase3/active-project";
+const PREVIOUS_ACTIVE_PROJECT_DIRECTORY: &str = "artifacts/phase3/active-project.previous";
 const EXPORT_DIRECTORY: &str = "artifacts/phase3/exports";
 const PROJECT_SAVE_DIRECTORY: &str = "artifacts/phase3/projects";
 const ROM_IMPORT_DIRECTORY: &str = "artifacts/phase5/imports";
@@ -42,6 +44,10 @@ pub struct ProjectSummary {
     pub export_directory: String,
     pub rom_status: String,
     pub rom_detail: String,
+    pub trust_stage: String,
+    pub review_detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restart_action: Option<String>,
     pub files: Vec<ProjectFileEntry>,
     pub asset_roles: Vec<ProjectAssetRole>,
 }
@@ -283,20 +289,42 @@ pub fn seed_active_project_for_prompt(prompt: String) -> Result<PromptSeedResult
     seed_active_project_for_prompt_in_repo(repo_root(), &prompt)
 }
 
-// New Project: throw away the working copy and start from the template.
+pub fn build_active_project() -> Result<ActiveProjectResult, String> {
+    build_active_project_for_repo(repo_root())
+}
+
+// New Project: rotate the working copy out of the way before starting clean.
 pub fn reset_active_project() -> Result<ActiveProjectResult, String> {
     let root = repo_root();
     let active = root.join(ACTIVE_PROJECT_DIRECTORY);
+    let previous = root.join(PREVIOUS_ACTIVE_PROJECT_DIRECTORY);
     if active.is_dir() {
-        fs::remove_dir_all(&active).map_err(|error| {
+        if previous.is_dir() {
+            fs::remove_dir_all(&previous).map_err(|error| {
+                format!(
+                    "Could not clear the previous active project {}: {}",
+                    previous.display(),
+                    error
+                )
+            })?;
+        }
+        fs::rename(&active, &previous).map_err(|error| {
             format!(
-                "Could not clear the active project {}: {}",
+                "Could not preserve the active project {}: {}",
                 active.display(),
                 error
             )
         })?;
     };
-    ensure_active_project_for_repo(root)
+    match ensure_active_project_for_repo(root.clone()) {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            if previous.is_dir() && !active.exists() {
+                let _ = fs::rename(&previous, &active);
+            }
+            Err(error)
+        }
+    }
 }
 
 fn seed_active_project_for_prompt_in_repo(
@@ -331,6 +359,12 @@ fn seed_active_project_for_prompt_in_repo(
             "Asteroids",
             ASTEROIDS_BASIC_SKELETON,
             "Loaded the simple Asteroids starter code and audio loop into the blank project",
+        ))
+    } else if looks_like_simple_missile_command_request(prompt) {
+        Some((
+            "Missile Command",
+            MISSILE_COMMAND_BASIC_SKELETON,
+            "Loaded the Skyline Intercept starter with generated sprites, music, and working defense controls",
         ))
     } else {
         None
@@ -391,6 +425,29 @@ fn seed_active_project_for_prompt_in_repo(
         applied: true,
         source: Some(seed_source.to_string()),
     })
+}
+
+fn build_active_project_for_repo(repo_root: PathBuf) -> Result<ActiveProjectResult, String> {
+    ensure_active_project_for_repo(repo_root.clone())?;
+    let build_script = repo_root.join("scripts/build-sgdk.sh");
+    if !build_script.is_file() {
+        return Err(format!("SGDK build script is missing: {}", build_script.display()));
+    }
+    let mut command = Command::new(&build_script);
+    command.current_dir(&repo_root).arg(ACTIVE_PROJECT_DIRECTORY);
+    crate::starter_rom::run_command_with_timeout(
+        &mut command,
+        "Seeded active project build",
+        std::time::Duration::from_secs(15 * 60),
+    )?;
+    let result = ensure_active_project_for_repo(repo_root)?;
+    if !result.rom_exists {
+        return Err(format!(
+            "Seeded build finished without a current ROM: {}",
+            result.detail
+        ));
+    }
+    Ok(result)
 }
 
 pub fn audit_active_project_memory() -> ProjectMemoryAuditResult {
@@ -813,6 +870,28 @@ fn project_memory_truth_warnings(
     let combined = format!("{}\n{}\n{}", game_text, assets_text, playtest_text);
     let combined_lower = combined.to_ascii_lowercase();
     let rom_exists = project_path.join("out/rom.bin").is_file();
+    let source_text = fs::read_to_string(project_path.join("src/main.c")).unwrap_or_default();
+    let source_genre = detected_game_genre(&source_text);
+    let memory_genre = detected_game_genre(&format!("{}\n{}", game_text, playtest_text));
+
+    if source_genre != "unknown" && memory_genre != "unknown" && source_genre != memory_genre {
+        warnings.push(format!(
+            "Project notes describe {}, but src/main.c contains {}",
+            memory_genre, source_genre
+        ));
+    }
+
+    if gate == "pass" {
+        let source_modified = [project_path.join("src"), project_path.join("res")]
+            .iter()
+            .filter_map(|path| latest_modified_at(path))
+            .max();
+        let playtest_modified = latest_modified_at(&project_path.join("PLAYTEST.md"));
+        if matches!((source_modified, playtest_modified), (Some(source), Some(playtest)) if source > playtest)
+        {
+            warnings.push("PLAYTEST.md pass predates the latest game source/resource change".to_string());
+        }
+    }
 
     if !rom_exists
         && game_lower.lines().any(|line| {
@@ -922,6 +1001,7 @@ fn missing_quality_review_fields(playtest_text: &str) -> Vec<&'static str> {
 fn detected_game_genre(text: &str) -> &'static str {
     let lower = text.to_ascii_lowercase();
     for (needle, genre) in [
+        ("missile command", "missile command"),
         ("snake", "snake"),
         ("pong", "pong"),
         ("tetris", "tetris"),
@@ -933,6 +1013,22 @@ fn detected_game_genre(text: &str) -> &'static str {
         }
     }
     "unknown"
+}
+
+fn latest_modified_at(path: &Path) -> Option<SystemTime> {
+    let metadata = fs::metadata(path).ok()?;
+    let own_modified = metadata.modified().ok();
+    if !metadata.is_dir() {
+        return own_modified;
+    }
+
+    fs::read_dir(path)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(Result::ok))
+        .filter_map(|entry| latest_modified_at(&entry.path()))
+        .chain(own_modified)
+        .max()
 }
 
 fn has_captured_or_omitted_audio(assets_text: &str, playtest_text: &str) -> bool {
@@ -1048,6 +1144,17 @@ fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
             .map(|metadata| format!("{} bytes", metadata.len()))
             .unwrap_or_else(|_| "Build starter ROM before export".to_string())
     };
+    let playtest_text = fs::read_to_string(project_path.join("PLAYTEST.md")).unwrap_or_default();
+    let game_text = fs::read_to_string(project_path.join("GAME.md")).unwrap_or_default();
+    let trust_stage = project_trust_stage(&playtest_text, rom_current);
+    let review_detail = match trust_stage.as_str() {
+        "reviewed" => "Human-visible quality review passed",
+        "playable" => "Semantic playability gate passed; final human-visible review is pending",
+        "failed" => "Visible quality review failed; see PLAYTEST.md",
+        "built" => "ROM built; semantic playability and visible quality review are pending",
+        _ => "No current playable or reviewed ROM exists",
+    }
+    .to_string();
 
     ProjectSummary {
         generated_at: unix_timestamp(),
@@ -1057,6 +1164,9 @@ fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
         export_directory: repo_relative(&paths.repo_root, &paths.export_directory),
         rom_status: rom_status.to_string(),
         rom_detail,
+        trust_stage,
+        review_detail,
+        restart_action: project_restart_action(&game_text),
         asset_roles: asset_roles_for_project(&paths.repo_root, &project_path),
         files: vec![
             file_entry(&paths.repo_root, project_path.join("src/main.c"), "Main C"),
@@ -1077,6 +1187,47 @@ fn project_summary_for_repo(repo_root: PathBuf) -> ProjectSummary {
             ),
         ],
     }
+}
+
+fn project_trust_stage(playtest_text: &str, rom_current: bool) -> String {
+    for line in playtest_text.lines() {
+        let lower = line.trim().to_ascii_lowercase();
+        let Some(value) = lower.strip_prefix("project stage:") else {
+            continue;
+        };
+        let stage = value.trim().trim_end_matches('.');
+        if matches!(stage, "prototype" | "built" | "playable" | "reviewed" | "failed") {
+            return stage.to_string();
+        }
+    }
+
+    if !rom_current {
+        "prototype".to_string()
+    } else if playability_gate_status(playtest_text) == "pass" {
+        "playable".to_string()
+    } else {
+        "built".to_string()
+    }
+}
+
+fn project_restart_action(game_text: &str) -> Option<String> {
+    for line in game_text.lines() {
+        let lower = line.to_ascii_lowercase();
+        if !(lower.contains("restart") || lower.contains("reset")) {
+            continue;
+        }
+        if line.split(|character: char| !character.is_ascii_alphanumeric())
+            .any(|word| word.eq_ignore_ascii_case("c"))
+        {
+            return Some("button.c".to_string());
+        }
+        if lower.split(|character: char| !character.is_ascii_alphanumeric())
+            .any(|word| word == "start")
+        {
+            return Some("button.start".to_string());
+        }
+    }
+    None
 }
 
 fn export_current_rom_for_repo(repo_root: PathBuf) -> Result<RomExportResult, String> {
@@ -1835,6 +1986,10 @@ fn looks_like_simple_asteroids_request(prompt: &str) -> bool {
         || looks_like_simple_game_request(prompt, "asteroid")
 }
 
+fn looks_like_simple_missile_command_request(prompt: &str) -> bool {
+    looks_like_simple_game_request(prompt, "missile command")
+}
+
 fn looks_like_simple_game_request(prompt: &str, genre: &str) -> bool {
     let text = prompt.to_lowercase();
     text.contains(genre)
@@ -2492,6 +2647,30 @@ Playability gate: FAIL.
     }
 
     #[test]
+    fn project_summary_explains_playable_without_denying_it() {
+        let temp_dir = temp_repo("summary-playable-detail");
+        let active_project = temp_dir.join(ACTIVE_PROJECT_DIRECTORY);
+        fs::create_dir_all(active_project.join("src")).unwrap();
+        fs::create_dir_all(active_project.join("out")).unwrap();
+        fs::write(active_project.join("src/main.c"), "int main(){}\n").unwrap();
+        fs::write(
+            active_project.join("PLAYTEST.md"),
+            "Project stage: PLAYABLE\n\nPlayability gate: PASS\n",
+        )
+        .unwrap();
+        fs::write(active_project.join("out/rom.bin"), b"CURRENT-ROM").unwrap();
+
+        let summary = project_summary_for_repo(temp_dir.clone());
+        fs::remove_dir_all(temp_dir).unwrap();
+
+        assert_eq!(summary.trust_stage, "playable");
+        assert_eq!(
+            summary.review_detail,
+            "Semantic playability gate passed; final human-visible review is pending"
+        );
+    }
+
+    #[test]
     fn new_active_project_drops_copied_starter_rom_output() {
         let temp_dir = temp_repo("active-without-output");
         let starter_project = temp_dir.join(STARTER_PROJECT);
@@ -2508,6 +2687,16 @@ Playability gate: FAIL.
         assert_eq!(result.status, "ready");
         assert!(!result.rom_exists);
         assert!(!active_rom_exists);
+    }
+
+    #[test]
+    fn simple_missile_command_request_selects_seed() {
+        assert!(looks_like_simple_missile_command_request(
+            "Make a simple Missile Command game with music"
+        ));
+        assert!(!looks_like_simple_missile_command_request(
+            "Explain the current project"
+        ));
     }
 
     #[test]

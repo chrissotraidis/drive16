@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -56,9 +57,21 @@ def tool_call(process: subprocess.Popen[str], message_id: int, name: str, argume
 
 
 def main() -> int:
-    subprocess.run(["scripts/validate-core-assets.py"], cwd=REPO_ROOT, check=True)
-    if not ROM.is_file():
-        subprocess.run(["scripts/build-sgdk.sh", "examples/phase2-core-assets"], cwd=REPO_ROOT, check=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--rom", type=Path, default=ROM)
+    args = parser.parse_args()
+    rom = args.rom.resolve()
+    try:
+        rom_path = str(rom.relative_to(REPO_ROOT))
+    except ValueError as error:
+        raise RuntimeError("Audio verification requires a repo-local ROM.") from error
+
+    if rom == ROM:
+        subprocess.run(["scripts/validate-core-assets.py"], cwd=REPO_ROOT, check=True)
+        if not ROM.is_file():
+            subprocess.run(["scripts/build-sgdk.sh", "examples/phase2-core-assets"], cwd=REPO_ROOT, check=True)
+    elif not rom.is_file():
+        raise RuntimeError(f"ROM is missing: {rom}")
 
     process = subprocess.Popen(
         [sys.executable, str(SERVER)],
@@ -100,7 +113,7 @@ def main() -> int:
             4,
             "run_rom",
             {
-                "rom_path": "examples/phase2-core-assets/out/rom.bin",
+                "rom_path": rom_path,
                 "frames": 180,
                 "use_input_script": True,
                 "stream_frames": False,
@@ -123,7 +136,7 @@ def main() -> int:
             7,
             "verify_audio",
             {
-                "rom_path": "examples/phase2-core-assets/out/rom.bin",
+                "rom_path": rom_path,
                 "frames": 180,
                 "use_input_script": True,
             },

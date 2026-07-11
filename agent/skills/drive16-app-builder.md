@@ -87,6 +87,16 @@ extra systems before the first successful `build_rom`. When reading or globbing
 active project files, use absolute paths under the Active Drive16 project; do
 not use repo-root relative globs like `res/*` for audit projects.
 
+That first build is a checkpoint, not the visual finish line. Get a coherent,
+responsive deterministic game on screen before attempting optional generated
+art. When AI sprites are enabled, test the `drive16-comfyui` tool even when the
+app-side readiness line says unknown or untested (browser preview cannot
+authoritatively probe the local service), but do not wire a generated asset
+until its role, crop, palette, scale, and visual quality have been reviewed.
+Keep a rejected result out of `resources.res` and record it as Rejected in
+`ASSETS.md`; never silently substitute primitive blocks and call the AI-sprite
+request done.
+
 1. If you need Genesis or SGDK reference (VDP limits, sprite engine, joypad,
    XGM), query `drive16-rag` first.
    For simple Snake prompts, use
@@ -105,15 +115,24 @@ not use repo-root relative globs like `res/*` for audit projects.
    `examples/game-skeletons/asteroids-basic/` as the first code/audio shape
    when available; copy/adapt its `src/main.c` and `res/` files
    before docs updates, then build.
-   If `src/main.c` already contains a seeded starter for the requested game,
-   build and test it before rewriting it or polishing docs.
+   For simple Missile Command prompts, use
+   `examples/game-skeletons/missile-command-basic/` as the first code/audio
+   shape when available; copy/adapt its `src/main.c` and `res/` files before
+   docs updates, then build.
+   If the settings block says `Seeded prototype already built: yes`, Drive16
+   already built and tested that scaffold. Treat it as hidden reference code:
+   read it once, make a concrete source or resource edit, and only then call
+   `build_rom`. Do not copy a Makefile or rebuild the unchanged seed. When the
+   setting says `no`, build a matching seed once before deeper changes.
 2. Edit the C and resource files in the active project.
 3. Build with the `drive16-sgdk-build` tool `build_rom`, passing the active
    project path. Never build any other way. Build again after your final
    source/resource edit; an older `out/rom.bin` is stale evidence and does not
    prove the current game.
-4. If the build fails, call `read_build_log`, fix the code, and rebuild.
-   Repeat until it builds.
+4. If the build fails, call `read_build_log`, fix the concrete compiler error,
+   and rebuild. Allow at most two repair builds in one turn. If the second
+   repair still fails, keep the project failed and report the compiler blocker;
+   do not loop or start over from a blank game.
 5. When behavior matters (movement, colors, text on screen), verify with the
    `drive16-emulator` tool: `run_rom` on `out/rom.bin`, then `capture_frame`
    to look at the screen. Use `send_input` to test controls.
@@ -154,14 +173,16 @@ turn is:
    every early row must say `Planned` or `Pending`, not `Used`, `Built`, or
    `Captured`.
 3. Edit `src/` and `res/`, build the ROM, run the emulator, call
-   `drive16-emulator.verify_screen`, test input, and
+   `drive16-emulator.verify_screen` as a low-level diagnostic, test input, and
    verify audio when expected.
 4. Only after that evidence exists, update `GAME.md`, `ASSETS.md`, and
    `PLAYTEST.md` with the current state.
-5. Call `drive16-sgdk-build.audit_project_memory` with `expect_gate: "pass"`.
-   If it returns issues, repair those exact documentation claims and audit once
-   more. If the second audit still fails, keep the gate failed and report the
-   remaining issue instead of claiming completion.
+5. Call `drive16-sgdk-build.audit_project_memory` with `expect_gate: "fail"`.
+   The builder may record evidence and mark the project `BUILT`, but it must not
+   award `Playability gate: PASS`, `Project stage: PLAYABLE`, or `Project stage:
+   REVIEWED`. Those trust states belong to Drive16's independent semantic and
+   human review. If the audit reports unsupported claims, repair them once and
+   leave the gate failed.
 
 Never use `GAME.md` to claim `out/rom.bin` is built unless `build_rom` succeeded
 after the final source/resource edit. Never write `Known Issues: none` unless
@@ -172,8 +193,9 @@ gate failed and record the blocker instead of calling audio omitted.
 
 ## Playability gate
 
-"ROM built successfully" is not the same as "done." Before saying a game is
-playable, verify the relevant checklist and record it in `PLAYTEST.md`:
+"ROM built successfully" is not the same as "done." Verify the relevant
+checklist and record concrete observations in `PLAYTEST.md`, while leaving the
+builder-owned gate failed pending independent review:
 
 - Movement is visible after input.
 - Controls map to the intended actions.
@@ -182,8 +204,12 @@ playable, verify the relevant checklist and record it in `PLAYTEST.md`:
   panels, borders, palette contrast, and clear object silhouettes. A sparse
   text-glyph prototype is not the default presentation bar unless the user
   explicitly asks for a text-only style.
-- `drive16-emulator.verify_screen` passes the presentation contract. One repair
-  attempt is allowed; a second failure keeps the playability gate failed.
+- A complete Genesis-style presentation cannot be only scattered solid-color
+  blocks. Use cohesive backgrounds/panels, multi-color sprites or tiles, clear
+  silhouettes, and intentional spacing appropriate to a 16-bit console.
+- `drive16-emulator.verify_screen` emits useful pixel diagnostics. It cannot
+  prove genre correctness, composition quality, restart behavior, or
+  playability, and its result must never award a trust state.
 - Every custom tile index refers to tile data that was actually loaded. Raw VRAM
   tile numbers are not artwork and can render differently across emulators.
 - Pause/resume is a round trip: Start pauses and a later Start resumes. Action
@@ -218,10 +244,11 @@ generic gate:
   or move continuously, collisions/destruction affect score/state, and restart
   works after death or game over.
 
-When `PLAYTEST.md` says `Playability gate: PASS`, its Evidence section must
-name the relevant genre checks and what was observed for each. Do not leave
-`Genre checks: pending`, `untested`, or a generic "looks good" note on a
-passing gate. Use an exact `## Evidence` heading. For Snake, include the exact
+When an independent reviewer later considers `Playability gate: PASS`, its
+Evidence section must name the relevant genre checks and what was observed for
+each. The builder should use an exact `## Evidence` heading and retain
+`Playability gate: FAIL` until that review. Do not replace concrete observations
+with a generic `Genre checks: pending` line. For Snake, include the exact
 evidence phrases: `score starts at 0`, `snake and food visible`,
 `D-pad movement visible`, `food can be approached or eaten`,
 `collision fail state checked`, and `restart checked`.
@@ -233,7 +260,7 @@ For Tetris, include the exact evidence phrases:
 `left/right/down movement works`, `rotation works`, `pieces lock into grid`,
 `line clear or stacking present`, and `game-over possible`.
 
-A passing `PLAYTEST.md` must also include an exact `## Quality Review` section
+A reviewed `PLAYTEST.md` must also include an exact `## Quality Review` section
 with specific observations for `Screen composition`, `Player feedback`,
 `Restart clarity`, `Audio response`, and `Style coherence`. Do not pass a game
 with pending fields or generic claims such as "looks good"; record what is
@@ -324,15 +351,16 @@ project's `res/resources.res`):
 Prefer these bundled assets for quick fallback work. If the `Drive16
 settings:` block says AI sprites or MML music are enabled, treat those toggles
 as the user's preference for new-game prompts: attempt generated sprites for
-the main visible object and generated MML for a short loop when the game would
+the main visible object and generated MML for a developed arrangement when the game would
 benefit from them, unless the user asked for primitive/no-music output. If the
 local generator is unavailable, say so plainly and document the fallback.
 
 ## Generating music (works fully locally)
 
 When the user asks for original music, or the request is for a complete new
-game and the `Drive16 settings:` block says MML music is enabled, write a short
-loop as MML and compile it with the `drive16-mml-music` tool `compile_music`.
+game and the `Drive16 settings:` block says MML music is enabled, write a
+compact but developed loop as MML and compile it with the
+`drive16-mml-music` tool `compile_music`.
 If MML music is disabled and the user did not ask for music, do not add music.
 If the user asks for music while it is disabled, say that you can use
 bundled/no music now or the user can enable MML music in Settings:
@@ -346,7 +374,12 @@ blocker for writing game code.
    `drive16_round_bass`, `drive16_clear_lead`, `drive16_soft_pad`,
    `drive16_chip_pluck`, `drive16_bright_bell`, `drive16_brass_stab`) as the
    starting point — copy the instrument blocks you use into your MML.
-   Channels A-F are FM, G-H are PSG. Keep it short and looping.
+   Channels A-F are FM, G-H are PSG. For a complete game, use at least four
+   active parts: bass, lead, harmony/texture, and rhythm/percussion. Give the
+   lead a recognizable A/B phrase with rhythmic and melodic variation instead
+   of repeating one arpeggio, and make the repeating section at least sixteen
+   seconds long. When MML music is enabled, a seeded VGM is only scaffolding;
+   compose and wire a replacement unless the user explicitly asks to keep it.
 2. Before the first `compile_music` call, read
    `corpus/mml/ctrmml-megadrive.md` or query the MML corpus. Use the documented
    channel syntax (`A`, `B`, `C`, etc.) from that reference; do not invent
@@ -358,7 +391,13 @@ blocker for writing game code.
 3. Call `compile_music` with the MML text and a symbol name like
    `my_song`. It compiles via ctrmml and writes a VGM under
    `artifacts/phase4/mml-music/last.vgm`, returning the exact `XGM ...`
-   resource line.
+   resource line plus a structural `quality` report. A successful compile and
+   non-silent audio are necessary but do not prove that the music is good. For
+   a complete game, do not wire a newly generated track unless
+   `quality.pass` is true. If a valid track fails that baseline, use the one
+   remaining compile attempt to address the listed issue; otherwise retain the
+   starter track and record the quality failure rather than shipping a tiny
+   loop. Human listening remains the final taste check.
 4. Copy the VGM into the active project (e.g. `res/my_song.vgm`), add the
    `XGM` line to `res/resources.res` pointing at that copied file, declare
    `extern const u8 my_song[];` in `res/resources.h`, and start it with
@@ -410,8 +449,8 @@ the crop/slice source and output in `ASSETS.md`.
 
 - One short paragraph: what you changed, what assets were used, and whether
   the ROM built and passed the playability checks.
-- Include `Playability gate: PASS` only when every relevant gate above is
-  verified; otherwise include `Playability gate: FAIL` with the main reason.
+- Always leave `Playability gate: FAIL` and state what independent review is
+  still required. Never award PLAYABLE or REVIEWED from inside the builder.
 - If verification showed something on screen, say what you saw.
 - If the ROM builds but playability is not proven, say that it is not done.
 - If you could not finish, say exactly what failed and what you need.

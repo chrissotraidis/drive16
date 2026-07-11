@@ -5,25 +5,30 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultOpenRouterModel,
   openRouterFreeformMessages,
+  sendOllamaFreeformReply,
   sendOpenRouterFreeformReply,
 } from "./agent/openrouter";
 import {
   abortAgentSession,
   agentActivityFromEvent,
   agentPromptWithProject,
+  buildActiveProject,
   createAgentActivityRepairState,
   ensureActiveProject,
   resetActiveProject,
   seedActiveProjectForPrompt,
   sendAgentPrompt,
   setAgentProviderKey,
+  verifyBrowserProject,
   visibleAgentActivityEvents,
   type ActiveProject,
+  type BrowserProjectVerification,
 } from "./agent/opencodeSession";
 import {
   coreLaunchFailureReadiness,
   activeGamepadActionIds,
   clampPlayerVolume,
+  detectNostalgistAudioSignal,
   controllerProfileConfigured,
   defaultPlayerVolume,
   detectInteractiveCoreReadiness,
@@ -35,10 +40,12 @@ import {
   pauseNostalgistPlayer,
   playerInputActionForId,
   playerInputActionFromKey,
-  resetNostalgistPlayer,
   resetInputProfile,
+  restartNostalgistPlayer,
+  resumeNostalgistAudio,
   resumeNostalgistPlayer,
   sendNostalgistInput,
+  setNostalgistMuted,
   setNostalgistVolume,
   sameGamepadReadiness,
   stopNostalgistPlayer,
@@ -93,6 +100,8 @@ type PendingAgentRun = {
   startedAt: number;
   previousSession?: string;
   projectName: string;
+  providerId?: ModelProvider;
+  modelId?: string;
   sawSourceOrResourceEdit?: boolean;
   sawBuildStarted?: boolean;
   sawBuildFinished?: boolean;
@@ -100,12 +109,24 @@ type PendingAgentRun = {
   sawScreenCheck?: boolean;
   sawInputTest?: boolean;
   sawAudioCheck?: boolean;
+  requiresAiSprites?: boolean;
+  sawAiSpriteFinished?: boolean;
+  sawAiSpriteFailed?: boolean;
   musicCompileAttempts?: number;
   waitingTimer?: number;
   stallTimer?: number;
   backgroundErrorTimer?: number;
+  projectRefreshTimer?: number;
   hardStopTimer?: number;
+  hardLimitMs?: number;
+  baselineRomExists?: boolean;
+  adoptedFreshRom?: boolean;
 };
+
+type PersistedPendingAgentRun = Pick<
+  PendingAgentRun,
+  "sessionId" | "startedAt" | "projectName"
+>;
 
 type ConversationMode = {
   state: HealthState;
@@ -114,6 +135,7 @@ type ConversationMode = {
 };
 
 type HealthState = "ready" | "warning" | "missing";
+type ProjectTrustStage = "prototype" | "built" | "playable" | "reviewed" | "failed";
 
 type HealthCheck = {
   name: string;
@@ -181,6 +203,9 @@ type ProjectSummary = {
   exportDirectory: string;
   romStatus: HealthState;
   romDetail: string;
+  trustStage: ProjectTrustStage;
+  reviewDetail: string;
+  restartAction?: PlayerInputActionId | null;
   files: ProjectFileEntry[];
   assetRoles: ProjectAssetRole[];
 };
@@ -447,12 +472,17 @@ const openRouterKeyStorageKey = "drive16.openrouter.key.v1";
 const openRouterAcceptedKeyStorageKey = "drive16.openrouter.acceptedKey.v1";
 const legacyOpenRouterSessionKeyStorageKey = "drive16.openrouter.sessionKey.v1";
 const activeProjectNameStorageKey = "drive16.activeProject.name.v1";
+const pendingAgentRunStorageKey = "drive16.agent.pending.v1";
 const defaultOllamaEndpoint = "http://127.0.0.1:11434";
-const defaultOllamaModel = "qwen2.5-coder:7b";
+const defaultOllamaModel =
+  "rafw007/Qwen3.6-35B-A3B-mlx-claude-coder-abliterated:latest";
 const defaultComfyUiEndpoint = "http://127.0.0.1:8188";
 const playerSetupTimeoutMs = 20_000;
 const openCodeHeartbeatTimeoutMs = 15_000;
-const agentRunHardLimitMs = 6 * 60_000;
+// ComfyUI generation plus one source edit/build cycle regularly exceeds three
+// minutes even when the bounded model is making progress. Keep a hard stop,
+// but do not abort an active implementation before it reaches the build step.
+const agentRunHardLimitMs = 5 * 60_000;
 
 const preferredOpenRouterModels = [
   defaultOpenRouterModel,
@@ -625,6 +655,42 @@ function resetActiveProjectName() {
   saveActiveProjectName("Untitled Project");
 }
 
+function loadPersistedPendingAgentRun(): PersistedPendingAgentRun | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(pendingAgentRunStorageKey) ?? "null");
+    if (
+      !parsed ||
+      typeof parsed.sessionId !== "string" ||
+      typeof parsed.startedAt !== "number" ||
+      typeof parsed.projectName !== "string"
+    ) {
+      return undefined;
+    }
+    return parsed as PersistedPendingAgentRun;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistPendingAgentRun(pending: PersistedPendingAgentRun) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(pendingAgentRunStorageKey, JSON.stringify(pending));
+  } catch {
+    // The in-memory run still works when browser storage is unavailable.
+  }
+}
+
+function clearPersistedPendingAgentRun() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(pendingAgentRunStorageKey);
+  } catch {
+    // Nothing else to clear.
+  }
+}
+
 const starterMessages: Message[] = [
   {
     id: 1,
@@ -634,6 +700,35 @@ const starterMessages: Message[] = [
     time: formatMessageTime(),
   },
 ];
+const conversationStorageKey = "drive16.conversation.v2";
+
+function loadConversationMessages(): Message[] {
+  if (typeof window === "undefined") return starterMessages;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(conversationStorageKey) ?? "null");
+    if (
+      !parsed ||
+      parsed.projectName !== loadActiveProjectName() ||
+      !Array.isArray(parsed.messages) ||
+      parsed.messages.length === 0
+    ) {
+      return starterMessages;
+    }
+    const storedMessages = parsed.messages as Message[];
+    const messages = storedMessages.filter(
+      (message): message is Message =>
+        message &&
+        typeof message.id === "number" &&
+        (message.role === "user" || message.role === "agent") &&
+        typeof message.body === "string" &&
+        typeof message.time === "string" &&
+        !message.body.startsWith("Drive16 could not automatically confirm this screen."),
+    );
+    return messages.length ? messages.slice(-40) : starterMessages;
+  } catch {
+    return starterMessages;
+  }
+}
 
 const previewPreflight: PreflightReport = {
   generatedAt: "preview",
@@ -697,6 +792,8 @@ const previewProjectSummary: ProjectSummary = {
   exportDirectory: "artifacts/phase3/exports",
   romStatus: "missing",
   romDetail: "No ROM built yet",
+  trustStage: "prototype",
+  reviewDetail: "No ROM has been built or reviewed",
   assetRoles: [
     {
       role: "Game code primitives",
@@ -805,7 +902,7 @@ const previewV1PromptResult: V1PromptResult = {
 };
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>(starterMessages);
+  const [messages, setMessages] = useState<Message[]>(loadConversationMessages);
   const [draft, setDraft] = useState("");
   const [buildState, setBuildState] = useState<BuildState>("running");
   const [transport, setTransport] = useState<TransportState>("running");
@@ -815,8 +912,10 @@ function App() {
   const [starterRom, setStarterRom] = useState<StarterRomPreview>(previewStarterRom);
   const [starterSource, setStarterSource] = useState("checking");
   const [starterBusy, setStarterBusy] = useState(false);
-  const [projectSummary, setProjectSummary] =
-    useState<ProjectSummary>(previewProjectSummary);
+  const [projectSummary, setProjectSummary] = useState<ProjectSummary>(() => ({
+    ...previewProjectSummary,
+    name: loadActiveProjectName(previewProjectSummary.name),
+  }));
   const [projectSource, setProjectSource] = useState("checking");
   const [exportResult, setExportResult] = useState<RomExportResult | undefined>();
   const [exportBusy, setExportBusy] = useState(false);
@@ -862,6 +961,7 @@ function App() {
     useState<LoadedInteractiveCore | undefined>();
   const [playerState, setPlayerState] = useState<PlayerSessionState>("idle");
   const [playerCanvasActive, setPlayerCanvasActive] = useState(false);
+  const [playerCanvasGeneration, setPlayerCanvasGeneration] = useState(0);
   const [playerAudio, setPlayerAudio] = useState<PlayerAudioState>("unavailable");
   const [playerVolume, setPlayerVolume] = useState(defaultPlayerVolume);
   const [playerScreenEvidence, setPlayerScreenEvidence] =
@@ -873,7 +973,6 @@ function App() {
   const [agentRom, setAgentRom] = useState<{ path: string; stamp: number } | undefined>();
   const [agentProviders, setAgentProviders] = useState<string[]>([]);
   const [workspacePath, setWorkspacePath] = useState<string | undefined>();
-  const [toastNotice, setToastNotice] = useState<ProjectActionNotice | undefined>();
   const [interactiveCoreReadiness, setInteractiveCoreReadiness] =
     useState<InteractiveCoreReadiness>(() =>
       detectInteractiveCoreReadiness({
@@ -937,9 +1036,12 @@ function App() {
   const romViewportRef = useRef<HTMLDivElement | null>(null);
   const playerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playerRuntimeRef = useRef<NostalgistPlayerRuntime | undefined>();
+  const ollamaAutoTestAttemptedRef = useRef(false);
   const romImportInputRef = useRef<HTMLInputElement | null>(null);
   const coreImportInputRef = useRef<HTMLInputElement | null>(null);
-  const messageIdRef = useRef(starterMessages.length + 1);
+  const messageIdRef = useRef(
+    messages.reduce((largest, message) => Math.max(largest, message.id), 0) + 1,
+  );
   const openCodeEventIdRef = useRef(1);
   const openCodeRawEventIdRef = useRef(1);
   const agentActivityRepairRef = useRef(createAgentActivityRepairState());
@@ -953,47 +1055,46 @@ function App() {
     void connectOpenCode();
     void loadRecentProjects();
     void loadInteractiveCoreStatus();
-    if (isTauriRuntime()) {
-      void ensureActiveProject()
-        .then((project) => {
-          setWorkspacePath(project.projectPath);
-          setProjectSummary(
-            projectSummaryFromActiveProject(
-              project,
-              loadActiveProjectName(project.romExists ? "Active Project" : "Untitled Project"),
-            ),
-          );
-          setProjectSource("tauri");
-          void loadProjectSummary();
-          if (project.romExists) {
-            setStarterRom({
-              ...previewStarterRom,
-              detail: "Active project ROM available. Press Verify or Play ROM to load it.",
-              projectPath: project.projectPath,
-              romPath: project.romPath,
-            });
-            setStarterSource("preview");
-            setTransport("paused");
-            appendOpenCodeEvent(
-              "project.active.rom.available",
-              `${project.romPath}; not auto-loaded on refresh`,
-            );
-            noteAction("Active project ROM available. Press Verify or Play ROM to load it.");
-          } else if (project.status === "stale") {
-            appendOpenCodeEvent("project.active.stale", project.detail);
-          }
-        })
-        .catch((error) => {
-          setProjectSource("error");
-          setProjectActionNotice({
-            state: "missing",
-            label: "Project load failed",
-            detail: errorDetail(error, "Could not load the active project"),
+    void recoverPersistedAgentRun()
+      .then(() => ensureActiveProject())
+      .then((project) => {
+        const projectName = loadActiveProjectName(
+          project.romExists ? "Active Project" : "Untitled Project",
+        );
+        setWorkspacePath(project.projectPath);
+        setProjectSummary(projectSummaryFromActiveProject(project, projectName));
+        setProjectSource(isTauriRuntime() ? "tauri" : "browser-local");
+        void loadProjectSummary();
+        if (project.romExists) {
+          setStarterRom({
+            ...previewStarterRom,
+            detail: "Active project ROM restored and loading in the player.",
+            projectPath: project.projectPath,
+            romPath: project.romPath,
           });
+          setStarterSource("preview");
+          setTransport("paused");
+          setAgentRom({ path: project.romPath, stamp: Date.now() });
+          appendOpenCodeEvent("project.active.rom.restored", project.romPath);
+          noteAction("Restored the active project ROM and loaded it into the player.");
+          if (!isTauriRuntime()) {
+            // Restoring a project must stay fast and read-only. The 15-second
+            // semantic diagnostic runs only after an explicit build/verify,
+            // never as a background startup job that can race New Project.
+            void auditActiveProjectMemory();
+          }
+        } else if (project.status === "stale") {
+          appendOpenCodeEvent("project.active.stale", project.detail);
+        }
+      })
+      .catch((error) => {
+        setProjectSource("error");
+        setProjectActionNotice({
+          state: "missing",
+          label: "Project load failed",
+          detail: errorDetail(error, "Could not load the active project"),
         });
-    } else {
-      void loadProjectSummary();
-    }
+      });
   }, []);
 
   useEffect(() => {
@@ -1010,9 +1111,15 @@ function App() {
     void refreshOllamaModels();
   }, [modelProvider, ollamaModelsSource, settingsOpen]);
 
-  // The desktop owns the local sprite service. Once the user enables AI
-  // sprites, start it on app launch and on later re-enables. Browser preview
-  // can only explain that boundary; it cannot spawn or inspect local tools.
+  useEffect(() => {
+    if (modelProvider !== "ollama" || modelConnection.state !== "idle") return;
+    if (ollamaAutoTestAttemptedRef.current) return;
+    ollamaAutoTestAttemptedRef.current = true;
+    void testOllamaConnection();
+  }, [modelConnection.state, modelProvider]);
+
+  // The desktop owns local sprite-service startup. Browser preview cannot
+  // spawn it, but the Vite bridge can still report whether it is reachable.
   useEffect(() => {
     if (!enhancements.spriteGeneration) {
       comfyUiAutoLaunchAttemptedRef.current = false;
@@ -1027,9 +1134,11 @@ function App() {
       return;
     }
 
-    if (settingsOpen) void testComfyUiConnection();
+    if (comfyUiAutoLaunchAttemptedRef.current) return;
+    comfyUiAutoLaunchAttemptedRef.current = true;
+    void testComfyUiConnection();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsOpen, enhancements.spriteGeneration, comfyUiConnection.state]);
+  }, [enhancements.spriteGeneration, comfyUiConnection.state]);
 
   // Preflight is a snapshot; re-run it when Settings opens so rows like
   // Docker reflect reality, not app-launch time.
@@ -1108,6 +1217,20 @@ function App() {
     element.scrollTop = element.scrollHeight;
   }, [messages]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        conversationStorageKey,
+        JSON.stringify({
+          projectName: projectSummary.name,
+          messages: messages.slice(-40),
+        }),
+      );
+    } catch {
+      // Keep the current conversation in memory when browser storage is unavailable.
+    }
+  }, [messages, projectSummary.name]);
+
   // When the agent finishes a build, capture a preview frame first. Interactive
   // Play is a separate check because missing cores should not leave a black box.
   useEffect(() => {
@@ -1122,19 +1245,6 @@ function App() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentRom?.stamp]);
-
-  // Surface every action result as a visible toast; the notice state also
-  // feeds the sr-only live region for assistive tech.
-  const noticeSeenRef = useRef(false);
-  useEffect(() => {
-    if (!noticeSeenRef.current) {
-      noticeSeenRef.current = true;
-      return;
-    }
-    setToastNotice(projectActionNotice);
-    const timer = window.setTimeout(() => setToastNotice(undefined), 8000);
-    return () => window.clearTimeout(timer);
-  }, [projectActionNotice]);
 
   useEffect(() => {
     return () => {
@@ -1215,33 +1325,20 @@ function App() {
     () => activeRomSourceFor(projectSummary, importResult, v1PromptResult, agentRom?.path),
     [importResult, projectSummary, v1PromptResult, agentRom],
   );
+  const romAudioAvailable = useMemo(
+    () => projectAudioAvailability(projectSummary.assetRoles, activeRomSource.kind),
+    [activeRomSource.kind, projectSummary.assetRoles],
+  );
   const activeRomPlayable = useMemo(
     () => canPlayActiveRom(activeRomSource, projectSummary),
     [activeRomSource, projectSummary],
   );
-  const playabilityGateState = useMemo(
-    () =>
-      appPlayabilityGateState({
-        activeRomPlayable,
-        lastInputAction,
-        playerAudio,
-        playerAudioEvidence,
-        playerInputEvidence,
-        playerScreenEvidence,
-        proofMaxAbs: starterRom.audioMaxAbs,
-        sessionActive: Boolean(playerRuntimeRef.current),
-      }),
-    [
-      activeRomPlayable,
-      lastInputAction,
-      playerAudio,
-      playerAudioEvidence,
-      playerInputEvidence,
-      playerScreenEvidence,
-      playerState,
-      starterRom.audioMaxAbs,
-    ],
-  );
+  const playabilityGateState: HealthState =
+    projectSummary.trustStage === "reviewed"
+      ? "ready"
+      : projectSummary.trustStage === "failed"
+        ? "missing"
+        : "warning";
   const topBarStatus = useMemo(() => {
     if (buildState === "building") {
       return {
@@ -1250,29 +1347,31 @@ function App() {
       };
     }
     if (buildState === "error") return { state: "error", label: "Error" };
-    if (activeRomPlayable && playabilityGateState === "missing") {
-      return { state: "error", label: "Checks Failed" };
+    if (projectSummary.trustStage === "failed") {
+      return { state: "error", label: "Failed Review" };
     }
-    if (activeRomPlayable && playabilityGateState === "warning") {
-      const checking =
-        starterBusy ||
-        playerState === "loading" ||
-        playerScreenEvidence === "checking" ||
-        playerInputEvidence === "testing" ||
-        playerAudioEvidence === "checking";
-      return { state: "warning", label: checking ? "Checking" : "Review Needed" };
+    if (playerState === "loading") return { state: "warning", label: "Starting" };
+    if (playerState === "playing" || playerState === "paused") {
+      return { state: "running", label: playerState === "paused" ? "Paused" : "Running" };
     }
-    return { state: "running", label: "Ready" };
+    if (projectSummary.trustStage === "reviewed") {
+      return { state: "running", label: "Reviewed" };
+    }
+    if (projectSummary.trustStage === "playable") {
+      return { state: "running", label: "Playable" };
+    }
+    if (projectSummary.romStatus === "warning") {
+      return { state: "error", label: "Build incomplete" };
+    }
+    if (activeRomPlayable) return { state: "warning", label: "Built" };
+    return { state: "warning", label: "Prototype" };
   }, [
     activeRomPlayable,
     agentPhase,
     buildState,
-    playabilityGateState,
-    playerAudioEvidence,
-    playerInputEvidence,
-    playerScreenEvidence,
+    projectSummary.romStatus,
+    projectSummary.trustStage,
     playerState,
-    starterBusy,
   ]);
 
   const actionFeedback = useMemo<ProjectActionNotice>(() => {
@@ -1305,6 +1404,9 @@ function App() {
       };
     }
     if (playerState === "loading") {
+      if (projectActionNotice.label === "Restarting game") {
+        return projectActionNotice;
+      }
       return {
         state: "warning",
         label: "Preparing Play",
@@ -1335,19 +1437,26 @@ function App() {
         detail: actionDetail,
       };
     }
+    if (projectSummary.romStatus === "warning") {
+      return {
+        state: "missing",
+        label: "Build incomplete",
+        detail: projectSummary.romDetail,
+      };
+    }
     if (activeRomPlayable && playabilityGateState === "warning") {
       return {
         state: "warning",
-        label: "Verification incomplete",
-        detail:
-          "This ROM can be previewed, but Drive16 has not confirmed every screen, input, sound, or quality check.",
+        label:
+          projectSummary.trustStage === "playable" ? "Playable; review pending" : "Built; not playable",
+        detail: projectSummary.reviewDetail,
       };
     }
     if (activeRomPlayable && playabilityGateState === "missing") {
       return {
         state: "missing",
-        label: "Verification failed",
-        detail: "The ROM exists, but one or more required checks failed.",
+        label: "Visible review failed",
+        detail: projectSummary.reviewDetail,
       };
     }
     return {
@@ -1366,6 +1475,10 @@ function App() {
     playabilityGateState,
     playerState,
     projectActionNotice,
+    projectSummary.romDetail,
+    projectSummary.romStatus,
+    projectSummary.reviewDetail,
+    projectSummary.trustStage,
     saveBusy,
     starterBusy,
   ]);
@@ -1392,14 +1505,33 @@ function App() {
     if (openCodeSource === "checking" || preflightSource === "checking") {
       return "Checking local build tools…";
     }
+    if (modelProvider === "ollama") {
+      return openCode.state === "ready" &&
+        agentProviders.includes("ollama") &&
+        modelConnection.state === "ready"
+        ? "Local model installed. The first build will verify agent tool calling."
+        : "Test an installed Ollama model in Settings before the first build.";
+    }
     if (!agentProviders.includes("openrouter") && !openRouterKey.trim()) {
       return "Connect OpenRouter in Settings before the first build.";
+    }
+    if (openCode.state === "ready" && agentProviders.includes("openrouter")) {
+      return "Ready to build locally. AI sprites are optional.";
     }
     if (docker && docker.state !== "ready") {
       return "Docker needs attention before the first ROM build.";
     }
     return "Ready to build locally. AI sprites are optional.";
-  }, [agentProviders, openCodeSource, openRouterKey, preflight.checks, preflightSource]);
+  }, [
+    agentProviders,
+    modelProvider,
+    modelConnection.state,
+    openCode.state,
+    openCodeSource,
+    openRouterKey,
+    preflight.checks,
+    preflightSource,
+  ]);
 
   function focusComposer(prompt = "") {
     if (prompt) setDraft(prompt);
@@ -1449,6 +1581,29 @@ function App() {
         if (!agentRunPending) {
           setOpenCodeBusy(false);
         }
+      }
+      return;
+    }
+
+    // The local browser preview uses the same OpenCode build agent for
+    // ROM-changing requests. Questions and explanations continue through the
+    // conversational model so “how did you build this?” is not mistaken for
+    // a request to start another game.
+    if (looksLikeBuildPrompt(trimmed.toLowerCase())) {
+      const clarifyingReply = clarifyingReplyForBuildPrompt(trimmed);
+      if (clarifyingReply) {
+        setMessages((current) => [...current, makeMessage("agent", clarifyingReply, "system")]);
+        appendOpenCodeEvent("agent.questions", clarifyingReply);
+        noteAction("Waiting for a little more direction before building.");
+        setOpenCodeBusy(false);
+        return;
+      }
+
+      let agentRunPending = false;
+      try {
+        agentRunPending = await runAgentPrompt(trimmed);
+      } finally {
+        if (!agentRunPending) setOpenCodeBusy(false);
       }
       return;
     }
@@ -1531,11 +1686,46 @@ function App() {
             : "v1.ready";
         appendOpenCodeEvent(readyEvent, promptResult.romPath);
       } else {
-        const reply = await sendOpenRouterFreeformReply({
-          apiKey: openRouterKey,
-          model: activeModel,
-          messages: openRouterFreeformMessages(messages, trimmed),
-        });
+        const replyMessages = openRouterFreeformMessages(
+          messages,
+          trimmed,
+          [
+            `Project: ${projectSummary.name}`,
+            `Build state: ${buildState}`,
+            `Agent phase: ${agentPhase}`,
+            `Build agent: ${openCode.state} - ${openCode.detail}`,
+            `Visible result: ${actionDetail}`,
+            `ROM: ${projectSummary.romStatus} - ${projectSummary.romDetail}`,
+            `Authoritative asset manifest: ${projectAssetSummary(
+              projectSummary.assetRoles,
+              activeRomSource.kind,
+            )}`,
+            `Authoritative audio manifest: ${
+              projectAudioAvailability(projectSummary.assetRoles, activeRomSource.kind) === false
+                ? "no audio is included in this ROM"
+                : "audio presence is not yet proven"
+            }`,
+            `Screen evidence: ${playerScreenEvidence}`,
+            `Input evidence: ${playerInputEvidence}`,
+            `Audio evidence: ${playerAudioEvidence}`,
+            `Recent activity: ${openCodeEvents
+              .slice(-5)
+              .map((event) => `${event.type}: ${event.detail}`)
+              .join(" | ")}`,
+          ].join("\n"),
+        );
+        const reply =
+          modelProvider === "ollama"
+            ? await sendOllamaFreeformReply({
+                endpoint: ollamaEndpoint,
+                model: ollamaModel,
+                messages: replyMessages,
+              })
+            : await sendOpenRouterFreeformReply({
+                apiKey: openRouterKey,
+                model: activeModel,
+                messages: replyMessages,
+              });
         const guardedReply = guardUnverifiedModelReply(reply.content);
         const agentMessage = makeMessage(
           "agent",
@@ -1551,7 +1741,11 @@ function App() {
         }
         appendOpenCodeEvent(
           "message.model",
-          `${shortModelLabel(reply.model)} replied${
+          `${
+            modelProvider === "ollama"
+              ? `Ollama ${shortOllamaLabel(reply.model)}`
+              : shortModelLabel(reply.model)
+          } replied${
             reply.totalTokens ? ` (${reply.totalTokens} tokens)` : ""
           }.`,
         );
@@ -1562,12 +1756,12 @@ function App() {
       }
       setBuildState("running");
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "OpenRouter reply failed";
+      const detail = error instanceof Error ? error.message : "Model reply failed";
       const agentMessage = makeMessage(
         "agent",
         shouldRunV1
           ? `The ROM build could not finish. ${detail}`
-          : `${openRouterReplyFailureMessage(detail)} ROM-changing prompts still use the verified local build path.`,
+          : `${modelReplyFailureMessage(modelProvider, detail)} ROM-changing prompts still use the verified local build path.`,
         shouldRunV1 ? "proof" : "system",
       );
       setMessages((current) => [...current, agentMessage]);
@@ -1583,9 +1777,68 @@ function App() {
     }
   }
 
+  async function recoverPersistedAgentRun() {
+    const persistedRun = loadPersistedPendingAgentRun();
+    if (!persistedRun) return;
+
+    try {
+      const stopped = await abortAgentSession(persistedRun.sessionId);
+      if (!stopped) throw new Error("The build agent did not confirm cancellation");
+      clearPersistedPendingAgentRun();
+      setOpenCodeSessionId(undefined);
+      appendOpenCodeEvent(
+        "agent.recovered.reload",
+        `${persistedRun.sessionId}; project preserved as ${persistedRun.projectName}`,
+      );
+      setProjectActionNotice({
+        state: "warning",
+        label: "Previous build stopped",
+        detail: "Drive16 preserved the project and stopped the agent run left active by a reload.",
+      });
+    } catch (error) {
+      const detail = errorDetail(error, "Could not stop the build left active by a reload");
+      appendOpenCodeEvent("agent.recovery.abort.failed", detail);
+      setProjectActionNotice({
+        state: "missing",
+        label: "Previous build still active",
+        detail,
+      });
+    }
+  }
+
+  async function cancelPendingAgentRun(eventType: string) {
+    const pending = pendingAgentRunRef.current;
+    if (!pending) return true;
+
+    clearPendingAgentRunTimers(pending);
+    try {
+      const stopped = await abortAgentSession(pending.sessionId);
+      if (!stopped) return false;
+      if (pendingAgentRunRef.current?.sessionId === pending.sessionId) {
+        pendingAgentRunRef.current = undefined;
+      }
+      clearPersistedPendingAgentRun();
+      appendOpenCodeEvent(eventType, pending.sessionId);
+      return true;
+    } catch (error) {
+      appendOpenCodeEvent(
+        "agent.abort.failed",
+        errorDetail(error, "Could not stop the active build agent"),
+      );
+      return false;
+    }
+  }
+
   async function runAgentPrompt(trimmed: string): Promise<boolean> {
     const startedAt = Date.now();
     const previousSession = openCodeSessionId;
+    // ROM-changing work has one explicit route. Ollama remains available for
+    // questions and diagnostics, but it can never edit, seed, build, or repair
+    // a project.
+    const agentProviderId: ModelProvider = "openrouter";
+    const agentModelId = defaultOpenRouterModel;
+    const followUp = shouldPreserveActiveProject(trimmed);
+    const agentName = followUp ? "drive16-repair" : "drive16-build";
     const clarifyingReply = clarifyingReplyForBuildPrompt(trimmed);
     if (clarifyingReply) {
       setMessages((current) => [
@@ -1602,7 +1855,7 @@ function App() {
     // boot, and the server restarts when a key is saved.
     let bridge = openCode;
     let providers = agentProviders;
-    if (bridge.state !== "ready" || !providers.includes("openrouter")) {
+    if (bridge.state !== "ready" || !providers.includes(agentProviderId)) {
       appendOpenCodeEvent("agent.reconnect", bridge.detail);
       const report = await connectOpenCode();
       if (report) {
@@ -1625,28 +1878,62 @@ function App() {
       return false;
     }
 
-    if (modelProvider === "ollama") {
+    const savedOpenRouterKey = openRouterKey.trim();
+    if (savedOpenRouterKey) {
+      try {
+        const auth = await setAgentProviderKey(agentProviderId, savedOpenRouterKey);
+        if (!auth.connected) {
+          throw new Error(auth.detail);
+        }
+        if (!providers.includes(agentProviderId)) {
+          providers = [...providers, agentProviderId];
+        }
+      } catch (error) {
+        const detail = errorDetail(error, "Could not sync the saved OpenRouter key");
+        setMessages((current) => [
+          ...current,
+          makeMessage(
+            "agent",
+            `Drive16 could not authorize the build agent with the saved OpenRouter key: ${detail}`,
+            "system",
+          ),
+        ]);
+        setProjectActionNotice({
+          state: "missing",
+          label: "OpenRouter authorization failed",
+          detail,
+        });
+        setAgentPhase("failed");
+        setBuildState("error");
+        return false;
+      }
+    }
+
+    if (!providers.includes(agentProviderId)) {
+      const setupDetail =
+        "Builds use DeepSeek V3.1 through OpenRouter. Open Settings, paste your OpenRouter API key, and click Test OpenRouter — Ollama is available for questions only.";
       setMessages((current) => [
         ...current,
-        makeMessage(
-          "agent",
-          "Building through Ollama is not wired up yet. Switch to OpenRouter in Settings to build; Ollama support is on the roadmap.",
-          "system",
-        ),
+        makeMessage("agent", setupDetail, "system"),
       ]);
       return false;
     }
 
-    if (!providers.includes("openrouter")) {
-      setMessages((current) => [
-        ...current,
-        makeMessage(
-          "agent",
-          "I need a model to build with. Open Settings, paste your OpenRouter API key, and click Test OpenRouter — you only have to do this once.",
-          "system",
-        ),
-      ]);
-      return false;
+    if (pendingAgentRunRef.current) {
+      const replaced = await cancelPendingAgentRun("agent.replaced");
+      if (!replaced) {
+        setMessages((current) => [
+          ...current,
+          makeMessage(
+            "agent",
+            "I could not confirm that the previous build stopped, so I did not start another one. Try again after the build agent reconnects.",
+            "system",
+          ),
+        ]);
+        setAgentPhase("failed");
+        setBuildState("error");
+        return false;
+      }
     }
 
     setBuildState("building");
@@ -1669,7 +1956,7 @@ function App() {
     }
     appendOpenCodeEvent(
       "agent.started",
-      `session: new; model: ${shortModelLabel(activeModel)}`,
+      `session: new; model: ${providerDisplayLabel(agentProviderId, activeModel, agentModelId)}`,
     );
     const waitNotice = window.setTimeout(() => {
       appendOpenCodeEvent(
@@ -1678,14 +1965,16 @@ function App() {
       );
     }, 20_000);
     try {
-      const project = await ensureActiveProject();
-      const projectName = looksLikeFollowUpPrompt(trimmed)
+      const project = followUp ? await ensureActiveProject() : await resetActiveProject();
+      let baselineRomExists = project.romExists;
+      let seededPrototypeBuilt = false;
+      const projectName = followUp
         ? projectSummary.name || loadActiveProjectName("Untitled Project")
         : projectNameFromPrompt(trimmed);
       saveActiveProjectName(projectName);
       setWorkspacePath(project.projectPath);
       setProjectSummary(projectSummaryFromActiveProject(project, projectName));
-      setProjectSource("tauri");
+      setProjectSource(isTauriRuntime() ? "tauri" : "browser-local");
       const agentProjectPath = project.agentProjectPath || project.projectPath;
       appendOpenCodeEvent("agent.workspace", agentProjectPath);
       try {
@@ -1698,6 +1987,50 @@ function App() {
             romStatus: "missing",
             romDetail: "Starter code seeded; no ROM built yet",
           }));
+          try {
+            const baseline = await buildActiveProject();
+            baselineRomExists = baseline.romExists;
+            if (baseline.romExists) {
+              setWorkspacePath(baseline.projectPath);
+              seededPrototypeBuilt = true;
+              setProjectSummary(projectSummaryFromActiveProject(baseline, projectName));
+              setProjectSource(isTauriRuntime() ? "tauri" : "browser-local");
+              resetActiveRomSession();
+              setAgentRom({ path: baseline.romPath, stamp: Date.now() });
+              setPlayerScreenEvidence("checking");
+              setPlayerInputEvidence("none");
+              setPlayerAudioEvidence("checking");
+              setProjectActionNotice({
+                state: "warning",
+                label: "Prototype built",
+                detail: "The seeded scaffold is available for diagnostics, but it is not Playable or Reviewed.",
+              });
+              appendOpenCodeEvent("agent.seed.built", baseline.romPath);
+              noteAction("Prototype ROM built and loaded for diagnostics.");
+              void loadProjectSummary();
+              if (!isTauriRuntime()) {
+                try {
+                  const evidence = await verifyBrowserProject();
+                  applyBrowserProjectEvidence(evidence);
+                  void loadProjectSummary();
+                  void auditActiveProjectMemory();
+                } catch (error) {
+                  setPlayerScreenEvidence("unverified");
+                  setPlayerInputEvidence("failed");
+                  setPlayerAudioEvidence("failed");
+                  appendOpenCodeEvent(
+                    "baseline.verify.failed",
+                    errorDetail(error, "Browser-local verification failed"),
+                  );
+                }
+              }
+            }
+          } catch (error) {
+            appendOpenCodeEvent(
+              "agent.seed.build_failed",
+              errorDetail(error, "The seeded starter did not build; the agent will attempt a repair"),
+            );
+          }
         }
       } catch (error) {
         appendOpenCodeEvent(
@@ -1712,21 +2045,34 @@ function App() {
         text: agentPromptWithProject(agentProjectPath, trimmed, {
           spriteGeneration: enhancements.spriteGeneration,
           musicGeneration: enhancements.musicGeneration,
+          seededPrototypeBuilt,
+          repairMode: followUp,
           comfyUiEndpoint,
           comfyUiCheckpoint,
           comfyUiLora,
           comfyUiState: comfyUiConnection.state,
           comfyUiDetail: comfyUiConnection.detail,
         }),
-        providerId: "openrouter",
-        modelId: activeModel,
+        providerId: agentProviderId,
+        modelId: agentModelId,
+        agentName,
         background: true,
         comfyUiEndpoint,
         comfyUiCheckpoint,
         comfyUiLora,
       });
       setOpenCodeSessionId(result.sessionId);
-      startPendingAgentRun(result.sessionId, startedAt, previousSession, projectName);
+      startPendingAgentRun(
+        result.sessionId,
+        startedAt,
+        previousSession,
+        projectName,
+        baselineRomExists,
+        enhancements.spriteGeneration,
+        agentRunHardLimitMs,
+        agentProviderId,
+        agentModelId,
+      );
       appendOpenCodeEvent(
         "agent.accepted",
         `session: ${result.sessionId}; previous: ${previousSession ?? "none"}`,
@@ -1763,6 +2109,11 @@ function App() {
     startedAt: number,
     previousSession: string | undefined,
     projectName: string,
+    baselineRomExists: boolean,
+    requiresAiSprites: boolean,
+    hardLimitMs = agentRunHardLimitMs,
+    providerId?: ModelProvider,
+    modelId?: string,
   ) {
     clearPendingAgentRunTimers(pendingAgentRunRef.current);
     const pending: PendingAgentRun = {
@@ -1770,6 +2121,11 @@ function App() {
       startedAt,
       previousSession,
       projectName,
+      baselineRomExists,
+      requiresAiSprites,
+      hardLimitMs,
+      providerId,
+      modelId,
     };
     pending.waitingTimer = window.setTimeout(() => {
       appendOpenCodeEvent(
@@ -1783,17 +2139,61 @@ function App() {
         sessionId,
         pendingAgentStallDetail(pending),
       );
-    }, 120_000);
+    }, 90_000);
     pending.hardStopTimer = window.setTimeout(() => {
       void failPendingAgentRun(
         sessionId,
-        `Drive16 stopped the build after ${formatDurationMs(agentRunHardLimitMs)} to prevent a runaway model loop.`,
+        `Drive16 stopped the build after ${formatDurationMs(hardLimitMs)} to prevent a runaway model loop.`,
       );
-    }, agentRunHardLimitMs);
+    }, hardLimitMs);
     pending.backgroundErrorTimer = window.setInterval(() => {
       void drainOpenCodeBackgroundErrors(sessionId);
     }, 3_000);
+    pending.projectRefreshTimer = window.setInterval(() => {
+      void reconcilePendingAgentRom(sessionId);
+    }, 1_500);
     pendingAgentRunRef.current = pending;
+    persistPendingAgentRun({ sessionId, startedAt, projectName });
+  }
+
+  async function reconcilePendingAgentRom(sessionId: string) {
+    const pending = pendingAgentRunRef.current;
+    if (!pending || pending.sessionId !== sessionId || pending.adoptedFreshRom) return;
+
+    try {
+      const project = await ensureActiveProject();
+      const canBeFresh = pendingAgentProducedFreshRom(pending);
+      if (!project.romExists || !canBeFresh) return;
+      adoptFreshAgentRom(project, pending, "ROM built and loaded while checks continue.");
+    } catch (error) {
+      appendOpenCodeRawEvent(
+        "agent.rom.reconcile.failed",
+        errorDetail(error, "Could not refresh the active ROM state"),
+      );
+    }
+  }
+
+  function adoptFreshAgentRom(
+    project: ActiveProject,
+    pending: PendingAgentRun,
+    detail: string,
+  ) {
+    if (pending.adoptedFreshRom) return;
+    pending.adoptedFreshRom = true;
+    saveActiveProjectName(pending.projectName);
+    setWorkspacePath(project.projectPath);
+    setProjectSummary(projectSummaryFromActiveProject(project, pending.projectName));
+    setProjectSource(isTauriRuntime() ? "tauri" : "browser-local");
+    resetActiveRomSession();
+    setAgentRom({ path: project.romPath, stamp: Date.now() });
+    setPlayerScreenEvidence("checking");
+    setProjectActionNotice({
+      state: "warning",
+      label: "ROM built, checking",
+      detail,
+    });
+    appendOpenCodeEvent("agent.rom.adopted", project.romPath);
+    noteAction("ROM built and loaded. Remaining checks are still running.");
   }
 
   async function drainOpenCodeBackgroundErrors(sessionId: string) {
@@ -1833,7 +2233,7 @@ function App() {
         pending.sessionId,
         pendingAgentStallDetail(pending),
       );
-    }, 180_000);
+    }, 90_000);
   }
 
   function recordPendingAgentMilestone(activity: {
@@ -1891,6 +2291,15 @@ function App() {
     ) {
       pending.sawAudioCheck = true;
     }
+    if (activity.eventType === "agent.assets.sprite.finished") {
+      pending.sawAiSpriteFinished = true;
+    }
+    if (
+      activity.eventType === "agent.assets.sprite.failed" ||
+      activity.eventType === "agent.assets.sprite.invalid"
+    ) {
+      pending.sawAiSpriteFailed = true;
+    }
   }
 
   function pendingAgentStallDetail(pending: PendingAgentRun) {
@@ -1919,65 +2328,142 @@ function App() {
     return /(?:^|[/:])(src|res)\/.+\.(c|h|s|res|png|vgm|wav|bin)\b/i.test(detail);
   }
 
+  function pendingAgentProducedFreshRom(pending: PendingAgentRun) {
+    // A model result is new only when it changed game inputs and completed the
+    // build afterward. Either event alone can still point at the seeded or
+    // previously built ROM.
+    return Boolean(pending.sawSourceOrResourceEdit && pending.sawBuildFinished);
+  }
+
+  async function buildEditedProjectIfNeeded(
+    project: ActiveProject,
+    pending: PendingAgentRun,
+  ): Promise<ActiveProject> {
+    if (
+      project.status !== "stale" ||
+      !pending.sawSourceOrResourceEdit ||
+      pending.sawBuildFinished
+    ) {
+      return project;
+    }
+
+    setAgentPhase("building");
+    pending.sawBuildStarted = true;
+    appendOpenCodeEvent(
+      "agent.autobuild.started",
+      "Source/resources changed without a final ROM build; Drive16 is building deterministically.",
+    );
+    try {
+      const built = await buildActiveProject();
+      pending.sawBuildFinished = built.romExists;
+      appendOpenCodeEvent(
+        "agent.autobuild.finished",
+        built.romPath,
+      );
+      return built;
+    } catch (error) {
+      pending.sawBuildFailed = true;
+      appendOpenCodeEvent(
+        "agent.autobuild.failed",
+        errorDetail(error, "Drive16 could not build the edited project"),
+      );
+      return project;
+    }
+  }
+
   async function failPendingAgentRun(sessionId: string, detail: string) {
     const pending = pendingAgentRunRef.current;
     if (!pending || pending.sessionId !== sessionId) return;
 
     clearPendingAgentRunTimers(pending);
     pendingAgentRunRef.current = undefined;
+    clearPersistedPendingAgentRun();
     setOpenCodeBusy(false);
     setAgentPhase("failed");
 
-    if (isTauriRuntime()) {
-      try {
-        await abortAgentSession(sessionId);
-        appendOpenCodeEvent("agent.aborted", sessionId);
-      } catch (error) {
-        appendOpenCodeEvent(
-          "agent.abort.failed",
-          errorDetail(error, "Could not stop the stalled OpenCode session"),
-        );
-      }
+    try {
+      await abortAgentSession(sessionId);
+      appendOpenCodeEvent("agent.aborted", sessionId);
+    } catch (error) {
+      appendOpenCodeEvent(
+        "agent.abort.failed",
+        errorDetail(error, "Could not stop the stalled OpenCode session"),
+      );
+    }
 
-      try {
-        const after = await ensureActiveProject();
-        saveActiveProjectName(pending.projectName);
-        setWorkspacePath(after.projectPath);
-        setProjectSummary(projectSummaryFromActiveProject(after, pending.projectName));
-        setProjectSource("tauri");
-        if (after.romExists) {
-          resetActiveRomSession();
-          setAgentRom({ path: after.romPath, stamp: Date.now() });
-          setPlayerScreenEvidence("checking");
-          setPlayerInputEvidence("none");
-          setPlayerAudioEvidence("checking");
+    try {
+      let after = await ensureActiveProject();
+      after = await buildEditedProjectIfNeeded(after, pending);
+      saveActiveProjectName(pending.projectName);
+      setWorkspacePath(after.projectPath);
+      setProjectSummary(projectSummaryFromActiveProject(after, pending.projectName));
+      setProjectSource(isTauriRuntime() ? "tauri" : "browser-local");
+      if (after.romExists) {
+        const producedFreshRom = pendingAgentProducedFreshRom(pending);
+        if (!producedFreshRom) {
+          if (pending.providerId === "ollama") {
+            setModelConnection({
+              state: "warning",
+              detail: `${shortOllamaLabel(
+                pending.modelId ?? "selected model",
+              )} can answer local chat, but it did not start Drive16 build tools in this run`,
+              model: pending.modelId,
+            });
+          }
+          void loadProjectSummary();
           setMessages((current) => [
             ...current,
             makeMessage(
               "agent",
-              `${detail} I stopped the runaway session and recovered its latest built ROM. Verification may still be incomplete.`,
+              `${detail} The agent made no game-source or build progress, so the previous ROM remains available as an unchanged preview.`,
               "system",
             ),
           ]);
           setProjectActionNotice({
-            state: "warning",
-            label: "ROM recovered",
-            detail: "The build produced a ROM before the agent stopped; remaining checks are incomplete.",
+            state: "missing",
+            label: "No fresh ROM produced",
+            detail: "The previous ROM is still playable, but this agent run made no game changes.",
           });
           appendOpenCodeEvent(
-            "agent.stalled.rom_recovered",
+            "agent.stalled.no_changes",
             `${after.romPath}; after ${formatDurationMs(Date.now() - pending.startedAt)}`,
           );
-          noteAction("Recovered the latest ROM after stopping a stalled agent run.");
-          setBuildState("running");
+          noteAction("The agent stopped without changing the game; the previous ROM was preserved.");
+          setBuildState("error");
           return;
         }
-      } catch (error) {
+
+        adoptFreshAgentRom(after, pending, "Fresh ROM recovered after the agent stopped.");
+        void loadProjectSummary();
+        setPlayerScreenEvidence("checking");
+        setPlayerInputEvidence("none");
+        setPlayerAudioEvidence("checking");
+        setMessages((current) => [
+          ...current,
+          makeMessage(
+            "agent",
+            `${detail} I stopped the runaway session and recovered its latest built ROM. Verification may still be incomplete.`,
+            "system",
+          ),
+        ]);
+        setProjectActionNotice({
+          state: "warning",
+          label: "ROM recovered",
+          detail: "The build produced a ROM before the agent stopped; remaining checks are incomplete.",
+        });
         appendOpenCodeEvent(
-          "agent.recovery.failed",
-          errorDetail(error, "Could not inspect the active project after the agent stopped"),
+          "agent.stalled.rom_recovered",
+          `${after.romPath}; after ${formatDurationMs(Date.now() - pending.startedAt)}`,
         );
+        noteAction("Recovered the latest ROM after stopping a stalled agent run.");
+        setBuildState("running");
+        return;
       }
+    } catch (error) {
+      appendOpenCodeEvent(
+        "agent.recovery.failed",
+        errorDetail(error, "Could not inspect the active project after the agent stopped"),
+      );
     }
 
     setMessages((current) => [
@@ -2012,6 +2498,9 @@ function App() {
     if (pending.backgroundErrorTimer) {
       window.clearInterval(pending.backgroundErrorTimer);
     }
+    if (pending.projectRefreshTimer) {
+      window.clearInterval(pending.projectRefreshTimer);
+    }
     if (pending.hardStopTimer) {
       window.clearTimeout(pending.hardStopTimer);
     }
@@ -2043,16 +2532,42 @@ function App() {
 
     clearPendingAgentRunTimers(pending);
     pendingAgentRunRef.current = undefined;
+    clearPersistedPendingAgentRun();
     try {
-      const after = await ensureActiveProject();
+      let after = await ensureActiveProject();
+      after = await buildEditedProjectIfNeeded(after, pending);
       saveActiveProjectName(pending.projectName);
       setWorkspacePath(after.projectPath);
       setProjectSummary(projectSummaryFromActiveProject(after, pending.projectName));
-      setProjectSource("tauri");
+      setProjectSource(isTauriRuntime() ? "tauri" : "browser-local");
 
       if (after.romExists) {
-        resetActiveRomSession();
-        setAgentRom({ path: after.romPath, stamp: Date.now() });
+        const producedFreshRom = pendingAgentProducedFreshRom(pending);
+        if (!producedFreshRom) {
+          void loadProjectSummary();
+          setMessages((current) => [
+            ...current,
+            makeMessage(
+              "agent",
+              "The agent stopped without editing or rebuilding the project. The seeded ROM is still available as an unchanged prototype.",
+              "system",
+            ),
+          ]);
+          setProjectActionNotice({
+            state: "missing",
+            label: "No fresh ROM produced",
+            detail: "The agent run made no source or build progress; Drive16 kept the unchanged prototype.",
+          });
+          appendOpenCodeEvent(
+            "agent.finished.no_changes",
+            `${after.romPath}; after ${formatDurationMs(Date.now() - pending.startedAt)}`,
+          );
+          noteAction("The agent stopped without changing the game; the prototype was preserved.");
+          setBuildState("error");
+          return;
+        }
+        adoptFreshAgentRom(after, pending, "ROM built; final project checks are running.");
+        void loadProjectSummary();
         setPlayerScreenEvidence("checking");
         setPlayerInputEvidence("none");
         setPlayerAudioEvidence((current) =>
@@ -2076,13 +2591,22 @@ function App() {
           "agent.rom.built",
           `${after.romPath}; ${formatDurationMs(Date.now() - pending.startedAt)}`,
         );
-        const previewResult = await launchRom(
-          after.romPath,
-          "Agent ROM preview captured. Playability still needs input/audio evidence.",
-        );
         const memoryAudit = await auditActiveProjectMemory();
-        surfaceAgentCompletionAudit(memoryAudit, previewResult);
-        setBuildState(previewResult.ok ? "running" : "error");
+        if (pending.requiresAiSprites && !pending.sawAiSpriteFinished) {
+          const detail = pending.sawAiSpriteFailed
+            ? "ComfyUI sprite generation failed; the playable ROM remains a primitive-art fallback."
+            : "AI sprites were enabled, but the agent never generated and wired them into this ROM.";
+          setProjectActionNotice({
+            state: "missing",
+            label: "AI sprites not completed",
+            detail,
+          });
+          appendOpenCodeEvent("agent.assets.sprite.missing", detail);
+          noteAction(detail);
+        } else {
+          surfaceAgentCompletionAudit(memoryAudit);
+        }
+        setBuildState("running");
       } else {
         const stale = after.status === "stale";
         const detail = `${after.detail}: ${after.romPath}`;
@@ -2191,8 +2715,15 @@ function App() {
   }
 
   function applyAgentEvidenceEvent(eventType: string) {
-    if (eventType === "agent.screenshot.checking") {
+    if (
+      eventType === "agent.screenshot.checking" ||
+      eventType === "agent.screenshot.capturing"
+    ) {
       setPlayerScreenEvidence("checking");
+      return;
+    }
+    if (eventType === "agent.screenshot.captured") {
+      setPlayerScreenEvidence("captured");
       return;
     }
     if (eventType === "agent.screenshot.checked") {
@@ -2229,10 +2760,15 @@ function App() {
   }
 
   async function auditActiveProjectMemory() {
-    if (!isTauriRuntime()) return undefined;
-
     try {
-      const audit = await invoke<ProjectMemoryAuditResult>("audit_active_project_memory");
+      const audit = isTauriRuntime()
+        ? await invoke<ProjectMemoryAuditResult>("audit_active_project_memory")
+        : await fetch("/__drive16_project/audit").then(async (response) => {
+            if (!response.ok) {
+              throw new Error(`Project audit failed with HTTP ${response.status}`);
+            }
+            return response.json() as Promise<ProjectMemoryAuditResult>;
+          });
       const eventType =
         audit.status === "ready"
           ? "project.memory.ready"
@@ -2295,14 +2831,14 @@ function App() {
 
     if (audit.status === "ready" && audit.gate === "pass") {
       const detail =
-        "Project memory reports Playability gate: PASS. I’m loading the ROM so the player evidence can stay visible.";
+        "The builder wrote Playability gate: PASS, but builder-authored project memory cannot award Playable or Reviewed. The ROM remains Built until independent semantic and human review.";
       setMessages((current) => [...current, makeMessage("agent", detail, "opencode")]);
       setProjectActionNotice({
-        state: "ready",
-        label: "Gate passed",
-        detail: audit.detail,
+        state: "warning",
+        label: "Review still required",
+        detail,
       });
-      appendOpenCodeEvent("agent.verification.passed", audit.detail);
+      appendOpenCodeEvent("agent.verification.claim_rejected", audit.detail);
       return;
     }
 
@@ -2354,6 +2890,22 @@ function App() {
 
   function noteAction(detail: string) {
     setActionDetail(detail);
+  }
+
+  function applyBrowserProjectEvidence(evidence: BrowserProjectVerification) {
+    setPlayerScreenEvidence(evidence.screenVisible ? "visible" : "unverified");
+    setPlayerInputEvidence(evidence.inputChanged ? "tested" : "failed");
+    setPlayerAudioEvidence(evidence.audioMaxAbs > 0 ? "captured" : "silent");
+    setLastInputAction(
+      evidence.inputChanged
+        ? "Scripted aim and fire input changed the frame"
+        : "Scripted input did not change the frame",
+    );
+    appendOpenCodeEvent(
+      "baseline.diagnostics",
+      `screen=${evidence.screenVisible}; input=${evidence.inputChanged}; idle15=${evidence.idleSurvives15Seconds}; restart=${evidence.restartMatched}; restartPath=${evidence.restartPath}; audioMaxAbs=${evidence.audioMaxAbs}`,
+    );
+    noteAction("Low-level ROM diagnostics completed; semantic review is still required.");
   }
 
   function applyAgentPhaseEvent(eventType: string) {
@@ -2443,13 +2995,43 @@ function App() {
       }
     }
 
-    setOpenCode({
-      ...previewOpenCode,
-      state: "warning",
-      detail: "OpenCode checks run in the desktop app; browser preview does not probe the local sidecar.",
-    });
-    setOpenCodeSource("preview");
-    return undefined;
+    try {
+      const [healthResponse, providerResponse] = await Promise.all([
+        fetch("/__drive16_opencode/global/health"),
+        fetch("/__drive16_opencode/provider"),
+      ]);
+      if (!healthResponse.ok || !providerResponse.ok) {
+        throw new Error(`Build agent returned HTTP ${healthResponse.status}/${providerResponse.status}`);
+      }
+      const health = (await healthResponse.json()) as { healthy?: boolean; version?: string };
+      const providers = (await providerResponse.json()) as { connected?: string[] };
+      const report: OpenCodeBridgeStatus = {
+        generatedAt: new Date().toISOString(),
+        state: health.healthy ? "ready" : "warning",
+        detail: health.healthy
+          ? "Local browser build agent connected"
+          : "Local browser build agent reported unhealthy",
+        baseUrl: "/__drive16_opencode",
+        healthUrl: "/__drive16_opencode/global/health",
+        eventUrl: "/__drive16_opencode/global/event",
+        version: health.version,
+        launched: false,
+        connectedProviders: providers.connected ?? [],
+      };
+      setOpenCode(report);
+      setOpenCodeSource("browser-local");
+      setAgentProviders(report.connectedProviders ?? []);
+      return report;
+    } catch (error) {
+      const report: OpenCodeBridgeStatus = {
+        ...previewOpenCode,
+        state: "warning",
+        detail: errorDetail(error, "Local browser build agent is unavailable"),
+      };
+      setOpenCode(report);
+      setOpenCodeSource("preview");
+      return report;
+    }
   }
 
   async function sendOpenCodeMessage(text: string): Promise<OpenCodeSendResult> {
@@ -2619,6 +3201,8 @@ function App() {
       exportDirectory: "artifacts/phase3/exports",
       romStatus: result.status,
       romDetail: result.detail,
+      trustStage: "built",
+      reviewDetail: "Demo output has not passed the semantic quality review",
       assetRoles: [
         {
           role: "Player sprite",
@@ -2679,8 +3263,24 @@ function App() {
     setProjectSource("checking");
 
     if (!isTauriRuntime()) {
-      setProjectSummary(previewProjectSummary);
-      setProjectSource("preview");
+      try {
+        const response = await fetch("/__drive16_project/summary", { cache: "no-store" });
+        if (!response.ok) throw new Error(`Project summary failed with HTTP ${response.status}`);
+        const summary = (await response.json()) as ProjectSummary;
+        setProjectSummary({
+          ...summary,
+          name: loadActiveProjectName(summary.name),
+        });
+        setWorkspacePath(summary.projectPath);
+        setProjectSource("browser-local");
+      } catch (error) {
+        setProjectSummary({
+          ...previewProjectSummary,
+          romStatus: "warning",
+          romDetail: errorDetail(error, "Local browser project is unavailable"),
+        });
+        setProjectSource("preview");
+      }
       return;
     }
 
@@ -3000,43 +3600,33 @@ function App() {
 
       // Hand the BYOK key to the OpenCode agent so chat prompts can build.
       // OpenCode activates the provider on a quick automatic restart.
-      if (isTauriRuntime()) {
-        try {
-          const auth = await setAgentProviderKey("openrouter", trimmedKey);
-          appendOpenCodeEvent("agent.auth", auth.detail);
-          if (auth.connected) {
-            setAgentProviders((current) =>
-              current.includes("openrouter") ? current : [...current, "openrouter"],
-            );
-            saveOpenRouterAcceptedKey(trimmedKey);
-            setModelConnection({
-              state: "ready",
-              detail: "OpenRouter key accepted and saved for the agent",
-            });
-          } else {
-            clearOpenRouterAcceptedKey();
-            setModelConnection({
-              state: "warning",
-              detail: `Key accepted, but the agent could not activate OpenRouter: ${auth.detail}`,
-            });
-          }
-          if (auth.restarted) {
-            void connectOpenCode();
-          }
-        } catch (error) {
-          const detail = errorDetail(error, "Could not hand the key to the agent");
-          appendOpenCodeEvent("agent.auth.failed", detail);
+      try {
+        const auth = await setAgentProviderKey("openrouter", trimmedKey);
+        appendOpenCodeEvent("agent.auth", auth.detail);
+        if (auth.connected) {
+          setAgentProviders((current) =>
+            current.includes("openrouter") ? current : [...current, "openrouter"],
+          );
+          saveOpenRouterAcceptedKey(trimmedKey);
+          setModelConnection({
+            state: "ready",
+            detail: "OpenRouter key accepted and saved for the agent",
+          });
+        } else {
           clearOpenRouterAcceptedKey();
           setModelConnection({
             state: "warning",
-            detail: `Key accepted by OpenRouter, but the agent setup failed: ${detail}`,
+            detail: `Key accepted, but the agent could not activate OpenRouter: ${auth.detail}`,
           });
         }
-      } else {
-        saveOpenRouterAcceptedKey(trimmedKey);
+        if (auth.restarted) void connectOpenCode();
+      } catch (error) {
+        const detail = errorDetail(error, "Could not hand the key to the agent");
+        appendOpenCodeEvent("agent.auth.failed", detail);
+        clearOpenRouterAcceptedKey();
         setModelConnection({
-          state: "ready",
-          detail: "OpenRouter key accepted",
+          state: "warning",
+          detail: `Key accepted by OpenRouter, but the agent setup failed: ${detail}`,
         });
       }
     } catch (error) {
@@ -3078,18 +3668,23 @@ function App() {
     try {
       const result = await loadOllamaModels(endpoint, model);
 
+      const state = result.state;
+      const detail =
+        state === "ready"
+          ? `${shortOllamaLabel(model)} is ready for questions and diagnostics. Builds use DeepSeek V3.1 through OpenRouter.`
+          : result.detail;
       setOllamaModels(result.models.length ? result.models : [model]);
       setOllamaModelsSource(result.models.length ? "ready" : "empty");
       setModelConnection({
-        state: result.state,
-        detail: result.detail,
+        state,
+        detail,
         baseUrl: result.baseUrl,
         model: result.model,
         models: result.models,
       });
       appendOpenCodeEvent(
-        result.state === "ready" ? "model.ready" : "model.warning",
-        result.state === "ready"
+        state === "ready" ? "model.ready" : "model.warning",
+        state === "ready"
           ? `${shortOllamaLabel(result.model)} is ready in Ollama.`
           : "Ollama needs attention. Open Advanced Ollama setup for details.",
       );
@@ -3229,7 +3824,7 @@ function App() {
         ? await invoke<ComfyUiEndpointStatus>("check_comfyui_endpoint", {
             request: { endpoint, checkpoint, lora },
           })
-        : browserComfyUiEndpointStatus(endpoint);
+        : await browserComfyUiEndpointStatus(endpoint);
 
       setComfyUiConnection(result);
       appendOpenCodeEvent(
@@ -3305,7 +3900,7 @@ function App() {
         ? await invoke<ComfyUiEndpointStatus>("launch_comfyui_endpoint", {
             request: { endpoint, checkpoint, lora },
           })
-        : browserComfyUiEndpointStatus(endpoint);
+        : await browserComfyUiEndpointStatus(endpoint);
 
       setComfyUiConnection(result);
       appendOpenCodeEvent(
@@ -3545,12 +4140,20 @@ function App() {
     void launchRom(proofPath, `${activeRomSource.label} proof captured.`);
   }
 
-  function startNewProject() {
+  async function startNewProject() {
+    if (!(await cancelPendingAgentRun("agent.canceled.new_project"))) {
+      setProjectActionNotice({
+        state: "missing",
+        label: "Could not start a new project",
+        detail: "The current build agent did not confirm cancellation. The workspace was left untouched.",
+      });
+      return;
+    }
+
     disposeInteractivePlayer();
     setPlayerCanvasActive(false);
     setPlayerState("stopped");
     setPlayerAudio("unavailable");
-    setPlayerVolume(defaultPlayerVolume);
     setPlayerScreenEvidence("none");
     setPlayerInputEvidence("none");
     setPlayerAudioEvidence("none");
@@ -3575,27 +4178,24 @@ function App() {
     setLastInputAction("No local input yet");
     resetBuildActivityLog();
     resetActiveProjectName();
-    clearPendingAgentRunTimers(pendingAgentRunRef.current);
-    pendingAgentRunRef.current = undefined;
+    clearPersistedPendingAgentRun();
     setOpenCodeBusy(false);
-    if (isTauriRuntime()) {
-      void resetActiveProject()
-        .then((project) => {
-          setWorkspacePath(project.projectPath);
-          setProjectSummary(projectSummaryFromActiveProject(project, "Untitled Project"));
-          setProjectSource("tauri");
-        })
-        .catch((error) => {
-          const detail = errorDetail(error, "Could not reset the project workspace");
-          setProjectActionNotice({
-            state: "missing",
-            label: "Project reset failed",
-            detail,
-          });
-          appendOpenCodeEvent("project.reset.failed", detail);
-          noteAction(detail);
+    await resetActiveProject()
+      .then((project) => {
+        setWorkspacePath(project.projectPath);
+        setProjectSummary(projectSummaryFromActiveProject(project, "Untitled Project"));
+        setProjectSource(isTauriRuntime() ? "tauri" : "browser-local");
+      })
+      .catch((error) => {
+        const detail = errorDetail(error, "Could not reset the project workspace");
+        setProjectActionNotice({
+          state: "missing",
+          label: "Project reset failed",
+          detail,
         });
-    }
+        appendOpenCodeEvent("project.reset.failed", detail);
+        noteAction(detail);
+      });
     setTransport("paused");
     setSpriteX(52);
     setStarterRom({
@@ -3612,10 +4212,12 @@ function App() {
       name: "Untitled Project",
       projectPath: "artifacts/phase3/active-project",
       romPath: "artifacts/phase3/active-project/out/rom.bin",
-      romStatus: "missing",
-      romDetail: "No ROM built yet",
+          romStatus: "missing",
+          romDetail: "No ROM built yet",
+          trustStage: "prototype",
+          reviewDetail: "No ROM has been built or reviewed",
     });
-    setProjectSource(isTauriRuntime() ? "checking" : "preview");
+    setProjectSource("checking");
     setProjectActionNotice({
       state: "ready",
       label: "New starter project",
@@ -3763,6 +4365,7 @@ function App() {
 
   function resetActiveRomSession() {
     disposeInteractivePlayer();
+    setPlayerCanvasGeneration((current) => current + 1);
     setPlayerCanvasActive(false);
     setPlayerState("stopped");
     setPlayerAudio("unavailable");
@@ -3921,28 +4524,9 @@ function App() {
       return;
     }
 
-    if (!isTauriRuntime() && loadedPlayerRom?.sourcePath !== activeRomSource.path) {
-      const detail =
-        "Browser preview cannot read this ROM from disk. Import a ROM in this browser session or use the desktop app to Play the current project.";
-      setPlayerState("stopped");
-      setPlayerCanvasActive(false);
-      setPlayerScreenEvidence((current) =>
-        current === "captured" ? "captured" : "unverified",
-      );
-      setProjectActionNotice({
-        state: "warning",
-        label: "Desktop app needed for Play",
-        detail,
-      });
-      noteAction(detail);
-      appendOpenCodeEvent("player.desktop_needed", detail);
-      return;
-    }
-
     setPlayerState("loading");
     setPlayerCanvasActive(true);
     setPlayerAudio("muted");
-    setPlayerVolume(defaultPlayerVolume);
     setPlayerScreenEvidence("checking");
     noteAction(`Preparing ${activeRomSource.label} for interactive Play.`);
     appendOpenCodeEvent("player.prepare.started", activeRomSource.path);
@@ -3968,34 +4552,20 @@ function App() {
         `Interactive Play setup timed out after ${formatDurationMs(playerSetupTimeoutMs)}.`,
       );
       playerRuntimeRef.current = runtime;
-      const audioState = await setNostalgistVolume(runtime, defaultPlayerVolume);
       setPlayerState("playing");
-      setPlayerAudio(audioState);
-      setPlayerVolume(defaultPlayerVolume);
+      setPlayerAudio("muted");
       schedulePlayerVisibilityCheck(payload.sourcePath);
-      const audioNeedsClick = audioState === "needs-gesture";
-      const audioUnavailable = audioState === "unavailable";
       setProjectActionNotice({
         state: "warning",
-        label: audioNeedsClick
-          ? "Player ready — enable sound"
-          : audioUnavailable
-            ? "Player ready — sound unavailable"
-            : "Player ready",
+        label: "Player ready — muted",
         detail: `${payload.sourceName} started with ${
           runtime.coreSource === "user" ? "the local core" : "the streamed core"
-        }. ${
-          audioNeedsClick
-            ? "Click the sound control if the browser has not started audio."
-            : audioUnavailable
-              ? "Drive16 could not access this browser session's audio output."
-              : `Sound is on at ${defaultPlayerVolume}%.`
-        }`,
+        }. Sound starts muted as a safety precaution. Click the sound control when you are ready to listen.`,
       });
       noteAction(
         `Player started for ${payload.sourceName} with ${
           runtime.coreSource === "user" ? "the local core" : "the streamed core"
-        }; sound ${audioState === "audible" ? `on at ${defaultPlayerVolume}%` : audioState}.`,
+        }; sound muted until the user enables it.`,
       );
       appendOpenCodeEvent("player.playing", `${payload.sourcePath} via ${runtime.coreSource}`);
     } catch (error) {
@@ -4035,11 +4605,10 @@ function App() {
         if (visibility === "visible") {
           reported = true;
           setPlayerScreenEvidence("visible");
-          const detail =
-            "The player is rendering visible frames. Controls and audio still need evidence before calling this game playable.";
+          const detail = "The game screen is visible and updating.";
           setProjectActionNotice({
-            state: "warning",
-            label: "Screen visible, playtest incomplete",
+            state: "ready",
+            label: "Screen visible",
             detail,
           });
           noteAction(detail);
@@ -4052,11 +4621,10 @@ function App() {
         if (runtimeCapture === "visible") {
           reported = true;
           setPlayerScreenEvidence("visible");
-          const detail =
-            "The interactive core produced a visible game frame. Controls and audio still need evidence before calling this game playable.";
+          const detail = "The game screen is visible and updating.";
           setProjectActionNotice({
-            state: "warning",
-            label: "Screen visible, playtest incomplete",
+            state: "ready",
+            label: "Screen visible",
             detail,
           });
           noteAction(detail);
@@ -4067,7 +4635,13 @@ function App() {
         reported = true;
         const unknownCount = samples.filter((sample) => sample === "unknown").length;
         const mostlyUnknown = unknownCount >= Math.ceil(samples.length / 2);
-        setPlayerScreenEvidence(mostlyUnknown ? "inconclusive" : "unverified");
+        setPlayerScreenEvidence((current) =>
+          current === "visible" || current === "captured"
+            ? current
+            : mostlyUnknown
+              ? "inconclusive"
+              : "unverified",
+        );
 
         const runtimeLog = runtime?.logs
           .filter((line) => /\[error\]|\[warn/i.test(line))
@@ -4079,17 +4653,13 @@ function App() {
           .slice(-4)
           .join(" | ");
         const detail = mostlyUnknown
-          ? "Drive16 could not automatically confirm this screen. The ROM is still running; treat it as a preview, not a verified build."
+          ? "The live canvas sampler was unavailable. Drive16 retained any completed emulator screen proof while the ROM kept running."
           : "Drive16 could not confirm visible game output. The ROM may be blank or stalled.";
         setProjectActionNotice({
           state: "warning",
-          label: mostlyUnknown ? "Screen check inconclusive" : "Screen not verified",
+          label: mostlyUnknown ? "Live screen check unavailable" : "Screen not verified",
           detail,
         });
-        setMessages((current) => [
-          ...current,
-          makeMessage("agent", detail, "system"),
-        ]);
         noteAction(detail);
         appendOpenCodeEvent(
           mostlyUnknown ? "player.screen.inconclusive" : "player.screen.unverified",
@@ -4164,13 +4734,23 @@ function App() {
     // Only reuse in-memory bytes in the browser preview, where there is no
     // disk access. In the desktop app the ROM at this path may have just
     // been rebuilt, so always re-read it.
-    if (!isTauriRuntime() && loadedPlayerRom?.sourcePath === source.path) {
+    if (
+      !isTauriRuntime() &&
+      source.kind === "imported" &&
+      loadedPlayerRom?.sourcePath === source.path
+    ) {
       return loadedPlayerRom;
     }
 
     if (!isTauriRuntime()) {
-      throw new Error(
-        "Browser preview cannot read that ROM from disk. Import a local ROM in this browser session or use the desktop app.",
+      const response = await fetch("/__drive16_project/rom", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Browser could not load the active ROM (HTTP ${response.status}).`);
+      }
+      return playerRomFromBytes(
+        source.path,
+        source.path.split(/[\\/]/).pop() || "rom.bin",
+        new Uint8Array(await response.arrayBuffer()),
       );
     }
 
@@ -4264,27 +4844,53 @@ function App() {
     }
   }
 
-  function resetInteractivePlayer() {
+  async function resetInteractivePlayer() {
     const runtime = playerRuntimeRef.current;
     if (!runtime) {
       noteAction("No interactive ROM is running yet.");
       return;
     }
 
-    resetNostalgistPlayer(runtime);
-    setPlayerState("playing");
-    setProjectActionNotice({
-      state: "ready",
-      label: "Interactive player reset",
-      detail: runtime.rom.sourceName,
-    });
-    noteAction("Interactive ROM reset.");
-    appendOpenCodeEvent("player.reset", runtime.rom.sourcePath);
+    const sourceName = runtime.rom.sourceName;
+    const sourcePath = runtime.rom.sourcePath;
+    const restartAction = projectSummary.restartAction
+      ? playerInputActionForId(projectSummary.restartAction, "controller", "Restart")
+      : undefined;
+    if (!restartAction) {
+      const detail = `${sourceName} does not document a game recovery control. Drive16 will not substitute an emulator reset.`;
+      setProjectActionNotice({ state: "missing", label: "Restart unavailable", detail });
+      noteAction(detail);
+      appendOpenCodeEvent("player.restart.unavailable", sourcePath);
+      return;
+    }
+
+    try {
+      if (playerState === "paused") resumeNostalgistPlayer(runtime);
+      await restartNostalgistPlayer(runtime, restartAction);
+      setPlayerCanvasActive(true);
+      setPlayerState("playing");
+      setProjectActionNotice({
+        state: "ready",
+        label: "Game restarted",
+        detail: `${sourceName} received its documented ${restartAction.label} recovery control.`,
+      });
+      noteAction(`Restarted ${sourceName} using its ${restartAction.label} control.`);
+      appendOpenCodeEvent(
+        "player.restarted",
+        `${sourcePath}; path=${restartAction.id}`,
+      );
+    } catch (error) {
+      const detail = errorDetail(error, "The game's recovery control failed");
+      setProjectActionNotice({ state: "missing", label: "Restart failed", detail });
+      noteAction(detail);
+      appendOpenCodeEvent("player.restart.failed", detail);
+    }
   }
 
   function stopInteractivePlayer() {
     const runtime = playerRuntimeRef.current;
     disposeInteractivePlayer();
+    setPlayerCanvasGeneration((current) => current + 1);
     setPlayerCanvasActive(false);
     setPlayerState("stopped");
     setProjectActionNotice({
@@ -4310,7 +4916,6 @@ function App() {
     } finally {
       playerRuntimeRef.current = undefined;
       setPlayerAudio("unavailable");
-      setPlayerVolume(defaultPlayerVolume);
     }
   }
 
@@ -4373,6 +4978,14 @@ function App() {
   }
 
   function setInteractivePlayerVolume(value: number) {
+    if (romAudioAvailable === false) {
+      setProjectActionNotice({
+        state: "missing",
+        label: "No sound in this ROM",
+        detail: "The project manifest records music and sound effects as planned, not included.",
+      });
+      return;
+    }
     const nextVolume = clampPlayerVolume(value);
     setPlayerVolume(nextVolume);
     const runtime = playerRuntimeRef.current;
@@ -4400,11 +5013,44 @@ function App() {
           detail,
         });
         noteAction(detail);
+      } else if (state === "enabled" || state === "signal") {
+        detectInteractivePlayerAudio(runtime);
       }
     });
   }
 
+  function detectInteractivePlayerAudio(runtime: NostalgistPlayerRuntime) {
+    void detectNostalgistAudioSignal(runtime).then((signalDetected) => {
+      if (playerRuntimeRef.current !== runtime) return;
+      if (signalDetected) {
+        setPlayerAudio("signal");
+        setPlayerAudioEvidence("captured");
+        appendOpenCodeEvent("player.audio.signal", runtime.rom.sourcePath);
+        noteAction("Game audio signal reached the browser output graph.");
+        return;
+      }
+      setPlayerAudioEvidence("silent");
+      setProjectActionNotice({
+        state: "missing",
+        label: "No sound detected",
+        detail: "The player is enabled, but this ROM produced no audio signal.",
+      });
+      appendOpenCodeEvent("player.audio.silent", runtime.rom.sourcePath);
+      noteAction("The player is enabled, but the ROM produced no audio signal.");
+    });
+  }
+
   function toggleInteractivePlayerMute() {
+    if (romAudioAvailable === false) {
+      setPlayerAudioEvidence("silent");
+      setProjectActionNotice({
+        state: "missing",
+        label: "No sound in this ROM",
+        detail: "The current build did not include its planned music or sound effects.",
+      });
+      noteAction("This ROM has no included audio to enable.");
+      return;
+    }
     const runtime = playerRuntimeRef.current;
     if (!runtime) {
       const detail = "Start a ROM before changing audio.";
@@ -4417,21 +5063,30 @@ function App() {
       appendOpenCodeEvent("player.audio.unavailable", "No interactive ROM is running");
       return;
     }
-    if (playerVolume === 0) {
-      void setNostalgistVolume(runtime, defaultPlayerVolume).then((state) => {
-        setPlayerVolume(defaultPlayerVolume);
+    if (playerVolume === 0 || playerAudio === "muted") {
+      const nextVolume = playerVolume > 0 ? playerVolume : defaultPlayerVolume;
+      void setNostalgistVolume(runtime, nextVolume).then((state) => {
+        setPlayerVolume(nextVolume);
         setPlayerAudio(state);
         const detail =
-          state === "audible"
-            ? `Sound is on at ${defaultPlayerVolume}%.`
+          state === "enabled" || state === "signal"
+            ? `Sound is enabled at ${nextVolume}%.`
             : "The browser has not made this player session audible yet.";
         setProjectActionNotice({
-          state: state === "audible" ? "ready" : "warning",
-          label: state === "audible" ? "Sound on" : "Sound unavailable",
+          state: state === "enabled" || state === "signal" ? "ready" : "warning",
+          label:
+            state === "signal"
+              ? "Sound signal detected"
+              : state === "enabled"
+                ? "Sound enabled"
+                : "Sound unavailable",
           detail,
         });
         noteAction(detail);
-        appendOpenCodeEvent("player.audio.volume", `${defaultPlayerVolume}%`);
+        appendOpenCodeEvent("player.audio.volume", `${nextVolume}%`);
+        if (state === "enabled" || state === "signal") {
+          detectInteractivePlayerAudio(runtime);
+        }
       });
       return;
     }
@@ -4459,23 +5114,38 @@ function App() {
           noteAction(detail);
           appendOpenCodeEvent("player.audio.needs_gesture", runtime.rom.sourcePath);
         } else {
-          noteAction(state === "audible" ? "Sound is on." : "Sound is muted.");
+          noteAction(
+            state === "signal"
+              ? "Sound signal detected."
+              : state === "enabled"
+                ? "Sound is enabled."
+                : "Sound is muted.",
+          );
           appendOpenCodeEvent("player.audio", state);
+          detectInteractivePlayerAudio(runtime);
         }
       });
       return;
     }
-    void setNostalgistVolume(runtime, 0).then(() => {
-      setPlayerVolume(0);
+    void setNostalgistMuted(runtime, true).then(() => {
       setPlayerAudio("muted");
       setProjectActionNotice({
         state: "warning",
-        label: "Volume muted",
-        detail: "App volume is 0%. Raise the slider manually if you want sound.",
+        label: "Muted",
+        detail: `Sound is muted. The saved level remains ${playerVolume}%.`,
       });
-      noteAction("App volume is muted.");
-      appendOpenCodeEvent("player.audio.volume", "0%");
+      noteAction("Sound muted without changing the saved level.");
+      appendOpenCodeEvent("player.audio.muted", `${playerVolume}% saved`);
     });
+  }
+
+  function prepareInteractivePlayerAudio() {
+    const runtime = playerRuntimeRef.current;
+    if (!runtime) return;
+    // Pointer-down may unlock WebAudio, but the following click owns the
+    // visible Muted/On transition. Do not let a missing probe race the click
+    // and overwrite a successful unmute with "Unavailable".
+    void resumeNostalgistAudio(runtime);
   }
 
   function handleRomKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -4707,11 +5377,15 @@ function App() {
   }
 
   const providerSetupHint =
-    modelConnection.state === "ready" || agentProviders.includes("openrouter")
-      ? ""
-      : modelProvider === "openrouter" && openRouterKey.trim()
-        ? "Open Settings to verify your saved key"
-        : "Add a model key in Settings to start building";
+    modelProvider === "ollama"
+      ? modelConnection.state === "ready"
+        ? ""
+        : "Test an installed Ollama model in Settings"
+      : modelConnection.state === "ready" || agentProviders.includes("openrouter")
+        ? ""
+        : openRouterKey.trim()
+          ? "Open Settings to verify your saved key"
+          : "Add a model key in Settings to start building";
 
   return (
     <main
@@ -4741,6 +5415,9 @@ function App() {
         }}
       />
       <TopBar
+        actionDetail={actionFeedback.detail}
+        actionLabel={actionFeedback.label}
+        actionState={actionFeedback.state}
         buildLabel={topBarStatus.label}
         buildState={topBarStatus.state}
         exportBusy={exportBusy}
@@ -4779,6 +5456,7 @@ function App() {
         />
         <PlayerPane
           assetSummary={projectAssetSummary(projectSummary.assetRoles, activeRomSource.kind)}
+          canvasGeneration={playerCanvasGeneration}
           canvasRef={playerCanvasRef}
           controllerBindings={controllerBindingRows}
           controllerConfigured={controllerMappingReady}
@@ -4798,6 +5476,8 @@ function App() {
           playDisabled={starterBusy || buildState === "building" || !activeRomPlayable}
           profileSource={inputProfile.source}
           romUnavailable={!activeRomPlayable}
+          romAudioAvailable={romAudioAvailable}
+          trustStage={projectSummary.trustStage}
           romInputFocused={romInputFocused}
           romLabel={activeRomSource.label}
           sessionActive={Boolean(playerRuntimeRef.current)}
@@ -4814,6 +5494,7 @@ function App() {
           onPlay={() => {
             void playActiveRom();
           }}
+          onPrepareAudio={prepareInteractivePlayerAudio}
           onResetPlayer={resetInteractivePlayer}
           onResetProfile={resetControlsProfile}
           onScreenBlur={() => setRomInputFocused(false)}
@@ -4835,22 +5516,6 @@ function App() {
         {actionFeedback.label}. {actionFeedback.detail}
         {actionFeedback.detail === actionDetail ? "" : ` ${actionDetail}`}
       </div>
-
-      {toastNotice ? (
-        <div className={`toast ${toastNotice.state}`} role="status" data-testid="action-toast">
-          <div className="toast-body">
-            <strong>{toastNotice.label}</strong>
-            <span>{toastNotice.detail}</span>
-          </div>
-          <button
-            type="button"
-            aria-label="Dismiss notification"
-            onClick={() => setToastNotice(undefined)}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
 
       {settingsOpen ? (
         <SettingsPanel
@@ -5160,6 +5825,7 @@ function isV1Prompt(text: string) {
 function clarifyingReplyForBuildPrompt(text: string) {
   const normalized = text.toLowerCase().trim();
   if (!looksLikeBuildPrompt(normalized)) return undefined;
+  if (shouldPreserveActiveProject(normalized)) return undefined;
   if (/just build|don't ask|do not ask|no questions|simple|basic/.test(normalized)) {
     return undefined;
   }
@@ -5176,7 +5842,7 @@ function clarifyingReplyForBuildPrompt(text: string) {
 
 function defaultPlanForBuildPrompt(text: string, enabledEnhancements: EnhancementSettings) {
   const normalized = text.toLowerCase();
-  if (looksLikeFollowUpPrompt(normalized)) {
+  if (shouldPreserveActiveProject(normalized)) {
     return "I’ll treat this as a follow-up on the current project: read the game notes, make the requested change in the active folder, rebuild, and check the screen/input/audio evidence before saying it worked.";
   }
   if (!looksLikeBuildPrompt(normalized)) return undefined;
@@ -5186,7 +5852,7 @@ function defaultPlanForBuildPrompt(text: string, enabledEnhancements: Enhancemen
       ? "ComfyUI sprites for the main game objects if the local generator is reachable"
       : "primitive or bundled sprites",
     enabledEnhancements.musicGeneration
-      ? "a short MML loop unless you asked for no music"
+      ? "a developed multi-part MML arrangement unless you asked for no music"
       : "no generated music unless enabled",
   ].join(", ");
 
@@ -5194,11 +5860,17 @@ function defaultPlanForBuildPrompt(text: string, enabledEnhancements: Enhancemen
 }
 
 function looksLikeBuildPrompt(normalized: string) {
+  if (
+    /^(how|why|what|when|where|who)\b/.test(normalized.trim()) ||
+    /^(explain|describe|tell me|show me)\b/.test(normalized.trim())
+  ) {
+    return false;
+  }
   return /\b(make|build|create|add|generate|turn|change|fix|repair)\b/.test(normalized);
 }
 
 function mentionsKnownGameShape(normalized: string) {
-  return /\b(snake|sprite|pong|breakout|platformer|shooter|racing|maze|runner|space|asteroids|tetris|pac|pinball|fighting|rpg)\b/.test(normalized);
+  return /\b(snake|sprite|pong|breakout|platformer|shooter|racing|maze|runner|space|asteroids|tetris|missile command|pac|pinball|fighting|rpg)\b/.test(normalized);
 }
 
 function looksLikeFollowUpPrompt(normalized: string) {
@@ -5208,6 +5880,15 @@ function looksLikeFollowUpPrompt(normalized: string) {
     ) ||
     /\bmake (it|this|the)\b/.test(normalized) ||
     /\b(faster|slower|bigger|smaller|harder|easier|louder|quieter)\b/.test(normalized)
+  );
+}
+
+function shouldPreserveActiveProject(text: string) {
+  const normalized = text.toLowerCase().trim();
+  return (
+    looksLikeFollowUpPrompt(normalized) ||
+    /^continue\b/.test(normalized) ||
+    /\b(current|existing|same|this)\b.{0,48}\b(game|project|rom|build)\b/.test(normalized)
   );
 }
 
@@ -5238,11 +5919,20 @@ function getConversationMode(
   const providerLabel = providerDisplayLabel(provider, activeModel, ollamaModel);
 
   if (provider === "ollama") {
+    if (connection.state === "ready") {
+      return {
+        state: openCode.state === "ready" ? "ready" : "warning",
+        label: "Ollama local chat",
+        detail:
+          openCode.state === "ready"
+            ? "Project questions use the selected local model. Build-tool compatibility is verified during each run."
+            : "The local model is ready, but the build agent is reconnecting.",
+      };
+    }
     return {
       state: "warning",
-      label: "Ollama readiness only",
-      detail:
-        "Ollama can be checked locally, but live Ollama replies are not wired yet.",
+      label: "Ollama not tested",
+      detail: `${providerLabel} is ${connectionLabel(connection.state).toLowerCase()}. Test it in Settings.`,
     };
   }
 
@@ -5294,7 +5984,11 @@ function freeformGateMessage(
   const providerLabel = providerDisplayLabel(provider, activeModel, ollamaModel);
 
   if (provider === "ollama") {
-    return "Ollama chat replies are not available yet. Switch to OpenRouter and test a key for chat replies; build prompts still run locally.";
+    return connection.state === "ready"
+      ? undefined
+      : `${providerLabel} is not ready yet (${connectionLabel(
+          connection.state,
+        ).toLowerCase()}). Open Settings and click Test Ollama, then send your message again.`;
   }
 
   if (!openRouterKeyPresent) {
@@ -5320,6 +6014,17 @@ function openRouterReplyFailureMessage(detail: string) {
   return `OpenRouter could not answer: ${detail}.`;
 }
 
+function modelReplyFailureMessage(provider: ModelProvider, detail: string) {
+  if (provider === "openrouter") return openRouterReplyFailureMessage(detail);
+  if (/model.*not found|not installed|404/i.test(detail)) {
+    return `Ollama could not answer: ${detail}. Refresh the installed-model list in Settings.`;
+  }
+  if (/network|fetch|failed|timeout|load/i.test(detail)) {
+    return `Ollama could not answer because the local request failed: ${detail}.`;
+  }
+  return `Ollama could not answer: ${detail}.`;
+}
+
 function guardUnverifiedModelReply(content: string) {
   if (!freeformReplyClaimsLocalProof(content)) return content;
 
@@ -5331,11 +6036,19 @@ function guardUnverifiedModelReply(content: string) {
 }
 
 function freeformReplyClaimsLocalProof(content: string) {
-  return /\b(rom|music|audio|sound|build|compiled?|verified|playable|loaded)\b/i.test(
-    content,
-  ) && /\b(built|compiled?|verified|ready|playing|playable|works?|loaded|finished|successfully)\b/i.test(
-    content,
-  );
+  return content
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/\b(no|not|never|failed|without|didn't|did not|couldn't|could not)\b/i.test(sentence))
+    .some(
+      (sentence) =>
+        /\b(i|we|drive16|the agent)\b.*\b(built|compiled|verified|tested|exported|generated)\b/i.test(
+          sentence,
+        ) ||
+        /\b(rom|build)\b.*\b(built|compiled)\b.*\bsuccessfully\b/i.test(sentence) ||
+        /\b(build|rom|audio|screen|input)\b.*\b(successfully built|passed all|fully verified|ready to ship)\b/i.test(
+          sentence,
+        ),
+    );
 }
 
 function preflightSummaryLabel(state: HealthState, source = "") {
@@ -5360,7 +6073,7 @@ function activeRomSourceFor(
   if (agentRomPath) {
     return {
       kind: "generated",
-      label: "Your project",
+      label: projectSummary.name,
       detail: "ROM built by the Drive16 agent",
       path: agentRomPath,
       storage: "generated-artifact",
@@ -5414,61 +6127,38 @@ function projectAssetSummary(
 ) {
   if (romKind === "imported") return "Assets: external ROM";
 
-  const sourceText = roles
+  const usedRoles = roles.filter(
+    (role) =>
+      /used|wired|captured|ready|included|complete|pass/i.test(role.status) &&
+      !/planned|missing|failed|not used/i.test(role.status),
+  );
+  const sourceText = usedRoles
     .map((role) => `${role.role} ${role.source} ${role.notes}`)
     .join(" ")
     .toLowerCase();
   if (/comfyui|generated sprite|ai sprite/.test(sourceText)) return "Assets: ComfyUI art";
-  if (/primitive|tile|sgdk text/.test(sourceText)) return "Assets: primitive art";
+  if (/role-specific tile|custom tile|presentation_tiles/.test(sourceText)) {
+    return "Assets: custom tile art";
+  }
+  if (/primitive|sgdk text|generic tile/.test(sourceText)) return "Assets: primitive art";
   if (/bundled|core pack/.test(sourceText)) return "Assets: bundled art";
   return "Assets: unknown";
 }
 
-function appPlayabilityGateState({
-  activeRomPlayable,
-  lastInputAction,
-  playerAudio,
-  playerAudioEvidence,
-  playerInputEvidence,
-  playerScreenEvidence,
-  proofMaxAbs,
-  sessionActive,
-}: {
-  activeRomPlayable: boolean;
-  lastInputAction: string;
-  playerAudio: PlayerAudioState;
-  playerAudioEvidence: PlayerAudioEvidence;
-  playerInputEvidence: PlayerInputEvidence;
-  playerScreenEvidence: PlayerScreenEvidence;
-  proofMaxAbs?: number;
-  sessionActive: boolean;
-}): HealthState {
-  if (!activeRomPlayable) return "missing";
-
-  const screenState: HealthState =
-    playerScreenEvidence === "visible" || playerScreenEvidence === "captured"
-      ? "ready"
-      : "warning";
-  const inputState: HealthState =
-    playerInputEvidence === "failed"
-      ? "missing"
-      : playerInputEvidence === "tested" ||
-          (sessionActive && lastInputAction !== "No local input yet")
-        ? "ready"
-        : "warning";
-  const audioState: HealthState =
-    playerAudioEvidence === "failed" || playerAudioEvidence === "silent"
-      ? "missing"
-      : playerAudioEvidence === "captured" ||
-          playerAudio === "audible" ||
-          (typeof proofMaxAbs === "number" && proofMaxAbs > 0)
-        ? "ready"
-        : "warning";
-  const states = [screenState, inputState, audioState];
-
-  if (states.includes("missing")) return "missing";
-  if (states.every((state) => state === "ready")) return "ready";
-  return "warning";
+function projectAudioAvailability(
+  roles: ProjectAssetRole[],
+  romKind: ActiveRomSource["kind"],
+): boolean | undefined {
+  if (romKind === "imported") return undefined;
+  const audioRoles = roles.filter((role) =>
+    /music|audio|sound|sfx|vgm|mml/i.test(
+      `${role.role} ${role.source} ${role.symbol} ${role.notes}`,
+    ),
+  );
+  if (audioRoles.length === 0) return false;
+  return audioRoles.some((role) =>
+    /used|wired|captured|ready|included|complete|pass/i.test(role.status),
+  );
 }
 
 function playerStateLabel(state: PlayerSessionState) {
@@ -5788,6 +6478,8 @@ function projectSummaryFromImport(result: RomImportResult): ProjectSummary {
     exportDirectory: previewProjectSummary.exportDirectory,
     romStatus: result.status,
     romDetail: `${formatBytes(result.bytes)} from ${result.sourceName}`,
+    trustStage: "built",
+    reviewDetail: "Imported ROM behavior has not been reviewed by Drive16",
     assetRoles: [
       {
         role: "Imported ROM",
@@ -5829,6 +6521,10 @@ function projectSummaryFromActiveProject(
     exportDirectory: previewProjectSummary.exportDirectory,
     romStatus,
     romDetail: project.detail,
+    trustStage: project.romExists ? "built" : "prototype",
+    reviewDetail: project.romExists
+      ? "ROM built; semantic playability and visible quality review are pending"
+      : "No ROM has been built or reviewed",
     assetRoles: [
       {
         role: "Project assets",
@@ -5868,6 +6564,8 @@ function projectSummaryFromSnapshot(snapshot: ProjectSnapshot): ProjectSummary {
     exportDirectory: previewProjectSummary.exportDirectory,
     romStatus: "ready",
     romDetail: snapshot.detail,
+    trustStage: "built",
+    reviewDetail: "Saved project review state must be refreshed after opening",
     assetRoles: [
       {
         role: "Saved project assets",
@@ -5900,6 +6598,7 @@ function projectSummaryFromSnapshot(snapshot: ProjectSnapshot): ProjectSummary {
 function projectNameFromPrompt(prompt: string) {
   const lower = prompt.toLowerCase();
   const knownGames: Array<[string, string]> = [
+    ["missile command", "Missile Command"],
     ["snake", "Snake"],
     ["asteroids", "Asteroids"],
     ["asteroid", "Asteroids"],
@@ -5915,6 +6614,7 @@ function projectNameFromPrompt(prompt: string) {
   const cleaned = prompt
     .replace(/^(please\s+)?(make|create|build|write|generate)\s+(a|an|the)?\s*/i, "")
     .replace(/\b(simple|basic|version|game|of|for|the|sega|genesis)\b/gi, " ")
+    .replace(/[^a-z0-9\s-]/gi, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean)
@@ -6019,25 +6719,52 @@ function providerDisplayLabel(
   return `Ollama ${shortOllamaLabel(ollamaModel)}`;
 }
 
-function browserComfyUiEndpointStatus(endpoint: string): ComfyUiEndpointStatus {
+async function browserComfyUiEndpointStatus(endpoint: string): Promise<ComfyUiEndpointStatus> {
   const baseUrl = normalizeComfyUiEndpoint(endpoint);
   const systemStatsUrl = `${baseUrl}/system_stats`;
-
-  return {
-    generatedAt: Date.now().toString(),
-    state: "warning",
-    detail: "Use the desktop app to test ComfyUI; browser preview cannot read the local API.",
-    baseUrl,
-    systemStatsUrl,
-    devices: 0,
-    checks: [
-      {
-        name: "API",
-        state: "warning",
-        detail: "ComfyUI checks run through the native app.",
-      },
-    ],
-  };
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 5_000);
+  try {
+    const response = await fetch("/__drive16_comfyui/system_stats", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = (await response.json()) as { devices?: unknown[] };
+    const devices = Array.isArray(payload.devices) ? payload.devices.length : 0;
+    return {
+      generatedAt: Date.now().toString(),
+      state: "ready",
+      detail: "ComfyUI API is reachable from the browser build workflow.",
+      baseUrl,
+      systemStatsUrl,
+      devices,
+      checks: [
+        {
+          name: "API",
+          state: "ready",
+          detail: `ComfyUI responded${devices ? ` with ${devices} device${devices === 1 ? "" : "s"}` : ""}.`,
+        },
+      ],
+    };
+  } catch (error) {
+    const detail =
+      error instanceof DOMException && error.name === "AbortError"
+        ? "ComfyUI did not respond within 5 seconds."
+        : `ComfyUI could not be reached: ${error instanceof Error ? error.message : "unknown error"}`;
+    return {
+      generatedAt: Date.now().toString(),
+      state: "missing",
+      detail,
+      baseUrl,
+      systemStatsUrl,
+      devices: 0,
+      checks: [{ name: "API", state: "missing", detail }],
+    };
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function normalizeComfyUiEndpoint(endpoint: string) {

@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Square,
   Volume2,
+  VolumeX,
   Wrench,
   X,
 } from "lucide-react";
@@ -38,6 +39,7 @@ type PlayerScreenEvidence =
 type PlayerInputEvidence = "none" | "testing" | "tested" | "failed";
 type PlayerAudioEvidence = "none" | "checking" | "captured" | "silent" | "failed";
 type EvidenceState = "ready" | "warning" | "missing";
+type ProjectTrustStage = "prototype" | "built" | "playable" | "reviewed" | "failed";
 
 type FramebufferFrame = {
   frameIndex: number;
@@ -59,6 +61,7 @@ type MappingRow = { control: string; label: string };
 
 export function PlayerPane({
   assetSummary,
+  canvasGeneration,
   canvasRef,
   controllerBindings,
   controllerConfigured,
@@ -76,7 +79,9 @@ export function PlayerPane({
   playerScreenEvidence,
   playerState,
   playDisabled,
+  romAudioAvailable,
   romUnavailable,
+  trustStage,
   profileSource,
   romInputFocused,
   romLabel,
@@ -92,6 +97,7 @@ export function PlayerPane({
   onCloseControls,
   onOpenProject,
   onPlay,
+  onPrepareAudio,
   onResetPlayer,
   onResetProfile,
   onScreenBlur,
@@ -108,6 +114,7 @@ export function PlayerPane({
   onVolumeChange,
 }: {
   assetSummary: string;
+  canvasGeneration: number;
   canvasRef: MutableRefObject<HTMLCanvasElement | null>;
   controllerBindings: BindingRow[];
   controllerConfigured: boolean;
@@ -125,7 +132,9 @@ export function PlayerPane({
   playerScreenEvidence: PlayerScreenEvidence;
   playerState: PlayerSessionState;
   playDisabled: boolean;
+  romAudioAvailable?: boolean;
   romUnavailable: boolean;
+  trustStage: ProjectTrustStage;
   profileSource: string;
   romInputFocused: boolean;
   romLabel: string;
@@ -141,6 +150,7 @@ export function PlayerPane({
   onCloseControls: () => void;
   onOpenProject: () => void;
   onPlay: () => void;
+  onPrepareAudio: () => void;
   onResetPlayer: () => void;
   onResetProfile: () => void;
   onScreenBlur: () => void;
@@ -166,17 +176,13 @@ export function PlayerPane({
       : starterRom.screenshotDataUrl
         ? "captured"
         : "fallback";
-  const gateState = playabilityGateState({
-    lastInputAction,
-    playerAudio,
-    playerAudioEvidence,
-    playerVolume,
-    playerInputEvidence,
-    playerScreenEvidence,
-    proofMaxAbs: starterRom.audioMaxAbs,
-    romUnavailable,
-    sessionActive,
-  });
+  const gateState: EvidenceState = romUnavailable
+    ? "missing"
+    : trustStage === "reviewed"
+      ? "ready"
+      : trustStage === "failed"
+        ? "missing"
+        : "warning";
 
   return (
     <section className="player-pane" aria-label="Game player">
@@ -204,14 +210,17 @@ export function PlayerPane({
             onKeyUp={onScreenKeyUp}
           >
             <canvas
+              key={canvasGeneration}
               ref={canvasRef}
               aria-label="Interactive Genesis player"
               className={`nostalgist-canvas ${interactive ? "active" : ""}`}
               data-testid="interactive-player-canvas"
             />
             {interactive ? (
-              playerState === "loading" ? (
-                <span className="player-loading">LOADING PLAYER</span>
+              playerState === "loading" || playerScreenEvidence === "checking" ? (
+                <span className="player-loading">
+                  {playerState === "loading" ? "STARTING GAME" : "CHECKING VIDEO"}
+                </span>
               ) : null
             ) : (
               <FramebufferCanvas
@@ -258,64 +267,83 @@ export function PlayerPane({
       )}
 
       <div className="player-controls" aria-label="Player controls">
-        <button
-          type="button"
-          className="control-primary"
-          data-testid="play-active-rom"
-          onClick={playerState === "paused" ? onTogglePause : onPlay}
-          disabled={playDisabled || playerState === "loading" || playerState === "playing"}
-        >
-          <Play size={15} />
-          {playerState === "loading"
-            ? "Preparing"
-            : playerState === "playing"
-              ? "Playing"
-              : playerState === "paused"
-                ? "Resume"
-              : romUnavailable
-                ? "No ROM"
-                : playDisabled
-                ? "Waiting"
-                : "Play ROM"}
-        </button>
-        {sessionActive ? (
-          <>
-            {playerState !== "paused" ? (
+        <div className="player-transport-controls">
+          <button
+            type="button"
+            className="control-primary"
+            data-testid="play-active-rom"
+            onClick={onPlay}
+            disabled={
+              playDisabled ||
+              playerState === "loading" ||
+              playerState === "playing" ||
+              playerState === "paused"
+            }
+          >
+            <Play size={15} />
+            {playerState === "loading"
+              ? "Preparing"
+              : playerState === "playing"
+                ? "Playing"
+                : playerState === "paused"
+                  ? "Paused"
+                : romUnavailable
+                  ? "No ROM"
+                  : playDisabled
+                  ? "Waiting"
+                  : "Play ROM"}
+          </button>
+          {sessionActive ? (
+            <>
               <button type="button" data-testid="pause-player" onClick={onTogglePause}>
-                <Pause size={15} />
-                Pause
+                {playerState === "paused" ? <Play size={15} /> : <Pause size={15} />}
+                {playerState === "paused" ? "Resume" : "Pause"}
               </button>
-            ) : null}
-            <button type="button" data-testid="reset-player" onClick={onResetPlayer}>
-              <RefreshCcw size={15} />
-              Reset
-            </button>
-            <button type="button" data-testid="stop-player" onClick={onStop}>
-              <Square size={15} />
-              Stop
-            </button>
-          </>
-        ) : null}
-        <span className="control-spacer" aria-hidden="true" />
+              <button type="button" data-testid="reset-player" onClick={onResetPlayer}>
+                <RefreshCcw size={15} />
+                Restart
+              </button>
+              <button type="button" data-testid="stop-player" onClick={onStop}>
+                <Square size={15} />
+                Stop
+              </button>
+            </>
+          ) : null}
+        </div>
         <div
           className={`player-volume-control ${playerAudio} ${
             playerVolume === 0 ? "zero" : "raised"
-          } ${sessionActive ? "active" : "inactive"}`}
+          } ${sessionActive ? "active" : "inactive"} ${
+            romAudioAvailable === false ? "no-audio" : ""
+          }`}
           data-testid="player-volume-control"
         >
           <button
             type="button"
             className={`player-audio-toggle ${playerAudio}`}
             data-testid="player-audio-toggle"
-            title={playerAudioTitle(playerAudio, sessionActive, playerVolume)}
+            title={playerAudioTitle(
+              playerAudio,
+              sessionActive,
+              playerVolume,
+              romAudioAvailable,
+              romUnavailable,
+            )}
+            onPointerDown={onPrepareAudio}
             onClick={onToggleMute}
-            disabled={playerAudio === "unavailable" && !sessionActive}
+            disabled={!sessionActive || romAudioAvailable === false}
           >
-            <Volume2 size={15} />
-            {playerAudioLabel(playerAudio, playerVolume, sessionActive)}
+            {romAudioAvailable === false ? <VolumeX size={15} /> : <Volume2 size={15} />}
+            {playerAudioLabel(
+              playerAudio,
+              playerVolume,
+              sessionActive,
+              romAudioAvailable,
+              romUnavailable,
+            )}
           </button>
           <label className="player-volume-slider">
-            <span>Volume</span>
+            <span>Level</span>
             <input
               aria-label="Player volume"
               data-testid="player-volume-slider"
@@ -324,30 +352,32 @@ export function PlayerPane({
               max="100"
               step="5"
               value={playerVolume}
-              disabled={!sessionActive}
+              disabled={!sessionActive || romAudioAvailable === false}
               onChange={(event) => onVolumeChange(Number(event.currentTarget.value))}
             />
             <strong>{playerVolume}%</strong>
           </label>
         </div>
-        <button
-          type="button"
-          data-testid="open-controls"
-          aria-expanded={controlsOpen}
-          onClick={onToggleControls}
-        >
-          <Gamepad2 size={15} />
-          Controls
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={emulatorFocused ? "Exit full screen" : "Full screen"}
-          title={emulatorFocused ? "Exit full screen" : "Full screen"}
-          onClick={onToggleFocus}
-        >
-          {emulatorFocused ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-        </button>
+        <div className="player-utility-controls">
+          <button
+            type="button"
+            data-testid="open-controls"
+            aria-expanded={controlsOpen}
+            onClick={onToggleControls}
+          >
+            <Gamepad2 size={15} />
+            Controls
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={emulatorFocused ? "Exit full screen" : "Full screen"}
+            title={emulatorFocused ? "Exit full screen" : "Full screen"}
+            onClick={onToggleFocus}
+          >
+            {emulatorFocused ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
+        </div>
       </div>
 
       <p className="player-status" data-testid="player-status">
@@ -361,9 +391,9 @@ export function PlayerPane({
       <div className="playtest-evidence" data-testid="playtest-evidence">
         <EvidencePill
           icon={<ShieldCheck size={14} />}
-          label={playabilityGateLabel(gateState, romUnavailable)}
+          label={playabilityGateLabel(trustStage, romUnavailable)}
           state={gateState}
-          help={playabilityGateHelp(gateState, romUnavailable)}
+          help={playabilityGateHelp(trustStage, romUnavailable)}
         />
         <EvidencePill
           icon={<Monitor size={14} />}
@@ -395,6 +425,7 @@ export function PlayerPane({
             starterRom.audioMaxAbs,
             playerVolume,
             sessionActive,
+            romAudioAvailable,
           )}
           state={audioEvidenceState(
             playerAudio,
@@ -403,6 +434,7 @@ export function PlayerPane({
             starterRom.audioMaxAbs,
             playerVolume,
             sessionActive,
+            romAudioAvailable,
           )}
           help="ROM audio signal and audible browser playback are separate checks."
         />
@@ -410,7 +442,7 @@ export function PlayerPane({
           icon={<ImageIcon size={14} />}
           label={assetSummary}
           state={assetSummary === "Assets: unknown" ? "warning" : "ready"}
-          help="Shows whether the project used ComfyUI art, bundled art, primitive tiles, or an external ROM."
+          help="Shows whether the project used ComfyUI art, custom tile art, bundled art, primitive tiles, or an external ROM."
         />
       </div>
 
@@ -504,22 +536,28 @@ function playerAudioLabel(
   state: PlayerAudioState,
   volume: number,
   sessionActive: boolean,
+  romAudioAvailable?: boolean,
+  romUnavailable = false,
 ) {
-  if (sessionActive) return volume === 0 ? "Muted" : `Volume ${volume}%`;
-  if (state === "audible") return "Sound on";
-  if (state === "muted") return "Muted";
-  if (state === "needs-gesture") return "Enable sound";
-  return "Audio unavailable";
+  if (romUnavailable || romAudioAvailable === false || !sessionActive) return "Unavailable";
+  if (state === "muted" || volume === 0) return "Muted";
+  if (state === "signal" || state === "enabled") return "On";
+  if (state === "needs-gesture") return "Unavailable";
+  return "Unavailable";
 }
 
 function playerAudioTitle(
   state: PlayerAudioState,
   sessionActive: boolean,
   volume: number,
+  romAudioAvailable?: boolean,
+  romUnavailable = false,
 ) {
-  if (state === "audible") return "Mute";
+  if (romUnavailable) return "Build or import a ROM before changing audio";
+  if (romAudioAvailable === false) return "This ROM does not include audio";
+  if (state === "enabled" || state === "signal") return "Mute";
   if (state === "muted" || volume === 0) return "Turn sound on";
-  if (state === "needs-gesture") return "Enable player audio";
+  if (state === "needs-gesture") return "Retry sound";
   if (!sessionActive) return "Start a ROM before changing audio";
   return "Try to enable audio for this player session";
 }
@@ -548,7 +586,7 @@ function screenEvidenceLabel(evidence: PlayerScreenEvidence, romUnavailable: boo
   if (evidence === "checking") return "Screen: checking";
   if (evidence === "captured") return "Screen: frame captured";
   if (evidence === "visible") return "Screen: visible";
-  if (evidence === "inconclusive") return "Screen: not confirmed";
+  if (evidence === "inconclusive") return "Screen: auto-check unavailable";
   return "Screen: not checked";
 }
 
@@ -595,19 +633,23 @@ function audioEvidenceLabel(
   proofMaxAbs?: number,
   playerVolume = 0,
   sessionActive = false,
+  romAudioAvailable?: boolean,
 ) {
   if (romUnavailable) return "Audio: no ROM";
+  if (romAudioAvailable === false) return "Audio: not included";
   if (sessionActive && playerVolume === 0) return "Sound: muted";
-  if (sessionActive && state === "audible") return "Sound: on";
-  if (sessionActive && state === "needs-gesture") return "Sound: enable";
+  if (sessionActive && state === "signal") return "Sound: signal detected";
+  if (sessionActive && state === "enabled") return "Sound: enabled";
+  if (sessionActive && state === "needs-gesture") return "Sound: unavailable";
   if (sessionActive && state === "unavailable") return "Sound: unavailable";
   if (evidence === "checking") return "Audio file: checking";
   if (evidence === "captured") return "Audio file: signal found";
   if (evidence === "silent") return "Audio: silent";
   if (evidence === "failed") return "Audio: failed";
-  if (state === "audible") return "Sound: on";
+  if (state === "signal") return "Sound: signal detected";
+  if (state === "enabled") return "Sound: enabled";
   if (state === "muted") return "Audio: muted";
-  if (state === "needs-gesture") return "Audio: enable sound";
+  if (state === "needs-gesture") return "Audio: unavailable";
   if (typeof proofMaxAbs === "number") {
     return proofMaxAbs > 0 ? "Audio file: signal found" : "Audio: silent";
   }
@@ -621,77 +663,49 @@ function audioEvidenceState(
   proofMaxAbs?: number,
   playerVolume = 0,
   sessionActive = false,
+  romAudioAvailable?: boolean,
 ): EvidenceState {
   if (romUnavailable) return "missing";
+  if (romAudioAvailable === false) return "missing";
+  // ROM audio proof is independent of whether this browser session is muted.
+  // Drive16 intentionally starts every game muted, so a safe default must not
+  // turn a verified non-silent ROM into a failed playability gate.
+  if (evidence === "captured" || (typeof proofMaxAbs === "number" && proofMaxAbs > 0)) {
+    return "ready";
+  }
   if (sessionActive) {
-    if (playerVolume === 0 || state === "needs-gesture") return "warning";
-    if (state === "audible") return "ready";
+    if (playerVolume === 0 || state === "muted" || state === "needs-gesture") return "warning";
+    if (state === "signal") return "ready";
+    if (state === "enabled") {
+      return "warning";
+    }
     return "missing";
   }
-  if (evidence === "captured") return "ready";
   if (evidence === "failed" || evidence === "silent") return "missing";
   if (evidence === "checking") return "warning";
-  if (state === "audible") return "ready";
+  if (state === "signal") return "ready";
+  if (state === "enabled") return "warning";
   if (state === "needs-gesture") return "warning";
-  if (typeof proofMaxAbs === "number" && proofMaxAbs > 0) return "ready";
   return "warning";
 }
 
-function playabilityGateState({
-  lastInputAction,
-  playerAudio,
-  playerAudioEvidence,
-  playerVolume,
-  playerInputEvidence,
-  playerScreenEvidence,
-  proofMaxAbs,
-  romUnavailable,
-  sessionActive,
-}: {
-  lastInputAction: string;
-  playerAudio: PlayerAudioState;
-  playerAudioEvidence: PlayerAudioEvidence;
-  playerVolume: number;
-  playerInputEvidence: PlayerInputEvidence;
-  playerScreenEvidence: PlayerScreenEvidence;
-  proofMaxAbs?: number;
-  romUnavailable: boolean;
-  sessionActive: boolean;
-}): EvidenceState {
-  if (romUnavailable) return "missing";
-
-  const states = [
-    screenEvidenceState(playerScreenEvidence, romUnavailable),
-    inputEvidenceState(lastInputAction, playerInputEvidence, romUnavailable, sessionActive),
-    audioEvidenceState(
-      playerAudio,
-      playerAudioEvidence,
-      romUnavailable,
-      proofMaxAbs,
-      playerVolume,
-      sessionActive,
-    ),
-  ];
-
-  if (states.includes("missing")) return "missing";
-  if (states.every((state) => state === "ready")) return "ready";
-  return "warning";
-}
-
-function playabilityGateLabel(state: EvidenceState, romUnavailable: boolean) {
+function playabilityGateLabel(stage: ProjectTrustStage, romUnavailable: boolean) {
   if (romUnavailable) return "Overall: no ROM";
-  if (state === "ready") return "Overall: verified";
-  if (state === "missing") return "Overall: checks failed";
-  return "Overall: review needed";
+  if (stage === "reviewed") return "Stage: Reviewed";
+  if (stage === "playable") return "Stage: Playable";
+  if (stage === "failed") return "Stage: Failed review";
+  if (stage === "built") return "Stage: Built";
+  return "Stage: Prototype";
 }
 
-function playabilityGateHelp(state: EvidenceState, romUnavailable: boolean) {
+function playabilityGateHelp(stage: ProjectTrustStage, romUnavailable: boolean) {
   if (romUnavailable) return "Build or import a ROM before Drive16 can check it.";
-  if (state === "ready") return "Drive16 confirmed screen, input, and sound evidence.";
-  if (state === "missing") {
-    return "At least one required check failed. The ROM remains playable as a diagnostic preview.";
+  if (stage === "reviewed") return "The game passed semantic playability and visible quality review.";
+  if (stage === "playable") return "The semantic playability gate passed; final visible review is pending.";
+  if (stage === "failed") {
+    return "Visible quality review failed. The ROM remains available only as a diagnostic build.";
   }
-  return "The ROM can be previewed, but one or more automated checks still need confirmation.";
+  return "A ROM may exist, but Playable and Reviewed have not been awarded.";
 }
 
 function InputControlsPanel({

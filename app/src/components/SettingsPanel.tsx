@@ -206,6 +206,10 @@ export function SettingsPanel({
                 Ollama
               </button>
             </div>
+            <p className="settings-provider-note">
+              ROM builds always use DeepSeek V3.1 through OpenRouter. This selection controls
+              questions, summaries, and diagnostics; Ollama never edits or rebuilds a ROM.
+            </p>
 
             {modelProvider === "openrouter" ? (
               <div
@@ -214,7 +218,7 @@ export function SettingsPanel({
                 data-testid="openrouter-settings"
               >
                 <label className="field-row">
-                  <span>Model</span>
+                  <span>Assistant model</span>
                   <div className="field-with-action">
                     <select
                       aria-label="OpenRouter model"
@@ -387,7 +391,7 @@ export function SettingsPanel({
                     <button
                       aria-label="Test ComfyUI"
                       data-testid="test-comfyui"
-                      disabled={busyComfyUi || !desktopRuntime}
+                      disabled={busyComfyUi}
                       onClick={onTestComfyUiConnection}
                       type="button"
                     >
@@ -598,14 +602,6 @@ function spriteEnhancementReadiness(
     };
   }
 
-  if (!desktopRuntime) {
-    return {
-      state: "needsSetup",
-      label: "Desktop app",
-      detail: "The browser preview cannot start sprite tools. Open the Drive16 desktop app.",
-    };
-  }
-
   if (connection.state === "testing") {
     return {
       state: "running",
@@ -627,6 +623,14 @@ function spriteEnhancementReadiness(
       state: "ready",
       label: "Ready",
       detail: "Local sprite generation is ready.",
+    };
+  }
+
+  if (!desktopRuntime) {
+    return {
+      state: "needsSetup",
+      label: "Not reachable",
+      detail: "The browser can use a running ComfyUI service, but cannot start it automatically.",
     };
   }
 

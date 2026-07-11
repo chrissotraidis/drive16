@@ -115,9 +115,19 @@ const agent = await loadAgentModule();
 const repairState = agent.createAgentActivityRepairState();
 const appSource = await readFile(path.join(rootDir, "app", "src", "App.tsx"), "utf8");
 const startNewProjectSource = extractFunctionBody(appSource, "startNewProject");
+const runAgentPromptSource = extractFunctionBody(appSource, "runAgentPrompt");
+const buildEditedProjectIfNeededSource = extractFunctionBody(
+  appSource,
+  "buildEditedProjectIfNeeded",
+);
+const failPendingAgentRunSource = extractFunctionBody(appSource, "failPendingAgentRun");
+const finishPendingAgentRunSource = extractFunctionBody(appSource, "finishPendingAgentRun");
 const appPackageSource = await readFile(path.join(rootDir, "app", "package.json"), "utf8");
 const tauriConfig = JSON.parse(
   await readFile(path.join(rootDir, "app", "src-tauri", "tauri.conf.json"), "utf8"),
+);
+const openCodeConfig = JSON.parse(
+  await readFile(path.join(rootDir, "opencode.json"), "utf8"),
 );
 const playerPaneSource = await readFile(
   path.join(rootDir, "app", "src", "components", "PlayerPane.tsx"),
@@ -147,6 +157,69 @@ const nostalgistPlayerSource = await readFile(
 const nostalgistPatchSource = await readFile(
   path.join(rootDir, "app", "patches", "nostalgist@0.21.1.patch"),
   "utf8",
+);
+
+assert(
+  openCodeConfig.agent["drive16-build"].max_tokens === 8000,
+  "Drive16 implementation calls must remain capped at 8,000 completion tokens.",
+);
+assert(
+  openCodeConfig.agent["drive16-repair"].max_tokens === 4000,
+  "Drive16 repair calls must remain capped at 4,000 completion tokens.",
+);
+assert(
+  openCodeConfig.agent["drive16-repair"].steps === 16,
+  "Drive16 repair needs enough bounded tool steps for read, edit, build, and verification.",
+);
+assert(
+  runAgentPromptSource.includes('const agentProviderId: ModelProvider = "openrouter"'),
+  "ROM-changing work must explicitly route through OpenRouter.",
+);
+assert(
+  runAgentPromptSource.includes("const agentModelId = defaultOpenRouterModel"),
+  "ROM-changing work must explicitly use the bounded DeepSeek model.",
+);
+assert(
+  runAgentPromptSource.includes('const agentName = followUp ? "drive16-repair" : "drive16-build"'),
+  "Follow-up ROM changes must use the 4,000-token repair agent.",
+);
+assert(
+  (runAgentPromptSource.match(/await sendAgentPrompt\(\{/g) ?? []).length === 1,
+  "A user ROM-changing prompt must start exactly one model call; repairs require a separate targeted prompt.",
+);
+assert(
+  !runAgentPromptSource.includes("sendOllamaFreeformReply"),
+  "Ollama must never appear in the ROM-changing execution path.",
+);
+assert(
+  runAgentPromptSource.includes("let seededPrototypeBuilt = false") &&
+    runAgentPromptSource.includes("seededPrototypeBuilt = true"),
+  "The build flow must track when Drive16 already built the seeded prototype.",
+);
+assert(
+  runAgentPromptSource.includes("seededPrototypeBuilt,") &&
+    runAgentPromptSource.includes("repairMode: followUp"),
+  "Implementation and repair prompts must receive the seeded-prototype and repair-pass context.",
+);
+assert(
+  appSource.includes("a developed multi-part MML arrangement unless you asked for no music"),
+  "The visible build plan must promise a developed arrangement rather than a disposable short loop.",
+);
+assert(
+  buildEditedProjectIfNeededSource.includes('project.status !== "stale"') &&
+    buildEditedProjectIfNeededSource.includes("pending.sawSourceOrResourceEdit") &&
+    buildEditedProjectIfNeededSource.includes("await buildActiveProject()"),
+  "Drive16 must deterministically build edited source when a model stops before the mechanical build step.",
+);
+assert(
+  failPendingAgentRunSource.includes("await buildEditedProjectIfNeeded(after, pending)") &&
+    finishPendingAgentRunSource.includes("await buildEditedProjectIfNeeded(after, pending)"),
+  "Both stalled and normally-finished agent runs must recover edited-but-unbuilt projects.",
+);
+assert(
+  appSource.includes('if (projectSummary.romStatus === "warning")') &&
+    appSource.includes('label: "Build incomplete"'),
+  "A stale source tree must surface as Build incomplete rather than generic Ready.",
 );
 const viteConfigSource = await readFile(
   path.join(rootDir, "app", "vite.config.ts"),
@@ -194,6 +267,14 @@ const openCodeAudioTraceVerifierSource = await readFile(
 );
 const liveGameAuditVerifierSource = await readFile(
   path.join(rootDir, "scripts", "verify-live-game-audit.mjs"),
+  "utf8",
+);
+const referenceRunCaptureSource = await readFile(
+  path.join(rootDir, "scripts", "capture-reference-run.py"),
+  "utf8",
+);
+const referenceRunVerifierSource = await readFile(
+  path.join(rootDir, "scripts", "verify-reference-run.mjs"),
   "utf8",
 );
 const liveGameAuditPromptRunnerSource = await readFile(
@@ -278,14 +359,18 @@ for (const expected of [
   "generate and validate separate role-specific sprites",
   "Complete generated games include simple music or SFX",
   "drive16-sgdk-build.audit_project_memory",
-  'expect_gate: "pass"',
-  "repair those exact documentation claims",
+  'expect_gate: "fail"',
+  "repair them once",
   "send_input` with `reset: true`",
   "a separate `send_input` with `start`",
   "Build the core playable game before optional music",
   "Music is a bounded enhancement, not a",
   "Before the first `compile_music` call",
   "corpus/mml/ctrmml-megadrive.md",
+  "at least four active parts",
+  "make the repeating section at least sixteen",
+  "`quality.pass` is true",
+  "Human listening remains the final taste check",
   "do not invent",
   "If two MML compile attempts fail",
   "after the second failed",
@@ -313,6 +398,10 @@ for (const expected of [
   "If audio is skipped because a tool failed, timed out, or you ran out of time",
   "examples/game-skeletons/snake-basic/",
   "examples/game-skeletons/asteroids-basic/",
+  "examples/game-skeletons/missile-command-basic/",
+  "at most two repair builds in one turn",
+  "low-level diagnostic",
+  "must not award `Playability gate: PASS`",
   "exact `## Quality Review` section",
   "A sparse text-glyph prototype is not the default presentation bar",
   "Run the screenshot quality audit after the final visual edit",
@@ -354,6 +443,33 @@ for (const expected of [
 }
 
 for (const expected of [
+  '"kind": "drive16-reference-run"',
+  '"referenceOnly": True',
+  '("action-baseline", 110, start, False)',
+  '("action", 110, action, False)',
+  '("idle15", 960, start, False)',
+  '"notAllowed": "Claiming model training, copying source, or reusing extracted art/audio."',
+]) {
+  assert(
+    referenceRunCaptureSource.includes(expected),
+    `Reference-run capture is missing contract: ${expected}`,
+  );
+}
+for (const expected of [
+  'report.kind === "drive16-reference-run"',
+  'report.referenceOnly === true',
+  '"action-baseline"',
+  'captures.get("idle15").frames >= 900',
+  'includes("copying source")',
+  "Reference run verified:",
+]) {
+  assert(
+    referenceRunVerifierSource.includes(expected),
+    `Reference-run verifier is missing contract: ${expected}`,
+  );
+}
+
+for (const expected of [
   "scripts/build-genteel.sh",
   "app/src-tauri/generated",
   'chmod +x "$GENERATED_DIR/genteel"',
@@ -378,7 +494,9 @@ for (const expected of [
 
 for (const expected of [
   'setPlayerInputEvidence(preview.inputChanged ? "tested" : "failed")',
-  'playerScreenEvidence === "visible" || playerScreenEvidence === "captured"',
+  '"baseline.diagnostics"',
+  'idle15=${evidence.idleSurvives15Seconds}',
+  "Low-level ROM diagnostics completed; semantic review is still required.",
 ]) {
   assert(
     appSource.includes(expected),
@@ -802,7 +920,13 @@ for (const expected of [
 for (const expected of [
   '"inputChangedFrame"',
   '"restartMatchedFreshState"',
-  '(120, ["start"])',
+  '"idleSurvives15Seconds"',
+  '"visibleRestartPathTested"',
+  '"gameOverRestartMatchedFreshState"',
+  '"gameOverRestartDifferenceRatio"',
+  'report["gameOverRestartMatchedFreshState"] is not False',
+  'reset_button = "c" if args.game == "missile-command" else "start"',
+  "(reset_frame, [reset_button])",
 ]) {
   assert(
     skeletonInteractionSource.includes(expected),
@@ -828,9 +952,12 @@ for (const expected of [
   "function loadActiveProjectName",
   "function saveActiveProjectName",
   "function resetActiveProjectName",
-  "if (isTauriRuntime())",
-  "loadActiveProjectName(project.romExists ?",
-  "} else {\n      void loadProjectSummary();\n    }",
+  'const conversationStorageKey = "drive16.conversation.v2"',
+  "parsed.projectName !== loadActiveProjectName()",
+  "projectName: projectSummary.name",
+  "const projectName = loadActiveProjectName(",
+  'setProjectSource(isTauriRuntime() ? "tauri" : "browser-local")',
+  'setAgentRom({ path: project.romPath, stamp: Date.now() })',
   "saveActiveProjectName(projectName)",
   "resetActiveProjectName()",
   "useState(false)",
@@ -858,9 +985,10 @@ for (const expected of [
   'agentPhaseLabel={agentPhase === "idle" ? "" : agentPhaseLabel(agentPhase)}',
   'if (eventType === "agent.verification.passed") return "done"',
   'if (eventType === "agent.finished") return "testing"',
-  "function appPlayabilityGateState",
-  'return { state: "warning", label: checking ? "Checking" : "Review Needed" }',
-  'return { state: "error", label: "Checks Failed" }',
+  "type ProjectTrustStage",
+  'projectSummary.trustStage === "reviewed"',
+  'label: "Failed Review"',
+  'label: "Built"',
   'starterBusy || buildState === "building" || !activeRomPlayable',
   "const recentDuplicate = current",
   ".slice(-8)",
@@ -870,16 +998,16 @@ for (const expected of [
   "const openCodeHeartbeatTimeoutMs = 15_000",
   "function clearOpenCodeHeartbeatTimer",
   "openCodeHeartbeatTimerRef.current = window.setTimeout",
-  '"project.active.rom.available"',
-  "not auto-loaded on refresh",
-  "Active project ROM available. Press Verify or Play ROM to load it.",
+  '"project.active.rom.restored"',
+  "Active project ROM restored and loading in the player.",
   "type ProjectMemoryAuditResult",
   'invoke<ProjectMemoryAuditResult>("audit_active_project_memory")',
   "function surfaceAgentCompletionAudit",
   "The ROM exists, but I’m not marking this game done.",
   "Playability gate: FAIL",
   "Playability unverified",
-  "Gate passed",
+  "Review still required",
+  '"agent.verification.claim_rejected"',
   '"project.memory.ready"',
   '"project.memory.warning"',
   '"project.memory.missing"',
@@ -896,13 +1024,19 @@ for (const expected of [
   "function recordPendingAgentMilestone",
   "function pendingAgentStallDetail",
   "function sourceOrResourcePathWasEdited",
+  "function pendingAgentProducedFreshRom",
+  "pending.sawSourceOrResourceEdit && pending.sawBuildFinished",
+  "const canBeFresh = pendingAgentProducedFreshRom(pending)",
+  "const producedFreshRom = pendingAgentProducedFreshRom(pending)",
+  "label: projectSummary.name",
+  'return "Assets: custom tile art"',
   "sawSourceOrResourceEdit",
   "sawBuildStarted",
   "sawBuildFinished",
   "sawScreenCheck",
   "sawInputTest",
   "sawAudioCheck",
-  "agentRunHardLimitMs = 6 * 60_000",
+  "agentRunHardLimitMs = 5 * 60_000",
   "hardStopTimer",
   "abortAgentSession(sessionId)",
   "agent.stalled.rom_recovered",
@@ -967,49 +1101,83 @@ for (const expected of [
   "setPlayerScreenEvidence((current) =>",
   '"captured"',
   'setPlayerScreenEvidence("visible")',
-  'setPlayerScreenEvidence(mostlyUnknown ? "inconclusive" : "unverified")',
+  'current === "visible" || current === "captured"',
   "playerScreenEvidence={playerScreenEvidence}",
   "romUnavailable={!activeRomPlayable}",
   "guardUnverifiedModelReply(reply.content)",
   "message.model.guarded",
-  "looksLikeFollowUpPrompt(trimmed)",
+  "shouldPreserveActiveProject(trimmed)",
+  "pendingAgentRunStorageKey",
+  "loadPersistedPendingAgentRun",
+  "clearPersistedPendingAgentRun",
+  "Builds use DeepSeek V3.1 through OpenRouter.",
+  'label: "No fresh ROM produced"',
+  "followUp ? await ensureActiveProject() : await resetActiveProject()",
   'projectSummary.name || loadActiveProjectName("Untitled Project")',
   '["tetris", "Tetris"]',
   "The agent produced a ROM file. I’m loading it now, but it is not marked playable until Drive16 has screen, input, and audio evidence.",
   'label: "ROM built, checking"',
   "type RomPreviewLoadResult",
-  "const previewResult = await launchRom(",
-  "surfaceAgentCompletionAudit(memoryAudit, previewResult)",
+  "function reconcilePendingAgentRom",
+  "function adoptFreshAgentRom",
+  "projectRefreshTimer",
+  'appendOpenCodeEvent("agent.rom.adopted", project.romPath)',
+  "surfaceAgentCompletionAudit(memoryAudit)",
   "ROM preview failed: ${previewResult.detail}",
   'label: "Preview failed"',
   '"preview.failed"',
   '"agent.verification.failed"',
   '"agent.verification.passed"',
   "Agent ROM preview captured. Playability still needs input/audio evidence.",
-  'setBuildState(previewResult.ok ? "running" : "error")',
+  'setBuildState("running")',
   "audioMaxAbs",
   "preview.audio.captured",
   "preview.audio.silent",
   '"agent.rom.built"',
-  'label: "Verification incomplete"',
-  'label: "Verification failed"',
-  'label: audioNeedsClick',
-  "Sound is on at",
+  '"Built; not playable"',
+  'label: "Visible review failed"',
+  'label: "Player ready — muted"',
+  "Sound starts muted as a safety precaution.",
+  "Sound is enabled at",
   "setNostalgistVolume",
+  "setNostalgistMuted",
+  "detectNostalgistAudioSignal",
   "defaultPlayerVolume",
   "seedActiveProjectForPrompt",
+  "buildActiveProject",
+  'const agentProviderId: ModelProvider = "openrouter"',
+  "const agentModelId = defaultOpenRouterModel",
+  'const agentName = followUp ? "drive16-repair" : "drive16-build"',
   "agent.seeded",
+  "agent.seed.built",
+  'label: "Prototype built"',
   "Starter code seeded; no ROM built yet",
-  'label: "Screen visible, playtest incomplete"',
-  'label: mostlyUnknown ? "Screen check inconclusive" : "Screen not verified"',
-  '"The player is rendering visible frames. Controls and audio still need evidence before calling this game playable."',
+  'label: "Screen visible"',
+  'label: mostlyUnknown ? "Live screen check unavailable" : "Screen not verified"',
+  '"The game screen is visible and updating."',
 ]) {
   assert(appSource.includes(expected), `App lifecycle source is missing: ${expected}`);
 }
 assert(
-  !appSource.includes('void launchRom(project.romPath, "Active project ROM ready.")'),
-  "App startup must not auto-load an existing active-project ROM; loading should require Verify or Play.",
+  appSource.includes('setAgentRom({ path: project.romPath, stamp: Date.now() })'),
+  "App startup must restore an existing active-project ROM into the player.",
 );
+for (const expected of [
+  "active-project.previous",
+  "renameSync(activeProject, previousActiveProject)",
+  "examples/game-skeletons/missile-command-basic",
+  'request.url === "/build"',
+  "buildBrowserProject",
+]) {
+  assert(viteConfigSource.includes(expected), `Browser project reset is missing backup behavior: ${expected}`);
+}
+for (const expected of [
+  "PREVIOUS_ACTIVE_PROJECT_DIRECTORY",
+  "fs::rename(&active, &previous)",
+  "fs::rename(&previous, &active)",
+]) {
+  assert(projectSource.includes(expected), `Native project reset is missing backup behavior: ${expected}`);
+}
 assert(
   !appSource.includes("window.sessionStorage.setItem(openRouter"),
   "OpenRouter key must not be saved to sessionStorage; refresh should keep it.",
@@ -1051,32 +1219,55 @@ for (const expected of [
   "disposeInteractivePlayer();",
   'setPlayerState("stopped")',
   'setPlayerAudio("unavailable")',
-  "setPlayerVolume(defaultPlayerVolume)",
   "setLoadedPlayerRom(undefined)",
   "setAgentRom(undefined)",
   "resetBuildActivityLog()",
 ]) {
   assert(startNewProjectSource.includes(expected), `New project reset is missing: ${expected}`);
 }
+assert(
+  !startNewProjectSource.includes("setPlayerVolume(defaultPlayerVolume)"),
+  "New project reset must preserve the saved player volume while starting muted.",
+);
 
 for (const expected of [
-  "export const defaultPlayerVolume = 40",
-  "const retroarchAttenuationSteps = 40",
+  "export const defaultPlayerVolume = 60",
+  "const retroarchVolumeStepDb = 0.5",
+  "const retroarchMaxAttenuationDb = 60",
+  "const playerVolumeCurveExponent = 2",
   "audio_mute_enable: true",
   "audio_mixer_mute_enable: false",
   "audio_volume: 0",
   "audio_mixer_volume: 0",
   "emscripten?.RWA?.context",
+  "installAudioProbe(runtime)",
+  "runtime.audioSignalDetected ? \"signal\" : \"enabled\"",
+  "Cannot push NULL or empty core path into the playlist",
   'if (!runtime.muted) runtime.instance.sendCommand("MUTE")',
   'runtime.instance.sendCommand("MUTE")',
-  "(1 - nextVolume / 100) * retroarchAttenuationSteps",
-  "return runtime.muted || runtime.volume === 0 ? \"muted\" : \"audible\"",
+  "playerVolumeToAttenuationSteps(nextVolume)",
+  "const amplitude = normalized ** playerVolumeCurveExponent",
+  "-20 * Math.log10(amplitude)",
 ]) {
   assert(
     nostalgistPlayerSource.includes(expected),
     `Nostalgist player source is missing audio safety guard: ${expected}`,
   );
 }
+
+function expectedVolumeSteps(percent) {
+  if (percent <= 0) return 120;
+  const amplitude = (percent / 100) ** 2;
+  return Math.round(Math.min(60, Math.max(0, -20 * Math.log10(amplitude))) / 0.5);
+}
+
+assert(expectedVolumeSteps(5) === 104, "5% player volume must map to -52 dB.");
+assert(expectedVolumeSteps(10) === 80, "10% player volume must map to -40 dB.");
+assert(expectedVolumeSteps(60) === 18, "60% player volume must map to about -9 dB.");
+assert(
+  expectedVolumeSteps(5) - expectedVolumeSteps(10) === 24,
+  "5% and 10% must differ by 12 dB, not one or two RetroArch steps.",
+);
 
 for (const expected of [
   'aria-label="Ollama model"',
@@ -1092,7 +1283,7 @@ for (const expected of [
   "Missing LoRA",
   "Not running",
   "Starts local pixel-art tools automatically",
-  "The browser preview cannot start sprite tools. Open the Drive16 desktop app.",
+  "The browser can use a running ComfyUI service, but cannot start it automatically.",
   "Drive16 could not auto-start sprite tools. Try Start sprite tools again.",
   "Open Advanced sprite setup for technical details.",
 ]) {
@@ -1173,15 +1364,18 @@ for (const expected of [
   "ShieldCheck",
   "EvidencePill",
   "type EvidenceState",
-  "playabilityGateState",
+  "type ProjectTrustStage",
   "playabilityGateLabel",
   "Overall: no ROM",
-  "Overall: review needed",
-  "Overall: checks failed",
-  "Overall: verified",
+  "Stage: Prototype",
+  "Stage: Built",
+  "Stage: Playable",
+  "Stage: Reviewed",
+  "Stage: Failed review",
   "Screen: no ROM",
   "Screen: frame captured",
   "Screen: visible",
+  "Screen: auto-check unavailable",
   "Screen: not checked",
   "Input: no ROM",
   "Input: untested",
@@ -1194,27 +1388,59 @@ for (const expected of [
   "Audio file: checking",
   "Audio file: signal found",
   "Audio: silent",
+  "Audio: not included",
   "Audio: failed",
-  "Audio: enable sound",
+  "Audio: muted",
   "Audio: unverified",
   "audioEvidenceState",
   "playerAudioEvidence",
   "playerVolume",
   'data-testid="player-volume-slider"',
   'aria-label="Player volume"',
-  "Turn sound on",
+  'return "Muted"',
+  'if (state === "needs-gesture") return "Unavailable"',
+  'return "On"',
+  'return "Unavailable"',
   "ROM READY",
   'romUnavailable || playerScreenEvidence === "none"',
-  'disabled={playerAudio === "unavailable" && !sessionActive}',
-  "Enable sound",
-  "Enable player audio",
+  'disabled={!sessionActive || romAudioAvailable === false}',
+  "Retry sound",
   "needs-gesture",
   "Start a ROM before changing audio",
   "Try to enable audio for this player session",
   '"NO ROM"',
   '"No ROM"',
+  'playerState === "paused"',
+  '? "Paused"',
+  'playerState === "paused" ? "Resume" : "Pause"',
+  'playerState === "paused" ? <Play size={15} /> : <Pause size={15} />',
 ]) {
   assert(playerPaneSource.includes(expected), `Player pane source is missing: ${expected}`);
+}
+
+for (const expected of [
+  "restartNostalgistPlayer(runtime, restartAction)",
+  'playerInputActionForId(projectSummary.restartAction, "controller", "Restart")',
+  "Drive16 will not substitute an emulator reset.",
+  'label: "Restart unavailable"',
+  '"player.restart.failed"',
+  '`${sourcePath}; path=${restartAction.id}`',
+]) {
+  assert(appSource.includes(expected), `Game recovery restart is missing: ${expected}`);
+}
+
+for (const expected of [
+  "This project does not document a game recovery control.",
+  "runtime.instance.press({ button, player: 1, time: 220 })",
+  "function browserAudioOutputSupported()",
+  'typeof browserGlobal.AudioContext === "function"',
+  "ctx.createBufferSource()",
+  "ctx.createBuffer(1, 1, 22_050)",
+]) {
+  assert(
+    nostalgistPlayerSource.includes(expected),
+    `Nostalgist recovery input is missing: ${expected}`,
+  );
 }
 
 for (const expected of [
@@ -1281,8 +1507,12 @@ for (const expected of [
   "pub fn seed_active_project_for_prompt",
   "fn seed_active_project_for_prompt_in_repo",
   "fn looks_like_simple_snake_request",
+  "fn looks_like_simple_missile_command_request",
   "fn looks_like_blank_starter_main",
   "SNAKE_BASIC_SKELETON",
+  "MISSILE_COMMAND_BASIC_SKELETON",
+  "pub fn build_active_project",
+  "fn build_active_project_for_repo",
   "fn detected_game_genre",
   "fn has_captured_or_omitted_audio",
   "fn audio_disabled_by_user_request",
@@ -1307,8 +1537,25 @@ for (const expected of [
   "async fn seed_active_project_for_prompt",
   "project::seed_active_project_for_prompt",
   "seed_active_project_for_prompt,",
+  "async fn build_active_project",
+  "project::build_active_project",
+  "build_active_project,",
 ]) {
   assert(nativeMainSource.includes(expected), `Native command wiring is missing: ${expected}`);
+}
+
+for (const relativePath of [
+  "examples/game-skeletons/missile-command-basic/src/main.c",
+  "examples/game-skeletons/missile-command-basic/res/resources.res",
+  "examples/game-skeletons/missile-command-basic/res/missile_cursor.png",
+  "examples/game-skeletons/missile-command-basic/res/defense_city.png",
+  "examples/game-skeletons/missile-command-basic/res/missile_theme.mml",
+  "examples/game-skeletons/missile-command-basic/res/missile_theme.vgm",
+  "examples/game-skeletons/missile-command-basic/GAME.md",
+  "examples/game-skeletons/missile-command-basic/ASSETS.md",
+  "examples/game-skeletons/missile-command-basic/PLAYTEST.md",
+]) {
+  assert(existsSync(path.join(rootDir, relativePath)), `Missile Command seed is missing: ${relativePath}`);
 }
 
 for (const expected of [
@@ -1330,6 +1577,8 @@ const prompt = agent.agentPromptWithProject(
   {
     spriteGeneration: true,
     musicGeneration: false,
+    seededPrototypeBuilt: true,
+    repairMode: false,
     comfyUiEndpoint: "http://127.0.0.1:8188",
     comfyUiCheckpoint: "sd_xl_base_1.0.safetensors",
     comfyUiLora: "pixel-art-xl.safetensors",
@@ -1351,19 +1600,24 @@ for (const expected of [
   "Never claim out/rom.bin is built unless build_rom succeeded after the final source/resource edit.",
   "Never write Known Issues: none unless PLAYTEST.md passes with evidence.",
   "Never claim audio was omitted unless the user explicitly requested no audio",
-  "edit src/main.c before any more inspection only when the project is still blank",
+  "follow the Seeded prototype boundary below",
   "Do not use todo-list tools for simple generated games",
   "Keep the first implementation small",
   "Do not read README.md, Makefile, src/boot/*, or res/resources.*",
   "Build after the final code/resource edit; an older out/rom.bin is stale evidence.",
   "Build the core playable game before optional music unless the user specifically asked for music first.",
-  "If src/main.c already contains a simple seeded starter for the requested game",
+  "Seeded prototype already built: yes",
+  "Pass kind: implementation",
+  "Drive16 already built and tested the seeded scaffold before this model call",
+  "Do not copy a Makefile, rebuild the unchanged seed",
+  "make a concrete source or resource edit before the first build_rom call",
   "Use only SGDK APIs that are present in the starter or local examples",
   "Do not use VDP_drawRect, srand, or C library rand()",
   "VDP_fillTileMapRect",
   "examples/game-skeletons/snake-basic/",
   "Build the ROM, run it, call verify_screen, test input, and capture audio when sound is expected.",
-  "verify_screen must pass before Playability gate: PASS",
+  "verify_screen is a low-level diagnostic, not authority to write Playability gate: PASS",
+  "Never write Project stage: PLAYABLE or Project stage: REVIEWED",
   "Never use raw VRAM tile numbers as art",
   "Pause checks must prove both pause and resume",
   "Immediately after build_rom succeeds, do not inspect or rewrite docs",
@@ -1373,7 +1627,7 @@ for (const expected of [
   "if two compile attempts fail, record audio as failed",
   "The two-attempt MML cap is strict",
   "do not call compile_music a third time",
-  "If a seeded starter already includes a VGM/XGM resource",
+  "Original music is disabled: reuse a verified seeded VGM/XGM resource",
   "If any screen, input, or audio check is missing or failed",
   "Drive16 settings:",
   "AI sprites: enabled",
@@ -1381,9 +1635,41 @@ for (const expected of [
   "ComfyUI endpoint: http://127.0.0.1:8188",
   "ComfyUI checkpoint: sd_xl_base_1.0.safetensors",
   "ComfyUI LoRA: pixel-art-xl.safetensors",
+  "test the drive16-comfyui tool itself",
+  "final game must not remain a primitive-only prototype",
   "make snake",
 ]) {
   assert(prompt.includes(expected), `Prompt context is missing: ${expected}`);
+}
+
+const targetedRepairPrompt = agent.agentPromptWithProject(
+  "artifacts/phase3/active-project",
+  "fix the unchanged seeded build",
+  {
+    spriteGeneration: true,
+    musicGeneration: true,
+    seededPrototypeBuilt: true,
+    repairMode: true,
+    comfyUiEndpoint: "http://127.0.0.1:8188",
+    comfyUiCheckpoint: "sd_xl_base_1.0.safetensors",
+    comfyUiLora: "pixel-art-xl.safetensors",
+    comfyUiState: "ready",
+    comfyUiDetail: "Local sprite generation is ready.",
+  },
+);
+
+for (const expected of [
+  "Pass kind: targeted repair",
+  "This is the single permitted repair pass after a specific failed check",
+  "Fix the failure named in the user request without broad discovery or unchanged rebuilds",
+  "If the fix cannot be completed in this pass, stop and report the exact blocker",
+  "Original music is enabled. A seeded VGM is baseline scaffolding",
+  "Use at least five active parts",
+  "recognizable A/B phrase with rhythmic and melodic variation",
+  "repeating section at least sixteen seconds long",
+  "Require compile_music quality.pass",
+]) {
+  assert(targetedRepairPrompt.includes(expected), `Targeted repair prompt is missing: ${expected}`);
 }
 
 for (const expected of [
@@ -1467,8 +1753,12 @@ expectActivity(agent, toolEvent("drive16-emulator.send_input", "completed", "D-p
   label: "Input tested",
 });
 expectActivity(agent, toolEvent("drive16-emulator.capture_frame", "completed", "last-frame.png"), {
+  eventType: "agent.screenshot.captured",
+  label: "Screenshot captured",
+});
+expectActivity(agent, toolEvent("drive16-emulator.verify_screen", "completed", "quality pass"), {
   eventType: "agent.screenshot.checked",
-  label: "Screenshot checked",
+  label: "Screen quality passed",
 });
 expectActivity(agent, toolEvent("drive16-emulator.capture_audio", "completed", "last-audio.wav"), {
   eventType: "agent.audio.checked",
@@ -1530,7 +1820,7 @@ if (existsSync(liveLogPath)) {
     "agent.build.finished",
     "agent.input.tested",
     "agent.rom.ran",
-    "agent.screenshot.checked",
+    "agent.screenshot.captured",
     "agent.files.edited",
   ]) {
     assert(liveTypes.has(expected), `Live proof log is missing event type: ${expected}`);

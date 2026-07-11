@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -146,9 +146,13 @@ The ${genre.label} ROM compiled, but the required genre checks were not proven.
 }
 
 async function writeProject(projectPath, genre, playtestText) {
+  await mkdir(path.join(projectPath, "src"), { recursive: true });
+  await mkdir(path.join(projectPath, "out"), { recursive: true });
   await writeFile(path.join(projectPath, "GAME.md"), gameDoc(genre));
   await writeFile(path.join(projectPath, "ASSETS.md"), assetsDoc());
   await writeFile(path.join(projectPath, "PLAYTEST.md"), playtestText);
+  await writeFile(path.join(projectPath, "src", "main.c"), "int main(void) { return 0; }\n");
+  await writeFile(path.join(projectPath, "out", "rom.bin"), Buffer.from("fixture-rom"));
 }
 
 async function runVerifier(projectPath) {

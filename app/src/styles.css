@@ -253,7 +253,7 @@ p {
 
 .top-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(160px, 1fr) auto;
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -325,6 +325,44 @@ p {
   background: var(--panel);
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.top-feedback {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 9px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.top-feedback strong {
+  flex: 0 0 auto;
+  color: var(--muted-2);
+  font-size: 11px;
+}
+
+.top-feedback span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-feedback.ready strong {
+  color: var(--green);
+}
+
+.top-feedback.warning strong {
+  color: var(--amber);
+}
+
+.top-feedback.missing strong {
+  color: var(--danger);
 }
 
 .status-dot {
@@ -465,6 +503,7 @@ p {
   font-size: 13.5px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .chat-build-log {
@@ -1035,11 +1074,23 @@ p {
 /* control row + status line */
 
 .player-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) 330px auto;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
+}
+
+.player-transport-controls,
+.player-utility-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.player-utility-controls {
+  justify-self: end;
 }
 
 .player-controls button {
@@ -1059,14 +1110,13 @@ p {
   background: var(--accent-2);
 }
 
-.control-spacer {
-  flex: 1;
-}
-
 .player-volume-control {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+  width: 330px;
+  box-sizing: border-box;
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid rgba(244, 238, 230, 0.14);
@@ -1077,6 +1127,16 @@ p {
 .player-volume-control.active.zero {
   border-color: rgba(255, 171, 82, 0.48);
   box-shadow: 0 0 0 1px rgba(255, 123, 24, 0.1), 0 0 18px rgba(255, 123, 24, 0.14);
+}
+
+.player-volume-control.no-audio {
+  border-color: rgba(255, 115, 106, 0.34);
+  background: rgba(255, 115, 106, 0.05);
+}
+
+.player-volume-control.no-audio .player-audio-toggle {
+  color: var(--danger);
+  opacity: 1;
 }
 
 .player-audio-toggle {
@@ -1091,13 +1151,15 @@ p {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .player-audio-toggle:hover {
   color: var(--text);
 }
 
-.player-audio-toggle.audible svg {
+.player-audio-toggle.enabled svg,
+.player-audio-toggle.signal svg {
   color: rgba(115, 209, 123, 0.9);
 }
 
@@ -1117,7 +1179,8 @@ p {
 }
 
 .player-volume-slider input {
-  width: 104px;
+  width: 100%;
+  min-width: 80px;
   accent-color: var(--accent);
 }
 
@@ -1472,6 +1535,14 @@ p {
 .segmented-control button.active {
   color: #140b04;
   background: var(--accent);
+}
+
+.settings-provider-note {
+  max-width: 680px;
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .provider-fields {
@@ -1913,25 +1984,37 @@ p {
   .workspace {
     grid-template-columns: 320px minmax(0, 1fr);
   }
+
+  .player-controls {
+    grid-template-columns: 330px minmax(0, 1fr);
+  }
+
+  .player-transport-controls {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 860px) {
   .workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
   }
 
   .app-shell.conversation-collapsed .workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
+    display: flex;
   }
 
   .workspace .player-pane {
     order: -1;
+    flex: 0 0 auto;
+    min-height: min(620px, 76vh);
     padding: 10px;
   }
 
   .chat-rail {
+    flex: 0 0 min(560px, 70vh);
+    min-height: 440px;
     border-right: none;
     border-top: 1px solid var(--line);
   }
@@ -1947,6 +2030,10 @@ p {
   }
 
   .build-status {
+    display: none;
+  }
+
+  .top-feedback {
     display: none;
   }
 
@@ -1992,79 +2079,45 @@ p {
     font-size: 11.5px;
   }
 
+  .player-volume-control {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .player-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .player-transport-controls,
+  .player-volume-control,
+  .player-utility-controls {
+    grid-column: 1;
+  }
+
+  .player-transport-controls {
+    flex-wrap: wrap;
+  }
+
+  .player-utility-controls {
+    justify-self: start;
+  }
+
+  .player-volume-slider {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .player-volume-slider input {
+    flex: 1;
+    width: auto;
+    min-width: 52px;
+  }
+
+  .first-run-stage {
+    min-height: 380px;
+  }
+
   .menu-action-list {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-/* ------------------------------------------------------------------ toast */
-
-.toast {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 60;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  max-width: 380px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  background: var(--panel-2);
-  box-shadow: var(--shadow);
-  animation: toast-in 0.18s ease-out;
-}
-
-@keyframes toast-in {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-}
-
-.toast.ready {
-  border-color: rgba(143, 207, 136, 0.5);
-}
-
-.toast.warning {
-  border-color: rgba(255, 177, 95, 0.55);
-}
-
-.toast.missing {
-  border-color: rgba(255, 115, 106, 0.6);
-}
-
-.toast-body {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.toast-body strong {
-  font-size: 13px;
-  color: var(--text);
-}
-
-.toast-body span {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--muted-2);
-  overflow-wrap: anywhere;
-}
-
-.toast > button {
-  flex: 0 0 auto;
-  margin: -2px -4px 0 0;
-  padding: 2px 7px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 15px;
-}
-
-.toast > button:hover {
-  color: var(--text);
-  background: var(--panel-3);
 }

@@ -4,6 +4,30 @@
     "agent/skills/drive16-app-builder.md"
   ],
   "agent": {
+    "drive16-build": {
+      "description": "One bounded Drive16 ROM implementation pass",
+      "mode": "primary",
+      "steps": 20,
+      "max_tokens": 8000,
+      "maxOutputTokens": 8000,
+      "temperature": 0,
+      "permission": {
+        "task": "deny",
+        "todowrite": "deny"
+      }
+    },
+    "drive16-repair": {
+      "description": "One targeted Drive16 repair pass after a specific failed check",
+      "mode": "primary",
+      "steps": 16,
+      "max_tokens": 4000,
+      "maxOutputTokens": 4000,
+      "temperature": 0,
+      "permission": {
+        "task": "deny",
+        "todowrite": "deny"
+      }
+    },
     "bakeoff": {
       "description": "Bounded Drive16 model comparison runs",
       "mode": "primary",
@@ -28,9 +52,12 @@
         "minimax-m2.5:cloud": {
           "name": "MiniMax M2.5 Cloud"
         },
-        "rafw007/Qwen3.6-35B-A3B-mlx-claude-coder-abliterated:latest": {
-          "name": "Qwen 3.6 35B Claude Coder MLX"
-        },
+      "rafw007/Qwen3.6-35B-A3B-mlx-claude-coder-abliterated:latest": {
+        "name": "Qwen 3.6 35B Claude Coder MLX",
+        "options": {
+          "reasoningEffort": "none"
+        }
+      },
         "gemma4:31b-it-qat": {
           "name": "Gemma 4 31B IT QAT"
         },

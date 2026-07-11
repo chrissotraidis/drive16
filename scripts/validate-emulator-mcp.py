@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -56,12 +57,24 @@ def tool_call(process: subprocess.Popen[str], message_id: int, name: str, argume
 
 
 def main() -> int:
-    if not ROM.is_file():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--rom", type=Path, default=ROM)
+    parser.add_argument("--verify-screen", action="store_true")
+    args = parser.parse_args()
+    rom = args.rom.resolve()
+    try:
+        rom_path = str(rom.relative_to(REPO_ROOT))
+    except ValueError as error:
+        raise RuntimeError("Emulator verification requires a repo-local ROM.") from error
+
+    if rom == ROM and not ROM.is_file():
         subprocess.run(
             ["scripts/build-sgdk.sh", "examples/sgdk-hello-world"],
             cwd=REPO_ROOT,
             check=True,
         )
+    elif not rom.is_file():
+        raise RuntimeError(f"ROM is missing: {rom}")
 
     process = subprocess.Popen(
         [sys.executable, str(SERVER)],
@@ -111,8 +124,8 @@ def main() -> int:
             4,
             "run_rom",
             {
-                "rom_path": "examples/sgdk-hello-world/out/rom.bin",
-                "frames": 90,
+                "rom_path": rom_path,
+                "frames": 180 if args.verify_screen else 90,
                 "stream_frames": True,
                 "stream_every": 30,
             },
@@ -138,6 +151,16 @@ def main() -> int:
         state = tool_call(process, 6, "read_state")
         if not state["ok"]:
             raise RuntimeError("read_state did not report a successful latest run.")
+
+        if args.verify_screen:
+            verified = tool_call(
+                process,
+                7,
+                "verify_screen",
+                {"rom_path": rom_path, "frames": 180},
+            )
+            if not verified.get("ok"):
+                raise RuntimeError(f"verify_screen did not accept the ROM: {verified}")
 
         print(f"Emulator MCP ok: {screenshot}")
         return 0

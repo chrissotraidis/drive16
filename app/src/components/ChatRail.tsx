@@ -71,6 +71,7 @@ export function ChatRail({
   const visibleBuildEvents = buildEvents
     .filter((event) => !isHeartbeatEvent(event))
     .filter((event) => !isLowSignalPlayerEvent(event))
+    .filter((event) => !isLowSignalOpenCodeEvent(event))
     .slice(-10);
   const visibleRawEvents = rawBuildEvents.slice(-24);
   const [buildLogOpen, setBuildLogOpen] = useState(true);
@@ -123,7 +124,7 @@ export function ChatRail({
               <span>{messageMetaLabel(message)}</span>
               <time>{message.time}</time>
             </div>
-            <p>{message.body}</p>
+            <p>{plainChatFormatting(message.body)}</p>
           </article>
         ))}
       </div>
@@ -234,6 +235,21 @@ export function ChatRail({
 
 function messageMetaLabel(message: ChatMessage) {
   return message.role === "user" ? "You" : "Drive16";
+}
+
+function isLowSignalOpenCodeEvent(event: BuildLogEvent) {
+  const type = event.type.toLowerCase();
+  const finalType = type.split(".").pop() ?? type;
+  return (
+    ["created", "updated", "update", "sync", "diff", "delta", "status", "event", "idle"].includes(
+      finalType,
+    ) &&
+    (/^ses_/i.test(event.detail) || event.detail === "OpenCode event received")
+  );
+}
+
+function plainChatFormatting(body: string) {
+  return body.replace(/\*\*/g, "").replace(/^\s*-\s+/gm, "• ");
 }
 
 function friendlyEventType(type: string) {

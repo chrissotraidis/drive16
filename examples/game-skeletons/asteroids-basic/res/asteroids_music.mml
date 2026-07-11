@@ -1,0 +1,53 @@
+#title Vector Run: Second Orbit
+#composer Drive16
+#platform megadrive
+
+; Six-part, sixteen-bar arcade arrangement with a distinct A/B form.
+@80 fm ; drive16_round_bass
+  3   1
+ 31   7   0   8   3  28   0   1   0   0
+ 31  12   0   8   5  42   0   1   0   0
+ 31   7   0   8   3  18   0   2   0   0
+ 31  16   0   9   1   0   0   1   0   0
+
+@81 fm ; drive16_clear_lead
+  4   4
+ 25   5   0   4   2  22   0   2   3   0
+ 31  10   0   6   3   0   0   2   0   0
+ 25   5   0   4   2  30   0   3   3   0
+ 31  10   0   6   2   0   0   1   0   0
+
+@82 fm ; drive16_soft_pad
+  5   2
+ 20   4   5   8   6  36   0   2   0   0
+ 24  10   4  10   5   6   0   1   0   0
+ 18   4   5   8   6  42   0   2   0   0
+ 24  12   4  10   5  10   0   1   0   0
+
+@83 fm ; drive16_chip_pluck
+  5   3
+ 31  18   0   6   2  34   0   3   0   0
+ 31  20   0   7   1   0   0   1   0   0
+ 26  10   0   5   2  48   0   4   0   0
+ 31  18   0   7   1   8   0   1   0   0
+
+@85 fm ; drive16_brass_stab
+  4   6
+ 24   8   0   5   2  18   0   1   0   0
+ 31  12   0   8   3   0   0   1   0   0
+ 24   8   0   5   2  22   0   2   0   0
+ 31  12   0   8   2   0   0   1   0   0
+
+@40 psg 13>0:4
+*40 @40M0o9b
+@41 psg 10>0:7
+*41 @41M0o9b
+@42 psg 14>8:3 7>0:18
+*42 @42M0o8b
+
+A t112 @80 v12 o2 l8 L [a r e a >c <b a e] [f r c f a g f c] [d r a d f e d a] [e r b e g+ f e b] [a r e a >c <b a e] [f r c f a >c <a g c] [d r a d f a >d <a] [e r b e g+ b >e <b] [c r g c e d c g] [g r d g b a g d] [f r c f a g f c] [e r b e g+ f e b] [a r e a >c <b a e] [g r d g b a g d] [f r c f a >c <a f] [e r b e g+ b >e <b]
+B      @81 v11 o4 l8 L [e r a b >c b a e] [<e r g a b a g e] [f r a >c e c <a f] [e r g+ b >e d <b g+] [a r >c e d c <b a] [g r b >d e d <b g] [f r a >c d c <a f] [e g+ b >e d <b g+ e] [>e d c <a b a e r] [g a b >d c <b a g] [a >c e d c <a f e] [g+ b >e f e d <b g+] [a b >c e d c <b a] [g b >d g f e d <b] [f a >c f e d c <a] [e g+ b >e d c <b g+]
+C      @82 v7 o3 l1 L a f d e a f d e c g f e a g f e
+D      @83 v9 o4 l16 L [a>e<c>e<a>e<c>e] [f>c<a>c<f>c<a>c] [d>a<f>a<d>a<f>a] [e>b<g+>b<e>b<g+>b] [a>e<c>e<a>e<c>e] [f>c<a>c<f>c<a>c] [d>a<f>a<d>a<f>a] [e>b<g+>b<e>b<g+>b] [c>g<e>g<c>g<e>g] [g>d<b>d<g>d<b>d] [f>c<a>c<f>c<a>c] [e>b<g+>b<e>b<g+>b] [a>e<c>e<a>e<c>e] [g>d<b>d<g>d<b>d] [f>c<a>c<f>c<a>c] [e>b<g+>b<e>b<g+>b]
+E      @85 v9 o3 l8 L [a r r e r a r r] [f r r c r f r r] [d r r a r d r r] [e r r b r e r r] [a r e r a r >c <r] [f r c r f r a r] [d r a r d r f r] [e r b r e r g+ r] [c r g r c r e r] [g r d r g r b r] [f r c r f r a r] [e r b r e r g+ r] [a r e r a r >c <r] [g r d r g r b r] [f r c r f r a r] [e r b r e r >e <r]
+J 'mode 1'D40v13 l16 L [[arbr arbr arbr crbr]3 [arbr arbr acbr ccbr]]2 [[acbr arbb arbr crbb]3 [acbr ccbb acbr cccc]]2

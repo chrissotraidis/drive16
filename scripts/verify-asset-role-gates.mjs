@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -111,9 +111,16 @@ const scenarios = [
 ];
 
 async function writeProject(projectPath, scenario) {
+  await mkdir(path.join(projectPath, "src"), { recursive: true });
+  await mkdir(path.join(projectPath, "out"), { recursive: true });
   await writeFile(path.join(projectPath, "GAME.md"), gameDoc);
   await writeFile(path.join(projectPath, "ASSETS.md"), scenario.assets);
   await writeFile(path.join(projectPath, "PLAYTEST.md"), playtestDoc);
+  await writeFile(
+    path.join(projectPath, "src", "main.c"),
+    "#include <genesis.h>\nint main(bool hardReset) { (void) hardReset; while (TRUE) SYS_doVBlankProcess(); return 0; }\n",
+  );
+  await writeFile(path.join(projectPath, "out", "rom.bin"), Buffer.from([0x00]));
 }
 
 async function runVerifier(projectPath) {

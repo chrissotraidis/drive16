@@ -34,11 +34,20 @@ static u8 left_score;
 static u8 right_score;
 static u16 frame_counter;
 static u16 previous_joy;
-static bool presentation_ready;
+static bool started;
+static bool paused;
+static bool game_over;
 
 static void draw_abs(s16 x, s16 y, const char *text)
 {
     VDP_drawText(text, (u16)x, (u16)y);
+}
+
+static void draw_abs_palette(s16 x, s16 y, const char *text, u16 palette)
+{
+    VDP_setTextPalette(palette);
+    draw_abs(x, y, text);
+    VDP_setTextPalette(PAL3);
 }
 
 static u16 art_tile(u16 palette, u16 tile)
@@ -66,6 +75,17 @@ static void draw_score(void)
     draw_abs(17, 2, score);
 }
 
+static void draw_title(void)
+{
+    VDP_fillTileMapRect(BG_A, 0, COURT_X + 1, COURT_Y + 1, COURT_W - 2, COURT_H - 2);
+    VDP_fillTileMapRect(BG_A, art_tile(PAL2, TILE_INSET), COURT_X + 3, COURT_Y + 4, 1, 4);
+    VDP_fillTileMapRect(BG_A, art_tile(PAL2, TILE_INSET), COURT_X + COURT_W - 4, COURT_Y + 4, 1, 4);
+    VDP_setTileMapXY(BG_A, art_tile(PAL1, TILE_INSET), COURT_X + (COURT_W / 2), COURT_Y + 6);
+    draw_abs_palette(17, 10, "PONG", PAL1);
+    draw_abs(14, 13, "BEAT THE CPU");
+    draw_abs_palette(14, 16, "PRESS START", PAL2);
+}
+
 static void draw_court(void)
 {
     VDP_fillTileMapRect(BG_B, art_tile(PAL1, TILE_GRID), COURT_X + 1, COURT_Y + 1, COURT_W - 2, COURT_H - 2);
@@ -74,14 +94,6 @@ static void draw_court(void)
     VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), COURT_X, COURT_Y + 1, 1, COURT_H - 2);
     VDP_fillTileMapRect(BG_A, art_tile(PAL3, TILE_SOLID), COURT_X + COURT_W - 1, COURT_Y + 1, 1, COURT_H - 2);
 
-    for (s16 y = 2; y < COURT_H - 1; y += 2)
-    {
-        draw_tile(COURT_W / 2, y, PAL3, TILE_INSET);
-    }
-}
-
-static void draw_center_line(void)
-{
     for (s16 y = 2; y < COURT_H - 1; y += 2)
     {
         draw_tile(COURT_W / 2, y, PAL3, TILE_INSET);
@@ -121,32 +133,22 @@ static void serve_ball(s16 direction)
 
 static void reset_game(void)
 {
-    const bool first_draw = !presentation_ready;
-    if (!presentation_ready)
-    {
-        VDP_clearPlane(BG_A, TRUE);
-        VDP_clearPlane(BG_B, TRUE);
-        VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 0, 40, 4);
-        VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 24, 40, 4);
-        draw_abs(12, 1, "DRIVE16 // PONG");
-        draw_abs(6, 25, "D-PAD MOVE   START RESET");
-        presentation_ready = TRUE;
-    }
-    else
-    {
-        clear_paddle(LEFT_PADDLE_X, left_y);
-        clear_paddle(RIGHT_PADDLE_X, right_y);
-        clear_at(ball_x, ball_y);
-    }
+    VDP_clearPlane(BG_A, TRUE);
+    VDP_clearPlane(BG_B, TRUE);
+    VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 0, 40, 4);
+    VDP_fillTileMapRect(BG_B, art_tile(PAL3, TILE_SOLID), 0, 24, 40, 4);
+    draw_abs(12, 1, "DRIVE16 // PONG");
+    draw_abs(3, 25, "UP/DOWN MOVE  C PAUSE  START RESET");
 
     left_score = 0;
     right_score = 0;
+    paused = FALSE;
+    game_over = FALSE;
     left_y = (COURT_H - PADDLE_H) / 2;
     right_y = (COURT_H - PADDLE_H) / 2;
 
     draw_score();
-    if (first_draw) draw_court();
-    else draw_center_line();
+    draw_court();
     draw_paddle(LEFT_PADDLE_X, left_y);
     draw_paddle(RIGHT_PADDLE_X, right_y);
     serve_ball(1);
@@ -199,6 +201,13 @@ static void point_for_left(void)
         left_score++;
     }
     draw_score();
+    if (left_score >= 9)
+    {
+        game_over = TRUE;
+        draw_abs(16, 12, "YOU WIN");
+        draw_abs(14, 14, "PRESS START");
+        return;
+    }
     serve_ball(-1);
 }
 
@@ -209,6 +218,13 @@ static void point_for_right(void)
         right_score++;
     }
     draw_score();
+    if (right_score >= 9)
+    {
+        game_over = TRUE;
+        draw_abs(15, 12, "CPU WINS");
+        draw_abs(14, 14, "PRESS START");
+        return;
+    }
     serve_ball(1);
 }
 
@@ -258,16 +274,43 @@ static void step_ball(void)
 static void read_input(void)
 {
     const u16 joy = JOY_readJoypad(JOY_1);
+    const u16 pressed = joy & (u16)~previous_joy;
 
-    if ((joy & BUTTON_START) && !(previous_joy & BUTTON_START))
+    if (!started)
+    {
+        if (pressed & BUTTON_START)
+        {
+            started = TRUE;
+            reset_game();
+        }
+        previous_joy = joy;
+        return;
+    }
+
+    if ((pressed & BUTTON_C) && !game_over)
+    {
+        paused = !paused;
+        if (paused) draw_abs(17, 13, "PAUSED");
+        else
+        {
+            VDP_fillTileMapRect(BG_A, 0, COURT_X, COURT_Y, COURT_W, COURT_H);
+            draw_court();
+            draw_score();
+            draw_paddle(LEFT_PADDLE_X, left_y);
+            draw_paddle(RIGHT_PADDLE_X, right_y);
+            draw_ball();
+        }
+    }
+
+    if (pressed & BUTTON_START)
     {
         reset_game();
     }
-    if (joy & BUTTON_UP)
+    if (!paused && !game_over && (joy & BUTTON_UP))
     {
         move_left_paddle(-1);
     }
-    else if (joy & BUTTON_DOWN)
+    else if (!paused && !game_over && (joy & BUTTON_DOWN))
     {
         move_left_paddle(1);
     }
@@ -297,13 +340,14 @@ int main(bool hardReset)
     XGM_startPlay(pong_loop);
 
     reset_game();
+    started = FALSE;
+    draw_title();
 
     while (TRUE)
     {
         read_input();
 
-        frame_counter++;
-        if (frame_counter >= BALL_FRAMES)
+        if (started && !paused && !game_over && ++frame_counter >= BALL_FRAMES)
         {
             frame_counter = 0;
             move_right_ai();

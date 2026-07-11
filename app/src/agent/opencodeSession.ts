@@ -1,5 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 
+const browserOpenCodeBase = "/__drive16_opencode";
+const browserCapabilityProbeTimeoutMs = 30_000;
+
+function isTauriRuntime() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+async function requireJson<T>(response: Response, label: string): Promise<T> {
+  if (!response.ok) {
+    throw new Error(`${label} failed with HTTP ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 // Client for the real OpenCode agent loop. The Tauri backend proxies these
 // calls to the local `opencode serve` instance; the SSE event stream is
 // consumed directly by the UI for live activity.
@@ -35,20 +49,197 @@ export type PromptSeedResult = {
   source?: string | null;
 };
 
+export type AgentToolCapability = {
+  supported: boolean;
+  detail: string;
+  sessionId?: string;
+  tool?: string;
+  elapsedMs: number;
+};
+
+export type BrowserProjectVerification = {
+  generatedAt: string;
+  status: string;
+  detail: string;
+  romPath: string;
+  screenVisible: boolean;
+  inputChanged: boolean;
+  idleSurvives15Seconds: boolean;
+  restartMatched: boolean;
+  restartPath: string;
+  audioMaxAbs: number;
+};
+
 export async function ensureActiveProject(): Promise<ActiveProject> {
+  if (!isTauriRuntime()) {
+    return requireJson<ActiveProject>(await fetch("/__drive16_project"), "Project check");
+  }
   return invoke<ActiveProject>("ensure_active_project");
 }
 
 export async function resetActiveProject(): Promise<ActiveProject> {
+  if (!isTauriRuntime()) {
+    return requireJson<ActiveProject>(
+      await fetch("/__drive16_project/reset", { method: "POST" }),
+      "Reset project",
+    );
+  }
   return invoke<ActiveProject>("reset_active_project");
 }
 
 export async function abortAgentSession(sessionId: string): Promise<boolean> {
+  if (!isTauriRuntime()) {
+    return requireJson<boolean>(
+      await fetch(`${browserOpenCodeBase}/session/${sessionId}/abort`, { method: "POST" }),
+      "Abort agent session",
+    );
+  }
   return invoke<boolean>("abort_opencode_session", { sessionId });
 }
 
 export async function seedActiveProjectForPrompt(prompt: string): Promise<PromptSeedResult> {
+  if (!isTauriRuntime()) {
+    return requireJson<PromptSeedResult>(
+      await fetch("/__drive16_project/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      }),
+      "Seed project",
+    );
+  }
   return invoke<PromptSeedResult>("seed_active_project_for_prompt", { prompt });
+}
+
+export async function buildActiveProject(): Promise<ActiveProject> {
+  if (!isTauriRuntime()) {
+    return requireJson<ActiveProject>(
+      await fetch("/__drive16_project/build", { method: "POST" }),
+      "Build seeded project",
+    );
+  }
+  return invoke<ActiveProject>("build_active_project");
+}
+
+export async function verifyBrowserProject(): Promise<BrowserProjectVerification> {
+  if (isTauriRuntime()) {
+    throw new Error("Native ROM verification runs through the Tauri preview commands");
+  }
+  return requireJson<BrowserProjectVerification>(
+    await fetch("/__drive16_project/verify", { method: "POST" }),
+    "Verify seeded project",
+  );
+}
+
+export async function probeAgentToolCapability({
+  providerId,
+  modelId,
+}: {
+  providerId: string;
+  modelId: string;
+}): Promise<AgentToolCapability> {
+  if (isTauriRuntime()) {
+    return {
+      supported: false,
+      detail: "Local-model build tools must be capability-checked in the browser before desktop use",
+      elapsedMs: 0,
+    };
+  }
+
+  const startedAt = Date.now();
+  const session = await requireJson<{ id: string }>(
+    await fetch(`${browserOpenCodeBase}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Drive16 local model tool capability" }),
+    }),
+    "Create capability session",
+  );
+  const stamp = Date.now().toString(36);
+  try {
+    const response = await fetch(`${browserOpenCodeBase}/session/${session.id}/prompt_async`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messageID: `msg_drive16_probe_${stamp}`,
+        model: { providerID: providerId, modelID: modelId },
+        parts: [
+          {
+            id: `prt_drive16_probe_${stamp}`,
+            type: "text",
+            text: [
+              "Drive16 capability probe only.",
+              "Call the read tool exactly once on agent/skills/drive16-app-builder.md.",
+              "Do not edit files, do not call any other tool, and do not answer before the read call.",
+            ].join(" "),
+          },
+        ],
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Capability request failed with HTTP ${response.status}`);
+    }
+
+    const deadline = startedAt + browserCapabilityProbeTimeoutMs;
+    while (Date.now() < deadline) {
+      const messagesResponse = await fetch(
+        `${browserOpenCodeBase}/session/${session.id}/message`,
+        { cache: "no-store", headers: { Accept: "application/json" } },
+      );
+      if (!messagesResponse.ok) {
+        throw new Error(`Capability status failed with HTTP ${messagesResponse.status}`);
+      }
+      const messages = (await messagesResponse.json()) as Array<{
+        info?: { role?: string; finish?: string };
+        parts?: Array<{
+          type?: string;
+          tool?: string;
+          state?: { status?: string; error?: string };
+        }>;
+      }>;
+      const assistant = messages.find((message) => message.info?.role === "assistant");
+      const toolPart = assistant?.parts?.find((part) => part.type === "tool");
+      if (toolPart?.state?.status === "completed") {
+        return {
+          supported: true,
+          detail: `${modelId} completed a safe ${toolPart.tool ?? "tool"} call`,
+          sessionId: session.id,
+          tool: toolPart.tool,
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      if (toolPart?.state?.status === "error") {
+        return {
+          supported: false,
+          detail: `${modelId} attempted ${toolPart.tool ?? "a tool"}, but it failed`,
+          sessionId: session.id,
+          tool: toolPart.tool,
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      if (assistant?.info?.finish) {
+        return {
+          supported: false,
+          detail: `${modelId} answered without calling the required read tool`,
+          sessionId: session.id,
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+    }
+    return {
+      supported: false,
+      detail: `${modelId} did not call a build tool within ${browserCapabilityProbeTimeoutMs / 1000} seconds`,
+      sessionId: session.id,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } finally {
+    try {
+      await abortAgentSession(session.id);
+    } catch {
+      // The probe session may already have finished; it has no write authority.
+    }
+  }
 }
 
 export async function sendAgentPrompt({
@@ -56,6 +247,7 @@ export async function sendAgentPrompt({
   text,
   providerId,
   modelId,
+  agentName,
   noReply = false,
   background = false,
   comfyUiEndpoint,
@@ -66,18 +258,60 @@ export async function sendAgentPrompt({
   text: string;
   providerId: string;
   modelId: string;
+  agentName: "drive16-build" | "drive16-repair";
   noReply?: boolean;
   background?: boolean;
   comfyUiEndpoint?: string;
   comfyUiCheckpoint?: string;
   comfyUiLora?: string;
 }): Promise<AgentSendResult> {
+  if (!isTauriRuntime()) {
+    const session = sessionId
+      ? { id: sessionId }
+      : await requireJson<{ id: string }>(
+          await fetch(`${browserOpenCodeBase}/session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: "Drive16 browser build" }),
+          }),
+          "Create agent session",
+        );
+    const stamp = Date.now().toString(36);
+    const messageId = `msg_drive16_${stamp}`;
+    const partId = `prt_drive16_${stamp}`;
+    const response = await fetch(
+      `${browserOpenCodeBase}/session/${session.id}/prompt_async`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageID: messageId,
+          agent: agentName,
+          model: { providerID: providerId, modelID: modelId },
+          parts: [{ id: partId, type: "text", text }],
+        }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Agent request failed with HTTP ${response.status}`);
+    }
+    return {
+      sessionId: session.id,
+      messageId,
+      partId,
+      state: "ready",
+      detail: "OpenCode agent request started in the background",
+      replyText: null,
+      finish: null,
+    };
+  }
   return invoke<AgentSendResult>("send_opencode_message", {
     request: {
       sessionId,
       text,
       providerId,
       modelId,
+      agentName,
       noReply,
       background,
       comfyUiEndpoint,
@@ -97,6 +331,28 @@ export async function setAgentProviderKey(
   providerId: string,
   apiKey: string,
 ): Promise<AgentAuthResult> {
+  if (!isTauriRuntime()) {
+    await requireJson(
+      await fetch(`${browserOpenCodeBase}/auth/${providerId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "api", key: apiKey }),
+      }),
+      "Save agent key",
+    );
+    const providers = await requireJson<{ connected?: string[] }>(
+      await fetch(`${browserOpenCodeBase}/provider`),
+      "Agent provider check",
+    );
+    const connected = providers.connected?.includes(providerId) ?? false;
+    return {
+      connected,
+      restarted: false,
+      detail: connected
+        ? `${providerId} is connected`
+        : `${providerId} key was saved, but the provider is not active yet`,
+    };
+  }
   return invoke<AgentAuthResult>("set_opencode_auth", {
     request: { providerId, apiKey },
   });
@@ -105,6 +361,8 @@ export async function setAgentProviderKey(
 export type AgentPromptContext = {
   spriteGeneration: boolean;
   musicGeneration: boolean;
+  seededPrototypeBuilt: boolean;
+  repairMode: boolean;
   comfyUiEndpoint: string;
   comfyUiCheckpoint: string;
   comfyUiLora: string;
@@ -119,8 +377,10 @@ export function agentPromptWithProject(
 ): string {
   const contextLines = context
     ? [
-        `AI sprites: ${context.spriteGeneration ? "enabled" : "disabled"}`,
-        `MML music: ${context.musicGeneration ? "enabled" : "disabled"}`,
+      `AI sprites: ${context.spriteGeneration ? "enabled" : "disabled"}`,
+      `MML music: ${context.musicGeneration ? "enabled" : "disabled"}`,
+      `Seeded prototype already built: ${context.seededPrototypeBuilt ? "yes" : "no"}`,
+      `Pass kind: ${context.repairMode ? "targeted repair" : "implementation"}`,
         `ComfyUI endpoint: ${context.comfyUiEndpoint || "not configured"}`,
         `ComfyUI checkpoint: ${context.comfyUiCheckpoint || "not configured"}`,
         `ComfyUI LoRA: ${context.comfyUiLora || "not configured"}`,
@@ -129,15 +389,73 @@ export function agentPromptWithProject(
         }`,
       ]
     : [];
-  const spriteFallbackLines =
-    context?.spriteGeneration && context.comfyUiState !== "ready"
-      ? [
-          "Sprite fallback:",
-          "- AI sprites are enabled, but ComfyUI is not ready.",
-          "- Do not claim ComfyUI-generated sprites were used.",
-          "- Use primitive/manual Genesis-safe graphics for this turn and record the fallback in ASSETS.md.",
-        ].join("\n")
-      : "";
+  const spriteRequirementLines = context?.spriteGeneration
+    ? [
+        "AI sprite requirement:",
+        "- AI sprites are enabled. The final game must not remain a primitive-only prototype.",
+        "- App-side ComfyUI readiness can be unknown in browser preview; test the drive16-comfyui tool itself before deciding it is unavailable.",
+        "- After the first playable build, generate and wire separate Genesis-safe sprites for at least two primary visual roles. Do not reuse one image for unrelated roles.",
+        "- Record each generated file, SGDK symbol, role, and Used status in ASSETS.md.",
+        "- If ComfyUI genuinely fails, record the exact tool failure and mark the visual enhancement incomplete. Never silently call primitive fallback a completed AI-sprite build.",
+      ].join("\n")
+    : [
+        "AI sprites are disabled. Use deliberate Genesis-safe tiles, panels, palette contrast, and recognizable silhouettes; do not present scattered solid blocks as finished art.",
+      ].join("\n");
+  const seededPrototypeInstruction = context?.seededPrototypeBuilt
+    ? [
+        "Seeded prototype boundary:",
+        "- Drive16 already built and tested the seeded scaffold before this model call.",
+        "- Do not copy a Makefile, rebuild the unchanged seed, or spend tool steps re-proving the baseline.",
+        "- Read the project memory and src/main.c once, then make a concrete source or resource edit before the first build_rom call.",
+        "- The seed is hidden scaffolding, not the requested implementation result.",
+      ].join("\n")
+    : "No seeded prototype was pre-built; create the requested implementation before building.";
+  const repairInstruction = context?.repairMode
+    ? [
+        "Targeted repair boundary:",
+        "- This is the single permitted repair pass after a specific failed check.",
+        "- Fix the failure named in the user request without broad discovery or unchanged rebuilds.",
+        "- If the fix cannot be completed in this pass, stop and report the exact blocker.",
+      ].join("\n")
+    : "This is the single bounded implementation pass; do not start an internal repair loop.";
+  const musicRequirementLines = context?.musicGeneration
+    ? [
+        "Original music requirement:",
+        "- Original music is enabled. A seeded VGM is baseline scaffolding, not the finished requested soundtrack.",
+        "- Compose and wire a new genre-appropriate MML arrangement unless the user explicitly asks to retain the seed music.",
+        "- Use at least five active parts with contrasting bass, lead, harmony/pad, counterline or arpeggio, and percussion; use at least four instruments.",
+        "- Write a recognizable A/B phrase with rhythmic and melodic variation and a repeating section at least sixteen seconds long; do not submit a single repeated arpeggio.",
+        "- Require compile_music quality.pass, rebuild with the new VGM/XGM resource, and verify non-silent audio.",
+      ].join("\n")
+    : "Original music is disabled. Reuse a verified seeded VGM when available instead of composing replacement music.";
+
+  const simpleGameBuild =
+    /\b(simple|basic)\b/i.test(userText) &&
+    /\b(game|snake|pong|tetris|asteroids?|breakout|missile command|shooter|platformer)\b/i.test(
+      userText,
+    );
+  if (simpleGameBuild) {
+    return [
+      `Active Drive16 project: ${projectPath}`,
+      [
+        "Build this small Genesis game now. Do not make a todo list and do not spend a turn planning.",
+        "Start by reading GAME.md, ASSETS.md, PLAYTEST.md, and src/main.c. Then edit the game source.",
+        "If the folder contains a different game, replace its gameplay rather than preserving the old design.",
+        "Keep the first playable version compact, but hold it to a Genesis presentation bar: structured playfield, palette depth, readable UI, and recognizable object silhouettes.",
+        "Build after the source edit. Then complete the enabled sprite/music requirements, rebuild, run the ROM, verify the screen, test representative controls, and verify non-silent audio because sound was requested.",
+        "This is one bounded implementation pass. If a build or check fails, stop and record the exact failure; do not start a second model repair inside this call.",
+        "Do not award Playable or Reviewed. Record a Built or Prototype stage and leave semantic review to Drive16 after the call.",
+      ].join("\n"),
+      contextLines.length ? `Drive16 settings:\n${contextLines.join("\n")}` : "",
+      seededPrototypeInstruction,
+      repairInstruction,
+      spriteRequirementLines,
+      musicRequirementLines,
+      `User request: ${userText}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
 
   return [
     `Active Drive16 project: ${projectPath}`,
@@ -153,17 +471,17 @@ export function agentPromptWithProject(
     [
       "Verification contract:",
       "- Do not call the game done or playable just because out/rom.bin exists.",
+      "- This model call may produce Built or Prototype only. Never write Project stage: PLAYABLE or Project stage: REVIEWED; Drive16 owns those later gates.",
       "- Never claim out/rom.bin is built unless build_rom succeeded after the final source/resource edit.",
       "- Never write Known Issues: none unless PLAYTEST.md passes with evidence.",
       "- Never claim audio was omitted unless the user explicitly requested no audio; failed, skipped, timed-out, or silent audio keeps the gate failed.",
-      "- For a simple generated game, after reading GAME.md, ASSETS.md, PLAYTEST.md, and src/main.c, edit src/main.c before any more inspection only when the project is still blank; if a seeded starter is already present, build and test it first.",
+      "- For a simple generated game, follow the Seeded prototype boundary below; never spend this model pass rebuilding a scaffold Drive16 already proved.",
       "- Do not use todo-list tools for simple generated games; make one compact first implementation, then build.",
       "- Keep the first implementation small: no decorative custom tile arrays, no generated-art wiring, and no extra systems before the first successful build_rom.",
       "- Do not read README.md, Makefile, src/boot/*, or res/resources.* unless the build fails or you are actually adding resource assets/music.",
       "- When reading or globbing active project files, use absolute paths under the Active Drive16 project; do not use repo-root relative globs like res/* for audit projects.",
       "- Build after the final code/resource edit; an older out/rom.bin is stale evidence.",
       "- Build the core playable game before optional music unless the user specifically asked for music first.",
-      "- If src/main.c already contains a simple seeded starter for the requested game, build and test it before rewriting it or polishing docs.",
       "- Use only SGDK APIs that are present in the starter or local examples, or query drive16-rag first.",
       "- Do not use VDP_drawRect, srand, or C library rand(); for blocky graphics, load solid 8x8 tiles and draw cells with VDP_fillTileMapRect.",
       "- For simple Snake prompts, use examples/game-skeletons/snake-basic/ as the first code/audio shape when available; copy/adapt its src/main.c and res/ files before docs updates, then build.",
@@ -171,7 +489,7 @@ export function agentPromptWithProject(
       "- For simple Tetris prompts, use examples/game-skeletons/tetris-basic/ as the first code/audio shape when available; copy/adapt its src/main.c and res/ files before docs updates, then build.",
       "- Build the ROM, run it, call verify_screen, test input, and capture audio when sound is expected.",
       "- Immediately after build_rom succeeds, do not inspect or rewrite docs; run_rom, verify_screen, send_input with lowercase p1_buttons such as [\"right\"], run_rom with use_input_script true, capture_frame again, send_input with p1_buttons [\"start\"] when restart applies, then verify_audio if sound is expected.",
-      "- verify_screen must pass before Playability gate: PASS. If it rejects sparse composition, flat color, or weak scene structure, repair the game and run it once more; a second failure keeps the gate failed.",
+      "- verify_screen is a low-level diagnostic, not authority to write Playability gate: PASS. If it rejects the screen, record the failure and stop this bounded pass without retrying.",
       "- Never use raw VRAM tile numbers as art. Load custom tile data with a proven SGDK API or reuse a validated skeleton that already does so.",
       "- Pause checks must prove both pause and resume. Do not guard all input with `if (paused) return` before checking Start, because that makes resume impossible.",
       "- Edge-trigger Start, rotate, and action buttons; held D-pad movement may use deliberate repeat timing, but must not move once per frame.",
@@ -185,11 +503,16 @@ export function agentPromptWithProject(
       "- If Known Issues lists limitations, do not write Next Intended Change: none.",
       "- Before compiling MML music, read or query corpus/mml/ctrmml-megadrive.md; if two compile attempts fail, record audio as failed and finish the gameplay checks.",
       "- The two-attempt MML cap is strict; do not call compile_music a third time in the same turn.",
-      "- If a seeded starter already includes a VGM/XGM resource, use it and verify audio; do not compile replacement music.",
+      context?.musicGeneration
+        ? "- Original music is enabled: replace seeded VGM/XGM scaffolding with the new compiled arrangement and verify it."
+        : "- Original music is disabled: reuse a verified seeded VGM/XGM resource instead of composing a replacement.",
       "- If any screen, input, or audio check is missing or failed, say the playability gate failed and explain why.",
     ].join("\n"),
     contextLines.length ? `Drive16 settings:\n${contextLines.join("\n")}` : "",
-    spriteFallbackLines,
+    seededPrototypeInstruction,
+    repairInstruction,
+    spriteRequirementLines,
+    musicRequirementLines,
     userText,
   ]
     .filter(Boolean)
@@ -392,8 +715,8 @@ function toolActivity(
   }
   if (normalized.includes("capture_frame")) {
     return {
-      eventType: failed ? "agent.screenshot.failed" : completed ? "agent.screenshot.checked" : "agent.screenshot.checking",
-      label: failed ? "Screenshot check failed" : completed ? "Screenshot checked" : "Checking screenshot",
+      eventType: failed ? "agent.screenshot.failed" : completed ? "agent.screenshot.captured" : "agent.screenshot.capturing",
+      label: failed ? "Screenshot capture failed" : completed ? "Screenshot captured" : "Capturing screenshot",
       detail,
     };
   }

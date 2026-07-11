@@ -30,6 +30,8 @@ static u8 lines;
 static u8 score;
 static u16 frame_counter;
 static u16 previous_joy;
+static bool started;
+static bool paused;
 static bool game_over;
 static bool presentation_ready;
 
@@ -150,20 +152,30 @@ static void draw_stats(void)
     draw_abs(24, 8, score_text);
     draw_abs(24, 11, "UP/A ROTATE");
     draw_abs(24, 13, "D-PAD MOVE");
-    draw_abs(24, 15, "START RESET");
+    draw_abs(24, 15, "C PAUSE");
+    draw_abs(24, 17, "START RESET");
+}
+
+static void draw_title(void)
+{
+    VDP_fillTileMapRect(BG_A, 0, FIELD_X + 1, FIELD_Y + 1, FIELD_W, FIELD_H);
+    VDP_fillTileMapRect(BG_A, 0, 23, 5, 15, 20);
+    draw_abs(13, 9, "TETRIS");
+    draw_abs(10, 12, "CLEAR LINES");
+    draw_abs(10, 16, "PRESS START");
 }
 
 static void draw_next_piece(void)
 {
     const u8 next_type = piece_sequence[piece_index % (sizeof(piece_sequence) / sizeof(piece_sequence[0]))];
-    draw_abs(24, 18, "NEXT");
+    draw_abs(24, 19, "NEXT");
     for (s16 y = 0; y < 4; y++)
     {
         for (s16 x = 0; x < 4; x++)
         {
             if (piece_cell(next_type, 0, x, y))
             {
-                VDP_setTileMapXY(BG_A, art_tile(piece_palette(next_type), TILE_INSET), (u16)(25 + x), (u16)(20 + y));
+                VDP_setTileMapXY(BG_A, art_tile(piece_palette(next_type), TILE_INSET), (u16)(25 + x), (u16)(21 + y));
             }
         }
     }
@@ -340,6 +352,7 @@ static void reset_game(void)
     score = 0;
     piece_index = 0;
     previous_joy = 0;
+    paused = FALSE;
     game_over = FALSE;
     spawn_piece();
     render();
@@ -350,6 +363,24 @@ static void read_input(void)
     const u16 joy = JOY_readJoypad(JOY_1);
     const u16 pressed = joy & ~previous_joy;
 
+    if (!started)
+    {
+        if (pressed & BUTTON_START)
+        {
+            started = TRUE;
+            reset_game();
+        }
+        previous_joy = joy;
+        return;
+    }
+
+    if ((pressed & BUTTON_C) && !game_over)
+    {
+        paused = !paused;
+        render();
+        if (paused) draw_field(2, 8, "PAUSED");
+    }
+
     if (pressed & BUTTON_START)
     {
         reset_game();
@@ -357,7 +388,7 @@ static void read_input(void)
         return;
     }
 
-    if (!game_over)
+    if (!game_over && !paused)
     {
         if ((pressed & BUTTON_LEFT) && can_place(piece_x - 1, piece_y, piece_rot))
         {
@@ -405,16 +436,22 @@ int main(bool hardReset)
     XGM_startPlay(tetris_loop);
 
     reset_game();
+    started = FALSE;
+    SYS_doVBlankProcess();
+    draw_title();
 
     while (TRUE)
     {
         read_input();
-        frame_counter++;
-        const u16 drop_limit = (JOY_readJoypad(JOY_1) & BUTTON_DOWN) ? FAST_DROP_FRAMES : DROP_FRAMES;
-        if (frame_counter >= drop_limit)
+        if (started && !paused && !game_over)
         {
-            frame_counter = 0;
-            step_piece();
+            frame_counter++;
+            const u16 drop_limit = (JOY_readJoypad(JOY_1) & BUTTON_DOWN) ? FAST_DROP_FRAMES : DROP_FRAMES;
+            if (frame_counter >= drop_limit)
+            {
+                frame_counter = 0;
+                step_piece();
+            }
         }
         SYS_doVBlankProcess();
     }
