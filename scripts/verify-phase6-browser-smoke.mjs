@@ -582,7 +582,7 @@ async function main() {
         throw new Error(`Project menu is missing ${expectedAction}`);
       }
     }
-    if (!/Set Up Play|Replace Play Core/i.test(states.projectMenu)) {
+    if (!/Set Up Play|Use Local Core|Replace Play Core/i.test(states.projectMenu)) {
       throw new Error("Project menu is missing the Play core setup action.");
     }
     if (!/Asset roles|ASSETS\.md/i.test(states.projectMenu)) {
@@ -732,15 +732,19 @@ async function main() {
 
     await page.getByTestId("play-active-rom").click();
     await page.waitForFunction(() => {
+      const play = document.querySelector('[data-testid="play-active-rom"]')?.textContent ?? "";
       const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-      return /Player ready|Play setup failed|Play setup needed/i.test(feedback);
+      return /Playing/i.test(play) || /Play setup failed|Play setup needed/i.test(feedback);
     });
     states.playFeedback = await visibleText(page, "rom-action-feedback");
+    states.playButton = await visibleText(page, "play-active-rom");
     if (
       canCoreStatusPlay(args.coreStatus, args.userCorePath) &&
-      !/Player ready/i.test(states.playFeedback ?? "")
+      !/Playing/i.test(states.playButton ?? "")
     ) {
-      throw new Error(`Interactive Play did not start: ${states.playFeedback}`);
+      throw new Error(
+        `Interactive Play did not start: button=${states.playButton}; feedback=${states.playFeedback}`,
+      );
     }
     if (
       !canCoreStatusPlay(args.coreStatus, args.userCorePath) &&
@@ -751,19 +755,50 @@ async function main() {
 
     if (canCoreStatusPlay(args.coreStatus, args.userCorePath)) {
       states.activePlayerTruthSurface = await playerTruthSurface(page);
-      if (states.activePlayerTruthSurface.volumeSliderValue !== "40") {
+      if (states.activePlayerTruthSurface.volumeSliderValue !== "60") {
         throw new Error(
-          `Interactive Play should start at the audible default of 40%, saw ${states.activePlayerTruthSurface.volumeSliderValue}%.`,
+          `Interactive Play should preserve the 60% saved level, saw ${states.activePlayerTruthSurface.volumeSliderValue}%.`,
         );
       }
       if (states.activePlayerTruthSurface.volumeSliderDisabled !== false) {
         throw new Error("Interactive Play volume slider should be enabled for deliberate user opt-in.");
       }
-      if (!/Volume 40%/i.test(states.activePlayerTruthSurface.audioButtonText)) {
+      if (states.activePlayerTruthSurface.audioButtonText !== "Muted") {
         throw new Error(
-          `Interactive Play should expose the 40% sound default, saw ${states.activePlayerTruthSurface.audioButtonText}.`,
+          `Interactive Play should start muted, saw ${states.activePlayerTruthSurface.audioButtonText}.`,
         );
       }
+
+      const audioLayoutBefore = await playerAudioControlLayout(page);
+      await page.getByTestId("player-audio-toggle").click();
+      await page.waitForFunction(() => {
+        return document.querySelector('[data-testid="player-audio-toggle"]')?.textContent?.trim() === "On";
+      });
+      await page.waitForTimeout(600);
+      const audioLayoutEnabled = await playerAudioControlLayout(page);
+      if (audioLayoutEnabled.label !== "On" || audioLayoutEnabled.volume !== "60") {
+        throw new Error(
+          `Sound did not preserve the saved level while enabling: ${JSON.stringify(audioLayoutEnabled)}`,
+        );
+      }
+
+      await page.getByTestId("player-audio-toggle").click();
+      await page.waitForFunction(() => {
+        return document.querySelector('[data-testid="player-audio-toggle"]')?.textContent?.trim() === "Muted";
+      });
+      const audioLayoutMuted = await playerAudioControlLayout(page);
+      if (audioLayoutMuted.volume !== "60") {
+        throw new Error(
+          `Muting changed the saved volume level: ${JSON.stringify(audioLayoutMuted)}`,
+        );
+      }
+      assertStablePlayerAudioLayout(audioLayoutBefore, audioLayoutEnabled, "enable sound");
+      assertStablePlayerAudioLayout(audioLayoutBefore, audioLayoutMuted, "mute sound");
+      states.playerAudioTransition = {
+        initial: audioLayoutBefore,
+        enabled: audioLayoutEnabled,
+        muted: audioLayoutMuted,
+      };
 
       await page.getByTestId("pause-player").click();
       await page.waitForFunction(() => {
@@ -772,7 +807,7 @@ async function main() {
       });
       states.pauseFeedback = await visibleText(page, "rom-action-feedback");
 
-      await page.getByTestId("play-active-rom").click();
+      await page.getByTestId("pause-player").click();
       await page.waitForFunction(() => {
         const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
         return /resumed/i.test(feedback);
@@ -781,10 +816,10 @@ async function main() {
 
       await page.getByTestId("reset-player").click();
       await page.waitForFunction(() => {
-        const feedback = document.querySelector('[data-testid="rom-action-feedback"]')?.textContent ?? "";
-        return /Player ready|Play setup failed|Play setup needed/i.test(feedback);
+        const rawLog = document.querySelector('[data-testid="chat-raw-log"]')?.textContent ?? "";
+        return /player\.restarted|player\.restart\.(unavailable|failed)/i.test(rawLog);
       });
-      states.restartFeedback = await visibleText(page, "rom-action-feedback");
+      states.restartFeedback = await visibleText(page, "chat-raw-log");
 
       await page.getByTestId("stop-player").click();
       await page.waitForFunction(() => {
@@ -905,6 +940,45 @@ async function main() {
 
 function canCoreStatusPlay(coreStatus, userCorePath) {
   return Boolean(userCorePath) || coreStatus === "dev-only";
+}
+
+async function playerAudioControlLayout(page) {
+  return page.evaluate(() => {
+    const rect = (testId) => {
+      const element = document.querySelector(`[data-testid="${testId}"]`);
+      if (!(element instanceof HTMLElement)) return undefined;
+      const bounds = element.getBoundingClientRect();
+      return {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+      };
+    };
+    const volume = document.querySelector('[data-testid="player-volume-slider"]');
+    return {
+      label: document.querySelector('[data-testid="player-audio-toggle"]')?.textContent?.trim() ?? "",
+      volume: volume instanceof HTMLInputElement ? volume.value : undefined,
+      sound: rect("player-audio-toggle"),
+      slider: rect("player-volume-slider"),
+      controls: rect("open-controls"),
+    };
+  });
+}
+
+function assertStablePlayerAudioLayout(before, after, action) {
+  for (const control of ["sound", "slider", "controls"]) {
+    if (!before[control] || !after[control]) {
+      throw new Error(`Could not measure ${control} while checking ${action}.`);
+    }
+    for (const dimension of ["x", "y", "width", "height"]) {
+      if (Math.abs(before[control][dimension] - after[control][dimension]) > 0.5) {
+        throw new Error(
+          `${action} shifted ${control} ${dimension}: ${before[control][dimension]} -> ${after[control][dimension]}`,
+        );
+      }
+    }
+  }
 }
 
 async function screenshot(page, outDir, screenshots, name) {
