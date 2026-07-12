@@ -1,5 +1,25 @@
 # Drive16 Pipeline Hardening Handoff — 2026-07-11
 
+## 2026-07-12 local resume update
+
+The unresolved browser sound-state check is now closed without OpenRouter:
+
+- A fresh streamed-core session proved `Muted -> On -> Muted` while preserving
+  the saved `60%` level.
+- The sound button, volume slider, and Controls button retained identical
+  positions and dimensions through both transitions.
+- The playable-core Phase 6 smoke now records this transition, resumes through
+  the visible Resume control, and checks restart outcomes through their raw
+  events without hiding the higher-priority project trust stage.
+- `pnpm --dir app build`, project-memory verification, and the full
+  `dev-only` browser smoke pass. Evidence is in
+  `artifacts/phase6/verify-loop/browser-smoke/browser-smoke.json`.
+
+Resume with the remaining Asteroids-specific restart and ordinary-user review
+steps below. Keep the packaged WKWebView black canvas, Docker amd64 container
+startup, and the 28-step ComfyUI timeout as separate environment/product
+blockers; none invalidates the completed browser sound-state proof.
+
 ## Why work is paused
 
 The six-phase trust, player, verification, starter, OpenRouter, and browser E2E goal is paused by user request. The goal is not complete and the current Asteroids project must remain `PLAYABLE`, not `REVIEWED`.
