@@ -304,7 +304,15 @@ Accept:
 
 ## G10 — End-to-end re-measurement (close the loop)
 
-Status: todo
+Status: done — 2026-07-16. Results appended to the audit doc (§8):
+fixed overhead 57,558 → **18,803** tokens (target ≤20k ✅); fresh Pong build
+27.8 → **12.3 min** (target ≤15 ✅); iteration probe 9m53s → **3m06s**
+(target ≤5 min ✅); Pong input tokens 1.66M → **894,710** (target ≤600k
+missed — the richer run used 27 steps; ratio still halved to 139:1). The
+re-measurement also caught and fixed a regression: the harness prompt's
+long-standing `expect_gate pass` instruction contradicted builder gate
+ownership and let the model award itself `Playability gate: PASS`; the
+prompt now audits with `expect_gate fail` and states that Drive16 owns PASS.
 
 Why: prove the P0 batch moved the numbers that define the product experience.
 

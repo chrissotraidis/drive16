@@ -319,3 +319,33 @@ real build agent.
   user-visible warning (see P0).
 - 8 stray `opencode serve` processes accumulated on this machine; the app's
   port-collision logic works but nothing reaps orphans.
+
+---
+
+## 8. Post-remediation results (same day)
+
+The goal loop in `docs/2026-07-16-remediation-plan.md` (G1–G9, branch
+`audit/2026-07-16-remediation`) was completed and re-measured with the same
+local model and machine:
+
+| Metric | Baseline (this audit) | After G1–G9 | Target | Result |
+|---|---|---|---|---|
+| Fixed prompt overhead (trivial run) | 57,558 tokens | **18,803 tokens** | ≤20k | **−67%** ✅ |
+| Fresh Pong build via harness (local Qwen) | 27.8 min | **12.3 min** (740 s, 27 steps) | ≤15 min | **−56%** ✅ |
+| Pong build input tokens | 1,660,084 | **894,710** | ≤600k | −46% ✖ (missed: the richer run — sprite skeleton, memory-audit repair loop — used 27 steps vs 23) |
+| Input:output token ratio | 311:1 | **139:1** | — | halved |
+| Iteration ("paddles twice as tall", repair agent) | 9 m 53 s | **3 m 06 s** (14 steps, 352k in) | ≤5 min | **−69%** ✅ |
+| Run evidence checks | 10/11 | 11/11 mechanical checks green | — | see caveat |
+
+Caveat found by the re-measurement itself: the harness prompt had always
+instructed `audit_project_memory` with `expect_gate pass`, contradicting the
+builder rule that Drive16 owns `Playability gate: PASS`; the leaner G8 prompt
+made the model follow that instruction literally and award itself the gate.
+Fixed in the same pass (`expect_gate fail` + explicit ownership line), so
+builder runs again cap at Built/FAIL pending independent review. The
+underlying evidence in that run was real and trace-backed either way.
+
+Also validated incidentally: an in-app browser build on the Ollama provider
+ran end-to-end to a clean finish (32 tool calls), and the G3 classifier now
+treats "make a simple pong game" over an existing Pong as an iteration
+instead of a project reset.

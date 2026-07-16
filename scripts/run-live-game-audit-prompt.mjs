@@ -264,7 +264,7 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
     "- Every final gameplay capture must come from a run_rom call of at least 180 frames; short reset captures can catch an unfinished tile queue and are not valid visual evidence.",
     "- For audio checks after movement tests, call verify_audio with use_input_script false unless the sound specifically requires held input.",
     "- Drive16 stamps the mechanical evidence rows (input, restart, frames, non-silent audio, fresh build) into PLAYTEST.md from the tool trace after the run; spend your ## Evidence bullets on gameplay observations only you can make, and complete an exact ## Quality Review section with specific observations for Screen composition, Player feedback, Restart clarity, Audio response, and Style coherence.",
-    "- After updating all three project-memory files, call drive16-sgdk-build.audit_project_memory with expect_gate pass. Repair its exact issues and audit once more before finishing; if it still fails, keep the gate failed.",
+    "- After updating all three project-memory files, call drive16-sgdk-build.audit_project_memory with expect_gate fail. Repair any unsupported claims it lists and audit once more before finishing. The builder never writes Playability gate: PASS — that gate belongs to Drive16's independent review.",
     "- If Known Issues lists limitations, do not write Next Intended Change: none.",
     "- Do not call the game done or playable unless compile, screen, input, restart/basic gameplay, asset ledger, and audio evidence pass.",
     "",
