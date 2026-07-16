@@ -79,41 +79,6 @@ const firstBuildSkeletons = {
 // Contract paths: examples/game-skeletons/snake-basic and examples/game-skeletons/pong-basic.
 // Extra seed paths: examples/game-skeletons/tetris-basic and examples/game-skeletons/asteroids-basic.
 
-const genreEvidencePhrases = {
-  snake: [
-    "score starts at 0",
-    "snake and food visible",
-    "D-pad movement visible",
-    "food can be approached or eaten",
-    "collision fail state checked",
-    "restart checked",
-  ],
-  pong: [
-    "paddles and ball visible",
-    "paddle input tested",
-    "ball travels and bounces",
-    "scoring changes",
-    "serve or point restart visible",
-  ],
-  tetris: [
-    "playfield and score/line state readable",
-    "piece spawns visibly",
-    "left/right/down movement works",
-    "rotation works",
-    "pieces lock into grid",
-    "line clear or stacking present",
-    "game-over possible",
-  ],
-  asteroids: [
-    "ship, asteroids, and shots visible",
-    "rotation or thrust changes ship",
-    "firing creates moving projectile",
-    "asteroids move or wrap",
-    "collisions/destruction affect state",
-    "restart after death/game-over works",
-  ],
-};
-
 function parseArgs(argv) {
   const args = {
     prompt: "snake-basic",
@@ -286,7 +251,6 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
           "- Copy/adapt its src/main.c and res/ files into the active project before any docs update, then build_rom.",
         ]
       : [];
-  const evidencePhrases = genreEvidencePhrases[prompt.genre] ?? [];
 
   return [
     `Drive16 live generated-game audit prompt: ${prompt.id}`,
@@ -295,36 +259,12 @@ function promptText({ prompt, projectPath, readiness, firstBuildSeed }) {
     "",
     `User request: ${prompt.text}`,
     "",
-    "Required audit flow:",
-    "- Before editing, read GAME.md, ASSETS.md, and PLAYTEST.md in the project.",
-    "- Do not spend the run polishing project docs before gameplay exists.",
-    "- Early ASSETS.md planning rows are allowed, but they must say Planned/Pending until code, build, and verification evidence exist.",
-    "- Never claim out/rom.bin is built, never write Known Issues: none, and never claim audio was omitted unless the user explicitly requested no audio.",
-    "- For this simple generated-game audit, after reading GAME.md, ASSETS.md, PLAYTEST.md, and src/main.c, edit src/main.c before any more inspection only when the project is still blank; if a seeded starter is already present, build and test it first.",
-    "- Do not use todo-list tools for this simple audit; make one compact first implementation, then build.",
-    "- Keep the first implementation small: no decorative custom tile arrays, no generated-art wiring, and no extra systems before the first successful build_rom.",
-    "- Do not read README.md, Makefile, src/boot/*, or res/resources.* unless the build fails or you are actually adding resource assets/music.",
-    "- When reading or globbing active project files, use absolute paths under the Active Drive16 project; do not use repo-root relative globs like res/* for audit projects.",
-    "- Build the core playable game before optional music unless the request specifically asks for music first.",
-    "- Use only SGDK APIs that are present in the starter or local examples, or query drive16-rag before using them.",
-    "- Do not use VDP_drawRect, srand, or C library rand(); for blocky graphics, load solid 8x8 tiles and draw cells with VDP_fillTileMapRect.",
-    "- Build after the final code/resource edit; an older out/rom.bin is stale evidence.",
-    "- Immediately after a successful build_rom, do not inspect or rewrite docs; run_rom, capture_frame, send_input with reset true and lowercase p1_buttons such as [\"right\"], then make a separate send_input call with p1_buttons [\"start\"] when restart applies, run_rom with use_input_script true, capture_frame again, then verify_audio if sound is expected.",
+    "Required audit flow (your builder instructions apply; these are the run-specific rules):",
+    "- If a seeded starter is already present, build and test it first; only edit src/main.c immediately when the project is still blank.",
     "- Every final gameplay capture must come from a run_rom call of at least 180 frames; short reset captures can catch an unfinished tile queue and are not valid visual evidence.",
-    "- Valid send_input button names are lowercase: left, right, up, down, start, a, b, c, x, y, z, mode. Do not use SGDK constants like BUTTON_RIGHT.",
-    "- Run the ROM, capture a frame, test input, test restart/start behavior when relevant, and verify audio or record why audio was explicitly disabled.",
-    "- Use drive16-emulator.verify_audio for audio proof when sound is expected.",
     "- For audio checks after movement tests, call verify_audio with use_input_script false unless the sound specifically requires held input.",
-    "- If MML compilation fails twice, stop trying music for this turn, record audio as failed, and finish gameplay verification.",
-    "- Update GAME.md, ASSETS.md, and PLAYTEST.md with evidence and remaining issues.",
-    "- In PLAYTEST.md, complete an exact ## Quality Review section with specific observations for Screen composition, Player feedback, Restart clarity, Audio response, and Style coherence. Pending or generic praise cannot pass.",
-    evidencePhrases.length
-      ? `- In PLAYTEST.md, use an exact ## Evidence section and include the exact ${prompt.genre} evidence phrases when passing: ${evidencePhrases.join(", ")}.`
-      : "- In PLAYTEST.md, use an exact ## Evidence section and include the relevant genre evidence phrases when passing.",
-    "- In ASSETS.md, primitive text/tile rows should use the code path or drawing function in Symbol / File, such as `src/main.c draw_piece()`, not only a shared character like `#`.",
-    "- If one primitive glyph or helper is reused across multiple roles, explicitly say the shared primitive reuse is intentional in each affected row.",
-    "- In ASSETS.md, every music/sound row must record the resource symbol/file and the phrase captured non-silent audio evidence when verify_audio succeeds.",
-    "- After updating all three project-memory files, call drive16-sgdk-build.audit_project_memory with expect_gate pass. Repair its exact issues and audit once more before finishing; if it still fails, keep the gate failed.",
+    "- Drive16 stamps the mechanical evidence rows (input, restart, frames, non-silent audio, fresh build) into PLAYTEST.md from the tool trace after the run; spend your ## Evidence bullets on gameplay observations only you can make, and complete an exact ## Quality Review section with specific observations for Screen composition, Player feedback, Restart clarity, Audio response, and Style coherence.",
+    "- After updating all three project-memory files, call drive16-sgdk-build.audit_project_memory with expect_gate fail. Repair any unsupported claims it lists and audit once more before finishing. The builder never writes Playability gate: PASS — that gate belongs to Drive16's independent review.",
     "- If Known Issues lists limitations, do not write Next Intended Change: none.",
     "- Do not call the game done or playable unless compile, screen, input, restart/basic gameplay, asset ledger, and audio evidence pass.",
     "",
@@ -839,6 +779,22 @@ async function main() {
       timeoutSeconds: args.timeoutSeconds,
       appendTrace: resuming,
     });
+  }
+
+  if (args.runAgent) {
+    // Stamp trace-proven evidence into the project memory before the audits,
+    // so the model's budget goes to gameplay instead of ledger mechanics.
+    try {
+      await runCommand(
+        "node",
+        ["scripts/generate-project-memory.mjs", "--run", runPath, "--write"],
+        { timeout: 60000 },
+      );
+    } catch (error) {
+      console.warn(
+        `Project-memory generator failed: ${compact(`${error.stdout ?? ""}\n${error.stderr ?? ""}`) || error.message}`,
+      );
+    }
   }
 
   const existingScreenshotPath = path.join(runPath, "evidence", "last-frame.png");

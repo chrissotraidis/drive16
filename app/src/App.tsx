@@ -9,6 +9,17 @@ import {
   sendOpenRouterFreeformReply,
 } from "./agent/openrouter";
 import {
+  classifyAgentIntent,
+  looksLikeBuildPrompt,
+  mentionsKnownGameShape,
+  shouldPreserveActiveProject,
+} from "./agent/promptIntent";
+import {
+  agentIdleLimitMs,
+  agentRunHardLimitMs,
+  agentWatchdogVerdict,
+} from "./agent/watchdog";
+import {
   abortAgentSession,
   agentActivityFromEvent,
   agentPromptWithProject,
@@ -114,10 +125,10 @@ type PendingAgentRun = {
   sawAiSpriteFailed?: boolean;
   musicCompileAttempts?: number;
   waitingTimer?: number;
-  stallTimer?: number;
+  watchdogTimer?: number;
+  lastActivityAt?: number;
   backgroundErrorTimer?: number;
   projectRefreshTimer?: number;
-  hardStopTimer?: number;
   hardLimitMs?: number;
   baselineRomExists?: boolean;
   adoptedFreshRom?: boolean;
@@ -482,7 +493,8 @@ const openCodeHeartbeatTimeoutMs = 15_000;
 // ComfyUI generation plus one source edit/build cycle regularly exceeds three
 // minutes even when the bounded model is making progress. Keep a hard stop,
 // but do not abort an active implementation before it reaches the build step.
-const agentRunHardLimitMs = 5 * 60_000;
+// Watchdog limits live in ./agent/watchdog.ts (pure + unit-tested): builds
+// are killed for going idle, not for legitimately taking a long time.
 
 const preferredOpenRouterModels = [
   defaultOpenRouterModel,
@@ -1832,13 +1844,23 @@ function App() {
   async function runAgentPrompt(trimmed: string): Promise<boolean> {
     const startedAt = Date.now();
     const previousSession = openCodeSessionId;
-    // ROM-changing work has one explicit route. Ollama remains available for
-    // questions and diagnostics, but it can never edit, seed, build, or repair
-    // a project.
-    const agentProviderId: ModelProvider = "openrouter";
-    const agentModelId = defaultOpenRouterModel;
-    const followUp = shouldPreserveActiveProject(trimmed);
-    const agentName = followUp ? "drive16-repair" : "drive16-build";
+    // ROM-changing work routes through the selected provider: a tested local
+    // Ollama model builds locally; otherwise OpenRouter is the default. The
+    // per-run tool-capability check stays with OpenCode, which reports models
+    // that cannot drive the build tools as real errors in the run log.
+    const useOllamaBuild = modelProvider === "ollama" && modelConnection.state === "ready";
+    const agentProviderId: ModelProvider = useOllamaBuild ? "ollama" : "openrouter";
+    const agentModelId = useOllamaBuild ? ollamaModel : defaultOpenRouterModel;
+    // A real project only gets replaced on an explicit new-game request;
+    // ambiguous prompts default to preserving it. Repair budget is reserved
+    // for prompts about something being broken.
+    const intent = classifyAgentIntent(trimmed, {
+      projectHasGame:
+        projectSummary.romStatus === "ready" || projectSummary.trustStage !== "prototype",
+      currentGameHint: `${projectSummary.name} ${projectSummary.reviewDetail}`,
+    });
+    const followUp = intent.preserveProject;
+    const agentName = intent.agentName;
     const clarifyingReply = clarifyingReplyForBuildPrompt(trimmed);
     if (clarifyingReply) {
       setMessages((current) => [
@@ -1879,7 +1901,7 @@ function App() {
     }
 
     const savedOpenRouterKey = openRouterKey.trim();
-    if (savedOpenRouterKey) {
+    if (!useOllamaBuild && savedOpenRouterKey) {
       try {
         const auth = await setAgentProviderKey(agentProviderId, savedOpenRouterKey);
         if (!auth.connected) {
@@ -1910,8 +1932,9 @@ function App() {
     }
 
     if (!providers.includes(agentProviderId)) {
-      const setupDetail =
-        "Builds use DeepSeek V3.1 through OpenRouter. Open Settings, paste your OpenRouter API key, and click Test OpenRouter — Ollama is available for questions only.";
+      const setupDetail = useOllamaBuild
+        ? "The build agent cannot see the Ollama provider yet. Make sure Ollama is running, test the model in Settings, then try again."
+        : "Builds default to DeepSeek V3.1 through OpenRouter. Open Settings and either paste an OpenRouter API key, or switch to a tested local Ollama model to build locally.";
       setMessages((current) => [
         ...current,
         makeMessage("agent", setupDetail, "system"),
@@ -2046,7 +2069,7 @@ function App() {
           spriteGeneration: enhancements.spriteGeneration,
           musicGeneration: enhancements.musicGeneration,
           seededPrototypeBuilt,
-          repairMode: followUp,
+          repairMode: agentName === "drive16-repair",
           comfyUiEndpoint,
           comfyUiCheckpoint,
           comfyUiLora,
@@ -2134,18 +2157,31 @@ function App() {
       );
       noteAction("The agent request was accepted, but no build activity has started yet.");
     }, 45_000);
-    pending.stallTimer = window.setTimeout(() => {
-      void failPendingAgentRun(
-        sessionId,
-        pendingAgentStallDetail(pending),
+    // Kill on idleness, not on total duration: a healthy slow build keeps
+    // emitting tool events, while a stuck one goes quiet.
+    pending.lastActivityAt = startedAt;
+    pending.watchdogTimer = window.setInterval(() => {
+      const verdict = agentWatchdogVerdict(
+        Date.now(),
+        pending.startedAt,
+        pending.lastActivityAt ?? pending.startedAt,
+        agentIdleLimitMs,
+        pending.hardLimitMs ?? agentRunHardLimitMs,
       );
-    }, 90_000);
-    pending.hardStopTimer = window.setTimeout(() => {
-      void failPendingAgentRun(
-        sessionId,
-        `Drive16 stopped the build after ${formatDurationMs(hardLimitMs)} to prevent a runaway model loop.`,
-      );
-    }, hardLimitMs);
+      if (verdict === "idle") {
+        void failPendingAgentRun(
+          sessionId,
+          `No agent activity for ${formatDurationMs(agentIdleLimitMs)}. ${pendingAgentStallDetail(pending)}`,
+        );
+      } else if (verdict === "ceiling") {
+        void failPendingAgentRun(
+          sessionId,
+          `Drive16 stopped the build after ${formatDurationMs(
+            pending.hardLimitMs ?? agentRunHardLimitMs,
+          )} to prevent a runaway model loop.`,
+        );
+      }
+    }, 5_000);
     pending.backgroundErrorTimer = window.setInterval(() => {
       void drainOpenCodeBackgroundErrors(sessionId);
     }, 3_000);
@@ -2225,15 +2261,7 @@ function App() {
       window.clearTimeout(pending.waitingTimer);
       pending.waitingTimer = undefined;
     }
-    if (pending.stallTimer) {
-      window.clearTimeout(pending.stallTimer);
-    }
-    pending.stallTimer = window.setTimeout(() => {
-      void failPendingAgentRun(
-        pending.sessionId,
-        pendingAgentStallDetail(pending),
-      );
-    }, 90_000);
+    pending.lastActivityAt = Date.now();
   }
 
   function recordPendingAgentMilestone(activity: {
@@ -2492,17 +2520,14 @@ function App() {
     if (pending.waitingTimer) {
       window.clearTimeout(pending.waitingTimer);
     }
-    if (pending.stallTimer) {
-      window.clearTimeout(pending.stallTimer);
+    if (pending.watchdogTimer) {
+      window.clearInterval(pending.watchdogTimer);
     }
     if (pending.backgroundErrorTimer) {
       window.clearInterval(pending.backgroundErrorTimer);
     }
     if (pending.projectRefreshTimer) {
       window.clearInterval(pending.projectRefreshTimer);
-    }
-    if (pending.hardStopTimer) {
-      window.clearTimeout(pending.hardStopTimer);
     }
   }
 
@@ -3671,7 +3696,7 @@ function App() {
       const state = result.state;
       const detail =
         state === "ready"
-          ? `${shortOllamaLabel(model)} is ready for questions and diagnostics. Builds use DeepSeek V3.1 through OpenRouter.`
+          ? `${shortOllamaLabel(model)} is ready. ROM builds will run on this local model; each run verifies it can drive the build tools.`
           : result.detail;
       setOllamaModels(result.models.length ? result.models : [model]);
       setOllamaModelsSource(result.models.length ? "ready" : "empty");
@@ -5859,38 +5884,9 @@ function defaultPlanForBuildPrompt(text: string, enabledEnhancements: Enhancemen
   return `I’m starting the build with Drive16’s standard first-pass checklist: visible start state, working controls, score/state sanity, ${assetPlan}, build, screenshot check, input check, and audio check when sound is expected. Actual tool activity will appear in the build log.`;
 }
 
-function looksLikeBuildPrompt(normalized: string) {
-  if (
-    /^(how|why|what|when|where|who)\b/.test(normalized.trim()) ||
-    /^(explain|describe|tell me|show me)\b/.test(normalized.trim())
-  ) {
-    return false;
-  }
-  return /\b(make|build|create|add|generate|turn|change|fix|repair)\b/.test(normalized);
-}
-
-function mentionsKnownGameShape(normalized: string) {
-  return /\b(snake|sprite|pong|breakout|platformer|shooter|racing|maze|runner|space|asteroids|tetris|missile command|pac|pinball|fighting|rpg)\b/.test(normalized);
-}
-
-function looksLikeFollowUpPrompt(normalized: string) {
-  return (
-    /\b(change|fix|repair|adjust|update|improve|tweak|refine|iterate|continue|remove|replace)\b/.test(
-      normalized,
-    ) ||
-    /\bmake (it|this|the)\b/.test(normalized) ||
-    /\b(faster|slower|bigger|smaller|harder|easier|louder|quieter)\b/.test(normalized)
-  );
-}
-
-function shouldPreserveActiveProject(text: string) {
-  const normalized = text.toLowerCase().trim();
-  return (
-    looksLikeFollowUpPrompt(normalized) ||
-    /^continue\b/.test(normalized) ||
-    /\b(current|existing|same|this)\b.{0,48}\b(game|project|rom|build)\b/.test(normalized)
-  );
-}
+// looksLikeBuildPrompt, mentionsKnownGameShape, shouldPreserveActiveProject,
+// and classifyAgentIntent live in ./agent/promptIntent so the project-wipe
+// routing stays unit-testable (scripts/verify-prompt-intent.mjs).
 
 function promptReadyMessage(generatedMusic: boolean, generatedSprite: boolean) {
   if (generatedMusic && generatedSprite) {

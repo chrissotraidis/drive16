@@ -3,6 +3,9 @@
   "instructions": [
     "agent/skills/drive16-app-builder.md"
   ],
+  "permission": {
+    "skill": "deny"
+  },
   "agent": {
     "drive16-build": {
       "description": "One bounded Drive16 ROM implementation pass",
@@ -103,7 +106,8 @@
     "drive16-comfyui": {
       "type": "local",
       "command": [
-        "scripts/comfyui-mcp.sh"
+        "python3",
+        "mcp-servers/comfyui/server.py"
       ],
       "environment": {
         "COMFYUI_DOWNLOAD_CACHE_DIR": "artifacts/phase4/comfyui-mcp/cache"

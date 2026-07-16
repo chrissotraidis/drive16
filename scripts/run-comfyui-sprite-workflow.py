@@ -191,7 +191,7 @@ def download_image(base_url: str, image: dict[str, Any], destination: Path, *, t
     return target
 
 
-def find_first_image(history: dict[str, Any], prompt_id: str) -> dict[str, Any]:
+def history_images(history: dict[str, Any], prompt_id: str) -> list[dict[str, Any]]:
     entry = history.get(prompt_id)
     if entry is None and len(history) == 1:
         entry = next(iter(history.values()))
@@ -200,14 +200,32 @@ def find_first_image(history: dict[str, Any], prompt_id: str) -> dict[str, Any]:
     outputs = entry.get("outputs")
     if not isinstance(outputs, dict):
         raise RunnerError(f"History entry for prompt {prompt_id} has no outputs.")
+    images: list[dict[str, Any]] = []
     for output in outputs.values():
         if isinstance(output, dict):
-            images = output.get("images")
-            if isinstance(images, list) and images:
-                image = images[0]
+            for image in output.get("images") or []:
                 if isinstance(image, dict):
-                    return image
+                    images.append(image)
+    return images
+
+
+def find_first_image(history: dict[str, Any], prompt_id: str) -> dict[str, Any]:
+    # The workflow saves the quantized 32x32 sprite plus a pre-downscale
+    # 512x512 master; the sprite (non-master filename) is the primary output.
+    images = history_images(history, prompt_id)
+    for image in images:
+        if "master" not in str(image.get("filename", "")):
+            return image
+    if images:
+        return images[0]
     raise RunnerError(f"History entry for prompt {prompt_id} has no image outputs.")
+
+
+def find_master_image(history: dict[str, Any], prompt_id: str) -> dict[str, Any] | None:
+    for image in history_images(history, prompt_id):
+        if "master" in str(image.get("filename", "")):
+            return image
+    return None
 
 
 def wait_for_history(base_url: str, prompt_id: str, *, timeout: float, interval: float) -> dict[str, Any]:
@@ -398,6 +416,12 @@ def main() -> int:
         image = find_first_image(history, prompt_id)
         output_dir = ARTIFACT_DIR / prompt_id
         png = download_image(args.comfyui_url, image, output_dir, timeout=60)
+        master_image = find_master_image(history, prompt_id)
+        master_png: Path | None = None
+        if master_image is not None:
+            # Keep the pre-downscale 512x512 master for inspection and future
+            # crops; the 32x32 output alone hides what the diffusion produced.
+            master_png = download_image(args.comfyui_url, master_image, output_dir, timeout=60)
         validated_png, validator_output, raw_validator_rejection = run_validator_with_repair(png, symbol)
 
         ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
@@ -408,6 +432,7 @@ def main() -> int:
             "lora": args.lora,
             "downloadedPng": str(validated_png.relative_to(ROOT)),
             "rawPng": str(png.relative_to(ROOT)),
+            "masterPng": str(master_png.relative_to(ROOT)) if master_png else None,
             "validatorOutput": validator_output,
         }
         if raw_validator_rejection:

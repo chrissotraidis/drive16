@@ -207,8 +207,9 @@ export function SettingsPanel({
               </button>
             </div>
             <p className="settings-provider-note">
-              ROM builds always use DeepSeek V3.1 through OpenRouter. This selection controls
-              questions, summaries, and diagnostics; Ollama never edits or rebuilds a ROM.
+              This selection is the build model. A tested local Ollama model builds ROMs
+              entirely on this machine; OpenRouter (DeepSeek V3.1) is the hosted default.
+              Each run verifies the model can drive the build tools.
             </p>
 
             {modelProvider === "openrouter" ? (

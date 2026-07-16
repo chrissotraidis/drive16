@@ -172,12 +172,25 @@ def main() -> int:
     require(quantizer["inputs"].get("max_batch_size") == 1, "Quantizer must process one generated sprite.")
     require(palette["transparentIndex"] == 0, "Manifest must reserve palette index 0 for transparency.")
 
-    _, save = one_node(workflow, "SaveImage")
-    input_link(workflow, save, "images", quantizer_id)
-    require(
-        save["inputs"].get("filename_prefix") == manifest["workflow"]["outputPrefix"],
-        "SaveImage filename_prefix must match manifest.",
-    )
+    save_nodes = nodes_by_class(workflow, "SaveImage")
+    require(len(save_nodes) == 2, f"Expected sprite + master SaveImage nodes, found {len(save_nodes)}.")
+    output_prefix = manifest["workflow"]["outputPrefix"]
+    sprite_saves = [
+        (node_id, node)
+        for node_id, node in save_nodes
+        if node["inputs"].get("filename_prefix") == output_prefix
+    ]
+    master_saves = [
+        (node_id, node)
+        for node_id, node in save_nodes
+        if node["inputs"].get("filename_prefix") == f"{output_prefix}_master"
+    ]
+    require(len(sprite_saves) == 1, "Exactly one SaveImage must use the manifest outputPrefix.")
+    require(len(master_saves) == 1, "Exactly one SaveImage must save the pre-downscale master.")
+    input_link(workflow, sprite_saves[0][1], "images", quantizer_id)
+    # The master preserves what the diffusion actually produced, before the
+    # 32x32 downscale throws away detail.
+    input_link(workflow, master_saves[0][1], "images", decode_id)
 
     require(manifest["generation"].get("tilesWide") == 4, "Manifest tilesWide must be 4.")
     require(manifest["generation"].get("tilesHigh") == 4, "Manifest tilesHigh must be 4.")

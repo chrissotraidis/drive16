@@ -157,5 +157,15 @@
     "_meta": {
       "title": "Save Drive16 generated sprite"
     }
+  },
+  "11": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "drive16/generated/drive16_genesis_sprite_master",
+      "images": [
+        "6",
+        0
+      ]
+    }
   }
 }

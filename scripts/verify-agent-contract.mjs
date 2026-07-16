@@ -114,6 +114,10 @@ function extractFunctionBody(source, functionName) {
 const agent = await loadAgentModule();
 const repairState = agent.createAgentActivityRepairState();
 const appSource = await readFile(path.join(rootDir, "app", "src", "App.tsx"), "utf8");
+const promptIntentSource = await readFile(
+  path.join(rootDir, "app", "src", "agent", "promptIntent.ts"),
+  "utf8",
+);
 const startNewProjectSource = extractFunctionBody(appSource, "startNewProject");
 const runAgentPromptSource = extractFunctionBody(appSource, "runAgentPrompt");
 const buildEditedProjectIfNeededSource = extractFunctionBody(
@@ -172,16 +176,25 @@ assert(
   "Drive16 repair needs enough bounded tool steps for read, edit, build, and verification.",
 );
 assert(
-  runAgentPromptSource.includes('const agentProviderId: ModelProvider = "openrouter"'),
-  "ROM-changing work must explicitly route through OpenRouter.",
+  runAgentPromptSource.includes(
+    'const useOllamaBuild = modelProvider === "ollama" && modelConnection.state === "ready"',
+  ),
+  "Local Ollama builds require a tested (ready) model connection.",
 );
 assert(
-  runAgentPromptSource.includes("const agentModelId = defaultOpenRouterModel"),
-  "ROM-changing work must explicitly use the bounded DeepSeek model.",
+  runAgentPromptSource.includes(
+    'const agentProviderId: ModelProvider = useOllamaBuild ? "ollama" : "openrouter"',
+  ) && runAgentPromptSource.includes("useOllamaBuild ? ollamaModel : defaultOpenRouterModel"),
+  "ROM-changing work must route through the selected provider: tested Ollama locally, OpenRouter otherwise.",
 );
 assert(
-  runAgentPromptSource.includes('const agentName = followUp ? "drive16-repair" : "drive16-build"'),
-  "Follow-up ROM changes must use the 4,000-token repair agent.",
+  runAgentPromptSource.includes("const intent = classifyAgentIntent(trimmed"),
+  "Prompt routing must go through the unit-tested intent classifier (scripts/verify-prompt-intent.mjs).",
+);
+assert(
+  runAgentPromptSource.includes("const followUp = intent.preserveProject") &&
+    runAgentPromptSource.includes("const agentName = intent.agentName"),
+  "Preserve-vs-reset and the repair budget must come from the intent classifier: repairs get drive16-repair, feature follow-ups get drive16-build.",
 );
 assert(
   (runAgentPromptSource.match(/await sendAgentPrompt\(\{/g) ?? []).length === 1,
@@ -198,7 +211,7 @@ assert(
 );
 assert(
   runAgentPromptSource.includes("seededPrototypeBuilt,") &&
-    runAgentPromptSource.includes("repairMode: followUp"),
+    runAgentPromptSource.includes('repairMode: agentName === "drive16-repair"'),
   "Implementation and repair prompts must receive the seeded-prototype and repair-pass context.",
 );
 assert(
@@ -726,12 +739,9 @@ for (const expected of [
   "run-record.json",
   "verify-project-memory.mjs",
   "verify-opencode-audio-trace.mjs",
-  "drive16-emulator.verify_audio",
-  "Build the core playable game before optional music",
   "Do not claim ComfyUI-generated sprites were used",
-  "Do not spend the run polishing project docs before gameplay exists",
-  "Never claim out/rom.bin is built",
-  "Known Issues: none",
+  "generate-project-memory.mjs",
+  "stamps the mechanical evidence rows",
   "Date.now()",
   "captureStableFrame",
   "scripts/capture-game-screenshot.py",
@@ -743,7 +753,7 @@ for (const expected of [
   "--allow-seeded-source",
   "examples/game-skeletons/snake-basic",
   "emulatorInputScriptPath",
-  "send_input with reset true",
+  "run_rom call of at least 180 frames",
   "await rm(emulatorInputScriptPath, { force: true })",
 ]) {
   assert(
@@ -1036,8 +1046,8 @@ for (const expected of [
   "sawScreenCheck",
   "sawInputTest",
   "sawAudioCheck",
-  "agentRunHardLimitMs = 5 * 60_000",
-  "hardStopTimer",
+  "agentWatchdogVerdict(",
+  "pending.lastActivityAt = Date.now()",
   "abortAgentSession(sessionId)",
   "agent.stalled.rom_recovered",
   "musicCompileAttempts",
@@ -1106,11 +1116,11 @@ for (const expected of [
   "romUnavailable={!activeRomPlayable}",
   "guardUnverifiedModelReply(reply.content)",
   "message.model.guarded",
-  "shouldPreserveActiveProject(trimmed)",
+  "classifyAgentIntent(trimmed",
   "pendingAgentRunStorageKey",
   "loadPersistedPendingAgentRun",
   "clearPersistedPendingAgentRun",
-  "Builds use DeepSeek V3.1 through OpenRouter.",
+  "Builds default to DeepSeek V3.1 through OpenRouter.",
   'label: "No fresh ROM produced"',
   "followUp ? await ensureActiveProject() : await resetActiveProject()",
   'projectSummary.name || loadActiveProjectName("Untitled Project")',
@@ -1145,9 +1155,8 @@ for (const expected of [
   "defaultPlayerVolume",
   "seedActiveProjectForPrompt",
   "buildActiveProject",
-  'const agentProviderId: ModelProvider = "openrouter"',
-  "const agentModelId = defaultOpenRouterModel",
-  'const agentName = followUp ? "drive16-repair" : "drive16-build"',
+  'const agentProviderId: ModelProvider = useOllamaBuild ? "ollama" : "openrouter"',
+  "const agentName = intent.agentName",
   "agent.seeded",
   "agent.seed.built",
   'label: "Prototype built"',
@@ -1681,7 +1690,6 @@ for (const expected of [
 }
 
 const appFollowUpContract = [
-  "function looksLikeFollowUpPrompt",
   "I’ll treat this as a follow-up on the current project",
   "read the game notes",
   "make the requested change in the active folder",
@@ -1689,6 +1697,18 @@ const appFollowUpContract = [
 ];
 for (const expected of appFollowUpContract) {
   assert(appSource.includes(expected), `App follow-up contract is missing: ${expected}`);
+}
+const promptIntentContract = [
+  "export function looksLikeFollowUpPrompt",
+  "export function classifyAgentIntent",
+  "export function explicitNewGamePhrase",
+  "preserveProject = context.projectHasGame",
+];
+for (const expected of promptIntentContract) {
+  assert(
+    promptIntentSource.includes(expected),
+    `Prompt intent classifier contract is missing: ${expected}`,
+  );
 }
 
 expectActivity(agent, toolEvent("read", "completed", "GAME.md"), {

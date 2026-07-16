@@ -11,7 +11,7 @@
   },
   "workflow": {
     "path": "assets/enhancements/comfyui/drive16-genesis-sprite.workflow.json",
-    "nodeCount": 10,
+    "nodeCount": 11,
     "outputPrefix": "drive16/generated/drive16_genesis_sprite"
   },
   "validator": {
