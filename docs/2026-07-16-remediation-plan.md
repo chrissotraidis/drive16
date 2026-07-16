@@ -173,7 +173,16 @@ Accept:
 
 ## G6 — Make Ollama a first-class ROM-building provider
 
-Status: todo
+Status: done — 2026-07-16. `runAgentPrompt` routes builds through the
+selected provider: a tested (connection-ready) Ollama model builds locally
+(`providerId: "ollama"`, the selected model id); OpenRouter stays the hosted
+default. The OpenRouter key sync is skipped for local builds; setup copy,
+Settings note, connection-test detail, and README Model stance updated.
+Verified live in browser dev: Settings → Ollama (qwen) → "make a simple pong
+game" → skeleton seeded, baseline built, diagnostics green, and the OpenCode
+session confirmed running with providerID ollama + the qwen model and no
+OpenRouter key. Contract updated to assert the new routing; tsc, contract,
+intent, and watchdog checks all pass.
 
 Why: hardcoded `agentProviderId = "openrouter"` (App.tsx:1838) despite the
 harness, config, and today's passing Pong run proving the local path (audit

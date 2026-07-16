@@ -212,10 +212,11 @@ Key documents:
 
 ## Model stance
 
-Bring your own OpenRouter key for bounded ROM-changing calls. Ollama remains a
-local-only option for questions, summaries, and diagnostics, but cannot enter
-the ROM-changing execution path. No Drive16 flow asks you to log into a
-consumer AI subscription.
+ROM-changing work runs on the provider you select in Settings: a tested local
+Ollama model builds entirely on your machine, or bring your own OpenRouter key
+(default `deepseek/deepseek-chat-v3.1`) for hosted builds. Every run verifies
+the model can actually drive the build tools before results are trusted. No
+Drive16 flow asks you to log into a consumer AI subscription.
 
 ## Local reference runs
 

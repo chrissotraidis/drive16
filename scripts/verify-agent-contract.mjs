@@ -176,12 +176,16 @@ assert(
   "Drive16 repair needs enough bounded tool steps for read, edit, build, and verification.",
 );
 assert(
-  runAgentPromptSource.includes('const agentProviderId: ModelProvider = "openrouter"'),
-  "ROM-changing work must explicitly route through OpenRouter.",
+  runAgentPromptSource.includes(
+    'const useOllamaBuild = modelProvider === "ollama" && modelConnection.state === "ready"',
+  ),
+  "Local Ollama builds require a tested (ready) model connection.",
 );
 assert(
-  runAgentPromptSource.includes("const agentModelId = defaultOpenRouterModel"),
-  "ROM-changing work must explicitly use the bounded DeepSeek model.",
+  runAgentPromptSource.includes(
+    'const agentProviderId: ModelProvider = useOllamaBuild ? "ollama" : "openrouter"',
+  ) && runAgentPromptSource.includes("useOllamaBuild ? ollamaModel : defaultOpenRouterModel"),
+  "ROM-changing work must route through the selected provider: tested Ollama locally, OpenRouter otherwise.",
 );
 assert(
   runAgentPromptSource.includes("const intent = classifyAgentIntent(trimmed"),
@@ -1119,7 +1123,7 @@ for (const expected of [
   "pendingAgentRunStorageKey",
   "loadPersistedPendingAgentRun",
   "clearPersistedPendingAgentRun",
-  "Builds use DeepSeek V3.1 through OpenRouter.",
+  "Builds default to DeepSeek V3.1 through OpenRouter.",
   'label: "No fresh ROM produced"',
   "followUp ? await ensureActiveProject() : await resetActiveProject()",
   'projectSummary.name || loadActiveProjectName("Untitled Project")',
@@ -1154,8 +1158,7 @@ for (const expected of [
   "defaultPlayerVolume",
   "seedActiveProjectForPrompt",
   "buildActiveProject",
-  'const agentProviderId: ModelProvider = "openrouter"',
-  "const agentModelId = defaultOpenRouterModel",
+  'const agentProviderId: ModelProvider = useOllamaBuild ? "ollama" : "openrouter"',
   "const agentName = intent.agentName",
   "agent.seeded",
   "agent.seed.built",

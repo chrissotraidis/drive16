@@ -1844,11 +1844,13 @@ function App() {
   async function runAgentPrompt(trimmed: string): Promise<boolean> {
     const startedAt = Date.now();
     const previousSession = openCodeSessionId;
-    // ROM-changing work has one explicit route. Ollama remains available for
-    // questions and diagnostics, but it can never edit, seed, build, or repair
-    // a project.
-    const agentProviderId: ModelProvider = "openrouter";
-    const agentModelId = defaultOpenRouterModel;
+    // ROM-changing work routes through the selected provider: a tested local
+    // Ollama model builds locally; otherwise OpenRouter is the default. The
+    // per-run tool-capability check stays with OpenCode, which reports models
+    // that cannot drive the build tools as real errors in the run log.
+    const useOllamaBuild = modelProvider === "ollama" && modelConnection.state === "ready";
+    const agentProviderId: ModelProvider = useOllamaBuild ? "ollama" : "openrouter";
+    const agentModelId = useOllamaBuild ? ollamaModel : defaultOpenRouterModel;
     // A real project only gets replaced on an explicit new-game request;
     // ambiguous prompts default to preserving it. Repair budget is reserved
     // for prompts about something being broken.
@@ -1899,7 +1901,7 @@ function App() {
     }
 
     const savedOpenRouterKey = openRouterKey.trim();
-    if (savedOpenRouterKey) {
+    if (!useOllamaBuild && savedOpenRouterKey) {
       try {
         const auth = await setAgentProviderKey(agentProviderId, savedOpenRouterKey);
         if (!auth.connected) {
@@ -1930,8 +1932,9 @@ function App() {
     }
 
     if (!providers.includes(agentProviderId)) {
-      const setupDetail =
-        "Builds use DeepSeek V3.1 through OpenRouter. Open Settings, paste your OpenRouter API key, and click Test OpenRouter — Ollama is available for questions only.";
+      const setupDetail = useOllamaBuild
+        ? "The build agent cannot see the Ollama provider yet. Make sure Ollama is running, test the model in Settings, then try again."
+        : "Builds default to DeepSeek V3.1 through OpenRouter. Open Settings and either paste an OpenRouter API key, or switch to a tested local Ollama model to build locally.";
       setMessages((current) => [
         ...current,
         makeMessage("agent", setupDetail, "system"),
@@ -3693,7 +3696,7 @@ function App() {
       const state = result.state;
       const detail =
         state === "ready"
-          ? `${shortOllamaLabel(model)} is ready for questions and diagnostics. Builds use DeepSeek V3.1 through OpenRouter.`
+          ? `${shortOllamaLabel(model)} is ready. ROM builds will run on this local model; each run verifies it can drive the build tools.`
           : result.detail;
       setOllamaModels(result.models.length ? result.models : [model]);
       setOllamaModelsSource(result.models.length ? "ready" : "empty");
