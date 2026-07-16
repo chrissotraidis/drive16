@@ -19,6 +19,7 @@ PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOLS = {PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_GENTEEL = REPO_ROOT / "scripts" / "build-genteel.sh"
+GENTEEL_BUILD_PID_FILE = REPO_ROOT / "artifacts" / "phase0" / "genteel-build.pid"
 ARTIFACT_DIR = REPO_ROOT / "artifacts" / "phase1" / "emulator"
 LOG_FILE = ARTIFACT_DIR / "last-run.log"
 STATE_FILE = ARTIFACT_DIR / "state.json"
@@ -300,14 +301,26 @@ def get_genteel_bin() -> tuple[Path, str]:
     if not BUILD_GENTEEL.is_file():
         raise ToolExecutionError(f"Genteel build script is missing: {BUILD_GENTEEL}")
 
-    process = subprocess.run(
-        [str(BUILD_GENTEEL)],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        timeout=300,
-        check=False,
-    )
+    # A warm (stamp-cached) build returns in well under a second. A cold build
+    # is a multi-minute git clone + cargo compile that would outlive the MCP
+    # client's request timeout, so it is handed to a detached process and the
+    # caller gets an actionable retry message instead of a dead "-32001".
+    try:
+        process = subprocess.run(
+            [str(BUILD_GENTEEL)],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        start_detached_build(BUILD_GENTEEL, GENTEEL_BUILD_PID_FILE)
+        raise ToolExecutionError(
+            "The Genteel verification emulator is compiling for the first time "
+            "(a few minutes). It continues in the background; retry run_rom in "
+            "about 2 minutes, or run scripts/prewarm-local-tools.sh before builds."
+        )
     combined = process.stdout
     if process.stderr:
         combined = f"{combined}\n{process.stderr}" if combined else process.stderr
@@ -321,6 +334,25 @@ def get_genteel_bin() -> tuple[Path, str]:
     if not genteel_path.is_file():
         raise ToolExecutionError(f"Genteel binary was not created: {genteel_path}")
     return genteel_path, combined
+
+
+def start_detached_build(script: Path, pid_file: Path) -> None:
+    if pid_file.is_file():
+        try:
+            existing = int(pid_file.read_text(encoding="utf-8").strip())
+            os.kill(existing, 0)
+            return  # A background build is already running.
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    child = subprocess.Popen(
+        [str(script)],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    pid_file.write_text(str(child.pid), encoding="utf-8")
 
 
 def button_string(buttons_value: Any) -> str:

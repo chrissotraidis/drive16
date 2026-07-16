@@ -184,6 +184,13 @@ async function main() {
     "docker",
     ["info", "--format", "{{.ServerVersion}}"],
   );
+  const localToolsCheck = await runCheck(
+    "localTools",
+    "Genteel emulator and ctrmml compiler prewarm",
+    "scripts/prewarm-local-tools.sh",
+    [],
+    { timeout: 900000 },
+  );
   const comfyCheck = await runCheck(
     "comfyUi",
     "ComfyUI sprite readiness",
@@ -218,6 +225,7 @@ async function main() {
     opencodeCheck,
     credentialStatus(opencodeCheck),
     dockerCheck,
+    localToolsCheck,
     comfyCheck,
     contractCheck,
     memoryCheck,

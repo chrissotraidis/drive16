@@ -141,7 +141,16 @@ Accept:
 
 ## G5 — Pre-warm Genteel and ctrmml; actionable MCP timeout errors
 
-Status: todo
+Status: done — 2026-07-16. `scripts/prewarm-local-tools.sh` added and wired
+into the readiness check (`localTools`) and the native launch script (runs in
+parallel with the app build). Both MCP servers now give cold builds a
+20-second warm budget, then hand the compile to a detached pidfile-guarded
+process and return an actionable retry message instead of `-32001`; the
+ctrmml message states it does not count as a failed MML attempt. Verified:
+wiped `genteel-src/target` → prewarm rebuilt in 53 s (ctrmml had never been
+built on this machine — live landmine defused); `validate-emulator-mcp.py`
+passes; full readiness now reports generated-sprite ready with zero
+blockers/warnings.
 
 Why: first `run_rom`/`compile_music` cold-build toolchains inside an MCP call;
 the model sees `MCP error -32001: Request timed out` (audit §2).

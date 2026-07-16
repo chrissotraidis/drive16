@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import struct
 import subprocess
@@ -17,6 +18,7 @@ PROTOCOL_VERSION = "2025-11-25"
 SUPPORTED_PROTOCOLS = {PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUILD_CTRMML = REPO_ROOT / "scripts" / "build-ctrmml.sh"
+CTRMML_BUILD_PID_FILE = REPO_ROOT / "artifacts" / "phase4" / "ctrmml-build.pid"
 ARTIFACT_DIR = REPO_ROOT / "artifacts" / "phase4" / "mml-music"
 LOG_FILE = ARTIFACT_DIR / "last-compile.log"
 STATE_FILE = ARTIFACT_DIR / "state.json"
@@ -115,17 +117,48 @@ def mml_text_arg(value: Any) -> str:
     return value if value.endswith("\n") else value + "\n"
 
 
+def start_detached_build(script: Path, pid_file: Path) -> None:
+    if pid_file.is_file():
+        try:
+            existing = int(pid_file.read_text(encoding="utf-8").strip())
+            os.kill(existing, 0)
+            return  # A background build is already running.
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    child = subprocess.Popen(
+        [str(script)],
+        cwd=REPO_ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    pid_file.write_text(str(child.pid), encoding="utf-8")
+
+
 def build_ctrmml() -> tuple[Path, str]:
     if not BUILD_CTRMML.is_file():
         raise ToolExecutionError(f"ctrmml build script is missing: {BUILD_CTRMML}")
-    process = subprocess.run(
-        [str(BUILD_CTRMML)],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        timeout=300,
-        check=False,
-    )
+    # Warm (stamp-cached) builds return instantly; a cold clone + make would
+    # outlive the MCP client's timeout, so it is handed to a detached process
+    # with an actionable retry message instead.
+    try:
+        process = subprocess.run(
+            [str(BUILD_CTRMML)],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        start_detached_build(BUILD_CTRMML, CTRMML_BUILD_PID_FILE)
+        raise ToolExecutionError(
+            "The ctrmml music compiler is building for the first time (about a "
+            "minute). It continues in the background; retry compile_music "
+            "shortly, or run scripts/prewarm-local-tools.sh before builds. This "
+            "does not count as a failed MML compile attempt."
+        )
     combined = process.stdout
     if process.stderr:
         combined = f"{combined}\n{process.stderr}" if combined else process.stderr
