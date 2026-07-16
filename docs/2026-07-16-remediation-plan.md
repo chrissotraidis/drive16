@@ -79,7 +79,14 @@ Accept:
 
 ## G3 — Follow-up prompts must never wipe the active project
 
-Status: todo
+Status: done — 2026-07-16. Classification extracted to
+`app/src/agent/promptIntent.ts` (pure, unit-tested): follow-up verbs broadened
+(add/give/put/…), ambiguous prompts default to preserving a real project,
+only explicit phrases ("new game", "start over", "from scratch") or a
+different named genre reset, and `drive16-repair` is reserved for
+broken-game prompts — feature follow-ups now get the full build agent.
+`scripts/verify-prompt-intent.mjs` (14 cases) passes; tsc build passes;
+`verify-agent-contract.mjs` updated to assert the new routing and passes.
 
 Why: `shouldPreserveActiveProject` (App.tsx:5876) misses "add/give/put/…" →
 `resetActiveProject()` replaces the game (audit §4E).

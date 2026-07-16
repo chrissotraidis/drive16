@@ -9,6 +9,12 @@ import {
   sendOpenRouterFreeformReply,
 } from "./agent/openrouter";
 import {
+  classifyAgentIntent,
+  looksLikeBuildPrompt,
+  mentionsKnownGameShape,
+  shouldPreserveActiveProject,
+} from "./agent/promptIntent";
+import {
   abortAgentSession,
   agentActivityFromEvent,
   agentPromptWithProject,
@@ -1837,8 +1843,16 @@ function App() {
     // a project.
     const agentProviderId: ModelProvider = "openrouter";
     const agentModelId = defaultOpenRouterModel;
-    const followUp = shouldPreserveActiveProject(trimmed);
-    const agentName = followUp ? "drive16-repair" : "drive16-build";
+    // A real project only gets replaced on an explicit new-game request;
+    // ambiguous prompts default to preserving it. Repair budget is reserved
+    // for prompts about something being broken.
+    const intent = classifyAgentIntent(trimmed, {
+      projectHasGame:
+        projectSummary.romStatus === "ready" || projectSummary.trustStage !== "prototype",
+      currentGameHint: `${projectSummary.name} ${projectSummary.reviewDetail}`,
+    });
+    const followUp = intent.preserveProject;
+    const agentName = intent.agentName;
     const clarifyingReply = clarifyingReplyForBuildPrompt(trimmed);
     if (clarifyingReply) {
       setMessages((current) => [
@@ -2046,7 +2060,7 @@ function App() {
           spriteGeneration: enhancements.spriteGeneration,
           musicGeneration: enhancements.musicGeneration,
           seededPrototypeBuilt,
-          repairMode: followUp,
+          repairMode: agentName === "drive16-repair",
           comfyUiEndpoint,
           comfyUiCheckpoint,
           comfyUiLora,
@@ -5859,38 +5873,9 @@ function defaultPlanForBuildPrompt(text: string, enabledEnhancements: Enhancemen
   return `I’m starting the build with Drive16’s standard first-pass checklist: visible start state, working controls, score/state sanity, ${assetPlan}, build, screenshot check, input check, and audio check when sound is expected. Actual tool activity will appear in the build log.`;
 }
 
-function looksLikeBuildPrompt(normalized: string) {
-  if (
-    /^(how|why|what|when|where|who)\b/.test(normalized.trim()) ||
-    /^(explain|describe|tell me|show me)\b/.test(normalized.trim())
-  ) {
-    return false;
-  }
-  return /\b(make|build|create|add|generate|turn|change|fix|repair)\b/.test(normalized);
-}
-
-function mentionsKnownGameShape(normalized: string) {
-  return /\b(snake|sprite|pong|breakout|platformer|shooter|racing|maze|runner|space|asteroids|tetris|missile command|pac|pinball|fighting|rpg)\b/.test(normalized);
-}
-
-function looksLikeFollowUpPrompt(normalized: string) {
-  return (
-    /\b(change|fix|repair|adjust|update|improve|tweak|refine|iterate|continue|remove|replace)\b/.test(
-      normalized,
-    ) ||
-    /\bmake (it|this|the)\b/.test(normalized) ||
-    /\b(faster|slower|bigger|smaller|harder|easier|louder|quieter)\b/.test(normalized)
-  );
-}
-
-function shouldPreserveActiveProject(text: string) {
-  const normalized = text.toLowerCase().trim();
-  return (
-    looksLikeFollowUpPrompt(normalized) ||
-    /^continue\b/.test(normalized) ||
-    /\b(current|existing|same|this)\b.{0,48}\b(game|project|rom|build)\b/.test(normalized)
-  );
-}
+// looksLikeBuildPrompt, mentionsKnownGameShape, shouldPreserveActiveProject,
+// and classifyAgentIntent live in ./agent/promptIntent so the project-wipe
+// routing stays unit-testable (scripts/verify-prompt-intent.mjs).
 
 function promptReadyMessage(generatedMusic: boolean, generatedSprite: boolean) {
   if (generatedMusic && generatedSprite) {

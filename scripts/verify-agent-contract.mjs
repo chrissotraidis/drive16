@@ -114,6 +114,10 @@ function extractFunctionBody(source, functionName) {
 const agent = await loadAgentModule();
 const repairState = agent.createAgentActivityRepairState();
 const appSource = await readFile(path.join(rootDir, "app", "src", "App.tsx"), "utf8");
+const promptIntentSource = await readFile(
+  path.join(rootDir, "app", "src", "agent", "promptIntent.ts"),
+  "utf8",
+);
 const startNewProjectSource = extractFunctionBody(appSource, "startNewProject");
 const runAgentPromptSource = extractFunctionBody(appSource, "runAgentPrompt");
 const buildEditedProjectIfNeededSource = extractFunctionBody(
@@ -180,8 +184,13 @@ assert(
   "ROM-changing work must explicitly use the bounded DeepSeek model.",
 );
 assert(
-  runAgentPromptSource.includes('const agentName = followUp ? "drive16-repair" : "drive16-build"'),
-  "Follow-up ROM changes must use the 4,000-token repair agent.",
+  runAgentPromptSource.includes("const intent = classifyAgentIntent(trimmed"),
+  "Prompt routing must go through the unit-tested intent classifier (scripts/verify-prompt-intent.mjs).",
+);
+assert(
+  runAgentPromptSource.includes("const followUp = intent.preserveProject") &&
+    runAgentPromptSource.includes("const agentName = intent.agentName"),
+  "Preserve-vs-reset and the repair budget must come from the intent classifier: repairs get drive16-repair, feature follow-ups get drive16-build.",
 );
 assert(
   (runAgentPromptSource.match(/await sendAgentPrompt\(\{/g) ?? []).length === 1,
@@ -198,7 +207,7 @@ assert(
 );
 assert(
   runAgentPromptSource.includes("seededPrototypeBuilt,") &&
-    runAgentPromptSource.includes("repairMode: followUp"),
+    runAgentPromptSource.includes('repairMode: agentName === "drive16-repair"'),
   "Implementation and repair prompts must receive the seeded-prototype and repair-pass context.",
 );
 assert(
@@ -1106,7 +1115,7 @@ for (const expected of [
   "romUnavailable={!activeRomPlayable}",
   "guardUnverifiedModelReply(reply.content)",
   "message.model.guarded",
-  "shouldPreserveActiveProject(trimmed)",
+  "classifyAgentIntent(trimmed",
   "pendingAgentRunStorageKey",
   "loadPersistedPendingAgentRun",
   "clearPersistedPendingAgentRun",
@@ -1147,7 +1156,7 @@ for (const expected of [
   "buildActiveProject",
   'const agentProviderId: ModelProvider = "openrouter"',
   "const agentModelId = defaultOpenRouterModel",
-  'const agentName = followUp ? "drive16-repair" : "drive16-build"',
+  "const agentName = intent.agentName",
   "agent.seeded",
   "agent.seed.built",
   'label: "Prototype built"',
@@ -1681,7 +1690,6 @@ for (const expected of [
 }
 
 const appFollowUpContract = [
-  "function looksLikeFollowUpPrompt",
   "I’ll treat this as a follow-up on the current project",
   "read the game notes",
   "make the requested change in the active folder",
@@ -1689,6 +1697,18 @@ const appFollowUpContract = [
 ];
 for (const expected of appFollowUpContract) {
   assert(appSource.includes(expected), `App follow-up contract is missing: ${expected}`);
+}
+const promptIntentContract = [
+  "export function looksLikeFollowUpPrompt",
+  "export function classifyAgentIntent",
+  "export function explicitNewGamePhrase",
+  "preserveProject = context.projectHasGame",
+];
+for (const expected of promptIntentContract) {
+  assert(
+    promptIntentSource.includes(expected),
+    `Prompt intent classifier contract is missing: ${expected}`,
+  );
 }
 
 expectActivity(agent, toolEvent("read", "completed", "GAME.md"), {
