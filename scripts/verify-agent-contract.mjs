@@ -739,12 +739,9 @@ for (const expected of [
   "run-record.json",
   "verify-project-memory.mjs",
   "verify-opencode-audio-trace.mjs",
-  "drive16-emulator.verify_audio",
-  "Build the core playable game before optional music",
   "Do not claim ComfyUI-generated sprites were used",
-  "Do not spend the run polishing project docs before gameplay exists",
-  "Never claim out/rom.bin is built",
-  "Known Issues: none",
+  "generate-project-memory.mjs",
+  "stamps the mechanical evidence rows",
   "Date.now()",
   "captureStableFrame",
   "scripts/capture-game-screenshot.py",
@@ -756,7 +753,7 @@ for (const expected of [
   "--allow-seeded-source",
   "examples/game-skeletons/snake-basic",
   "emulatorInputScriptPath",
-  "send_input with reset true",
+  "run_rom call of at least 180 frames",
   "await rm(emulatorInputScriptPath, { force: true })",
 ]) {
   assert(

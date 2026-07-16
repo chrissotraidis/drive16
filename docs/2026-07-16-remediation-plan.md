@@ -238,7 +238,19 @@ Accept:
 
 ## G8 — Move ledger bookkeeping out of the model's token budget
 
-Status: todo
+Status: done — 2026-07-16. `scripts/generate-project-memory.mjs` stamps
+trace-proven evidence (input, restart, frames, non-silent audio, fresh build)
+into PLAYTEST.md and the captured-audio phrase onto used music rows in
+ASSETS.md; wired into the harness post-run. On the pong-local-qwen-1 run it
+reproduced the model's hand-written mechanical rows and correctly *refused*
+the fresh-ROM row (main.c was newer than the ROM — honest by construction).
+Harness prompt + skill file: 31,435 → **23,035 bytes (−26.7%)**, mostly by
+deleting bookkeeping instructions the generator obsoletes and lines that
+duplicated the skill; the sprite section now points at the G1
+`generate_sprite` MCP tool instead of a shell script. Contract updated
+deliberately (runner pins that moved to the skill were dropped; generator
+wiring is now pinned) and passes; `verify-project-memory` still passes on the
+pong project.
 
 Why: exact-phrase PLAYTEST/ASSETS bookkeeping consumes the small output
 budget and drives the magic-phrase economy (audit §4B; 5,342 output tokens
