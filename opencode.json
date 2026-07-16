@@ -3,6 +3,9 @@
   "instructions": [
     "agent/skills/drive16-app-builder.md"
   ],
+  "permission": {
+    "skill": "deny"
+  },
   "agent": {
     "drive16-build": {
       "description": "One bounded Drive16 ROM implementation pass",

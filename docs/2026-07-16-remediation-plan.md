@@ -23,9 +23,8 @@ Ground rules for the loop:
 Status: done — 2026-07-16. tools/list: 3 tools / 1,183 schema bytes (was 113 /
 118,849). Live `generate_sprite` via the new server: validated 32×32 PNG +
 SGDK resource line in 12.8 s (warm ComfyUI). `validate-opencode-config.py`
-passes. Fixed overhead: 57,558 → **31,233** input tokens; the <30k line is
-missed by 4% and the remainder is G2's foreign-skill payload — re-verify
-after G2.
+passes. Fixed overhead: 57,558 → 31,233 input tokens after G1 alone; the
+<30k check cleared once G2 landed (20,132 combined).
 
 Why: ~30k tokens of the 57.5k fixed prompt is `comfyui-mcp`'s schema dump
 (audit §3). The agent needs generate/status/fetch, nothing else.
@@ -54,7 +53,12 @@ Accept:
 
 ## G2 — Stop foreign skill injection into Drive16 agent sessions
 
-Status: todo
+Status: done — 2026-07-16. OpenCode 1.14 has no config switch to remove
+default skill discovery (`skills.paths` only adds), but a repo-level
+`"permission": {"skill": "deny"}` drops the entire skill payload from agent
+context. Fixed overhead: 31,233 → **20,132** input tokens (57,558 before
+G1+G2; 65% cut). All 23 drive16-* MCP tools confirmed still visible to the
+agent via a read-only probe.
 
 Why: 32 unrelated `~/.agents/skills/` entries load into every build session
 (~10k tokens, audit §3).
