@@ -208,7 +208,17 @@ Accept:
 
 ## G7 — Bound Ollama context and document local-inference operation
 
-Status: todo
+Status: done — 2026-07-16. README gained a "Local models (Ollama)" section:
+set `OLLAMA_CONTEXT_LENGTH≈49152` at the Ollama layer (verified that the
+OpenAI-compatible `/v1` endpoint Drive16 uses ignores per-request `num_ctx` —
+the model's 262k default was allocated regardless of client config), one
+model instance per build, tool-calling models only, and a browser-dev note to
+restart `opencode serve` after config changes. That last rule was validated
+by a live failure during verification: the pre-G1 server still held the
+113-tool config in memory, pushing prefill to ~54k tokens and past the
+first-token window (Ollama 500 after 65 s at 75% prefill); after a restart
+with the slim config the same in-app Ollama build ran cleanly (13+ tool
+calls).
 
 Why: the model allocates a 262,144-token slot (30 GB KV) and every quality
 knob interacts with context length; concurrent local calls evict the cache

@@ -107,7 +107,8 @@ Requirements (macOS today; the toolchain itself is cross-platform):
 - Node 22+ and pnpm, Rust + Cargo
 - [OpenCode CLI](https://opencode.ai) (`opencode` on PATH — the agent spine)
 - An OpenRouter API key (BYOK; default `deepseek/deepseek-chat-v3.1`) for ROM-changing work
-- Optional Ollama for local questions, summaries, and diagnostics
+- Optional Ollama for fully local builds, questions, and diagnostics
+  (see "Local models" below)
 
 ```sh
 pnpm --dir app install
@@ -209,6 +210,37 @@ Key documents:
 - `DECISIONS.md` — recorded decisions (MIT, distribution, emulator choices)
 - `drive16-architecture.md` — full architecture reference
 - `docs/phase*-*.md` — historical evidence packets from phases 0–8
+
+## Local models (Ollama)
+
+A tested local Ollama model can run the whole build loop on your machine.
+Three operational rules make it fast instead of painful:
+
+- **Bound the context window.** Agent build steps run at 20k+ tokens of
+  context; a model whose default context is huge (e.g. 262k) allocates tens
+  of GB of KV cache and slows attention for nothing. Drive16 talks to Ollama
+  through the OpenAI-compatible API, which ignores per-request `num_ctx`, so
+  set the bound at the Ollama layer before starting the server:
+
+  ```sh
+  OLLAMA_CONTEXT_LENGTH=49152 ollama serve
+  ```
+
+- **One model instance, one job.** Ollama serves one request at a time per
+  loaded model, and any interleaved request (freeform chat, another tool)
+  evicts the build's prompt cache — one stray request can add minutes of
+  re-prefill to the next agent step. Don't share the build model mid-build.
+
+- **Pick a tool-calling model.** The build agent needs reliable tool use;
+  Drive16 verifies this on each run and reports models that can't drive the
+  build tools instead of silently producing nothing.
+
+- **Browser-dev only: restart `opencode serve` after config changes.** The
+  dev surface proxies to a long-lived `opencode serve` on port 4096 that
+  reads `opencode.json` once at startup. A stale server keeps the old tool
+  schemas in memory — enough extra prefill that a local model can miss the
+  first-token window and the request dies with an opaque 500. (The packaged
+  app spawns a fresh server per launch and is unaffected.)
 
 ## Model stance
 
