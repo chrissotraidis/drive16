@@ -15,6 +15,11 @@ import {
   shouldPreserveActiveProject,
 } from "./agent/promptIntent";
 import {
+  agentIdleLimitMs,
+  agentRunHardLimitMs,
+  agentWatchdogVerdict,
+} from "./agent/watchdog";
+import {
   abortAgentSession,
   agentActivityFromEvent,
   agentPromptWithProject,
@@ -120,10 +125,10 @@ type PendingAgentRun = {
   sawAiSpriteFailed?: boolean;
   musicCompileAttempts?: number;
   waitingTimer?: number;
-  stallTimer?: number;
+  watchdogTimer?: number;
+  lastActivityAt?: number;
   backgroundErrorTimer?: number;
   projectRefreshTimer?: number;
-  hardStopTimer?: number;
   hardLimitMs?: number;
   baselineRomExists?: boolean;
   adoptedFreshRom?: boolean;
@@ -488,7 +493,8 @@ const openCodeHeartbeatTimeoutMs = 15_000;
 // ComfyUI generation plus one source edit/build cycle regularly exceeds three
 // minutes even when the bounded model is making progress. Keep a hard stop,
 // but do not abort an active implementation before it reaches the build step.
-const agentRunHardLimitMs = 5 * 60_000;
+// Watchdog limits live in ./agent/watchdog.ts (pure + unit-tested): builds
+// are killed for going idle, not for legitimately taking a long time.
 
 const preferredOpenRouterModels = [
   defaultOpenRouterModel,
@@ -2148,18 +2154,31 @@ function App() {
       );
       noteAction("The agent request was accepted, but no build activity has started yet.");
     }, 45_000);
-    pending.stallTimer = window.setTimeout(() => {
-      void failPendingAgentRun(
-        sessionId,
-        pendingAgentStallDetail(pending),
+    // Kill on idleness, not on total duration: a healthy slow build keeps
+    // emitting tool events, while a stuck one goes quiet.
+    pending.lastActivityAt = startedAt;
+    pending.watchdogTimer = window.setInterval(() => {
+      const verdict = agentWatchdogVerdict(
+        Date.now(),
+        pending.startedAt,
+        pending.lastActivityAt ?? pending.startedAt,
+        agentIdleLimitMs,
+        pending.hardLimitMs ?? agentRunHardLimitMs,
       );
-    }, 90_000);
-    pending.hardStopTimer = window.setTimeout(() => {
-      void failPendingAgentRun(
-        sessionId,
-        `Drive16 stopped the build after ${formatDurationMs(hardLimitMs)} to prevent a runaway model loop.`,
-      );
-    }, hardLimitMs);
+      if (verdict === "idle") {
+        void failPendingAgentRun(
+          sessionId,
+          `No agent activity for ${formatDurationMs(agentIdleLimitMs)}. ${pendingAgentStallDetail(pending)}`,
+        );
+      } else if (verdict === "ceiling") {
+        void failPendingAgentRun(
+          sessionId,
+          `Drive16 stopped the build after ${formatDurationMs(
+            pending.hardLimitMs ?? agentRunHardLimitMs,
+          )} to prevent a runaway model loop.`,
+        );
+      }
+    }, 5_000);
     pending.backgroundErrorTimer = window.setInterval(() => {
       void drainOpenCodeBackgroundErrors(sessionId);
     }, 3_000);
@@ -2239,15 +2258,7 @@ function App() {
       window.clearTimeout(pending.waitingTimer);
       pending.waitingTimer = undefined;
     }
-    if (pending.stallTimer) {
-      window.clearTimeout(pending.stallTimer);
-    }
-    pending.stallTimer = window.setTimeout(() => {
-      void failPendingAgentRun(
-        pending.sessionId,
-        pendingAgentStallDetail(pending),
-      );
-    }, 90_000);
+    pending.lastActivityAt = Date.now();
   }
 
   function recordPendingAgentMilestone(activity: {
@@ -2506,17 +2517,14 @@ function App() {
     if (pending.waitingTimer) {
       window.clearTimeout(pending.waitingTimer);
     }
-    if (pending.stallTimer) {
-      window.clearTimeout(pending.stallTimer);
+    if (pending.watchdogTimer) {
+      window.clearInterval(pending.watchdogTimer);
     }
     if (pending.backgroundErrorTimer) {
       window.clearInterval(pending.backgroundErrorTimer);
     }
     if (pending.projectRefreshTimer) {
       window.clearInterval(pending.projectRefreshTimer);
-    }
-    if (pending.hardStopTimer) {
-      window.clearTimeout(pending.hardStopTimer);
     }
   }
 

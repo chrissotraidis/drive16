@@ -13,6 +13,7 @@
     "tauri": "tauri",
     "verify:agent-contract": "node ../scripts/verify-agent-contract.mjs",
     "verify:prompt-intent": "node --experimental-strip-types ../scripts/verify-prompt-intent.mjs",
+    "verify:agent-watchdog": "node --experimental-strip-types ../scripts/verify-agent-watchdog.mjs",
     "verify:project-memory": "node ../scripts/verify-project-memory.mjs && node ../scripts/verify-genre-playability-gates.mjs && node ../scripts/verify-audio-evidence-gates.mjs && node ../scripts/verify-asset-role-gates.mjs",
     "check:live-game-audit-readiness": "node ../scripts/check-live-game-audit-readiness.mjs",
     "prepare:live-game-audit": "pnpm check:live-game-audit-readiness && node ../scripts/verify-live-game-audit.mjs --write-template",

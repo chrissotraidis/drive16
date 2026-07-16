@@ -112,7 +112,15 @@ Accept:
 
 ## G4 — Replace the flat 5-minute kill with an activity-based watchdog
 
-Status: todo
+Status: done — 2026-07-16. Policy extracted to `app/src/agent/watchdog.ts`
+(pure, unit-tested): runs are killed after 5 minutes of **silence**
+(`lastActivityAt` updated by every agent SSE event) or a 45-minute absolute
+ceiling — never for legitimately taking long. The old flat 5-minute
+`hardStopTimer` and 90-second `stallTimer` are gone; one 5-second interval
+computes the verdict. `scripts/verify-agent-watchdog.mjs` (6 cases) passes;
+tsc build passes; agent contract updated and passes. Bonus: the 90-second
+stall kill would also have killed healthy local-model steps (60–160 s
+between tool events); that failure mode is gone too.
 
 Why: builds are killed at 5 min flat (App.tsx:485) while a healthy local run
 takes ~28 min (audit §2–3).
