@@ -116,9 +116,22 @@ static void clear_paddle(s16 x, s16 y)
     }
 }
 
+// The ball is a hardware sprite (SPRITE resource + sprite engine), so it
+// glides over the tile court instead of snapping between BG_A cells.
+static Sprite *ball_sprite_object;
+
 static void draw_ball(void)
 {
-    draw_tile(ball_x, ball_y, PAL3, TILE_INSET);
+    SPR_setPosition(
+        ball_sprite_object,
+        (s16)((COURT_X + ball_x) * 8),
+        (s16)((COURT_Y + ball_y) * 8));
+    SPR_setVisibility(ball_sprite_object, VISIBLE);
+}
+
+static void hide_ball(void)
+{
+    SPR_setVisibility(ball_sprite_object, HIDDEN);
 }
 
 static void serve_ball(s16 direction)
@@ -204,6 +217,7 @@ static void point_for_left(void)
     if (left_score >= 9)
     {
         game_over = TRUE;
+        hide_ball();
         draw_abs(16, 12, "YOU WIN");
         draw_abs(14, 14, "PRESS START");
         return;
@@ -221,6 +235,7 @@ static void point_for_right(void)
     if (right_score >= 9)
     {
         game_over = TRUE;
+        hide_ball();
         draw_abs(15, 12, "CPU WINS");
         draw_abs(14, 14, "PRESS START");
         return;
@@ -230,8 +245,6 @@ static void point_for_right(void)
 
 static void step_ball(void)
 {
-    clear_at(ball_x, ball_y);
-
     ball_x += ball_dx;
     ball_y += ball_dy;
 
@@ -337,11 +350,18 @@ int main(bool hardReset)
     VDP_loadTileData(presentation_tiles, TILE_SOLID, 3, CPU);
     VDP_setTextPalette(PAL3);
     JOY_init();
+    SPR_init();
+    ball_sprite_object = SPR_addSprite(
+        &ball_sprite,
+        0,
+        0,
+        TILE_ATTR(PAL3, TRUE, FALSE, FALSE));
     XGM_startPlay(pong_loop);
 
     reset_game();
     started = FALSE;
     draw_title();
+    hide_ball();
 
     while (TRUE)
     {
@@ -354,6 +374,7 @@ int main(bool hardReset)
             step_ball();
         }
 
+        SPR_update();
         SYS_doVBlankProcess();
     }
 

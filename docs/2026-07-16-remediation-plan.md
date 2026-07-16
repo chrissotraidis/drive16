@@ -275,7 +275,16 @@ Accept:
 
 ## G9 — Sprite-engine skeleton + preserved 512px masters (quality floor up)
 
-Status: todo
+Status: done — 2026-07-16. `pong-basic` now renders the ball as a hardware
+sprite: `res/ball.png` + `SPRITE ball_sprite` resource, `SPR_init` /
+`SPR_addSprite` / `SPR_setPosition` / `SPR_update` in the loop (the first
+`SPR_*` usage anywhere in the skeletons). Builds via docker-sgdk, passes
+`validate-emulator-mcp --verify-screen`, and a scripted Start + 420-frame run
+shows the round sprite ball in play. The ComfyUI workflow gained a second
+SaveImage preserving the pre-downscale 512×512 master
+(`*_master_*.png`) next to the validated 32×32 (live-verified: 512×512 +
+32×32 both on disk); the runner downloads it and reports `masterPng`, and the
+workflow validator/manifest were updated to require the master node.
 
 Why: zero `SPR_*` usage anywhere teaches tile-grid-only graphics; the
 512×512 diffusion master is discarded (audit §4D).
