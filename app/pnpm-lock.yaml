@@ -5,7 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  nostalgist@0.21.1: 6bc93c6710fa457a57b0b2061e4e1b6bd97d2c82f21e4c2eecb4f1a8a8064730
+  nostalgist@0.21.1:
+    hash: 6bc93c6710fa457a57b0b2061e4e1b6bd97d2c82f21e4c2eecb4f1a8a8064730
+    path: patches/nostalgist@0.21.1.patch
 
 importers:
 
