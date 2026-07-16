@@ -20,7 +20,12 @@ Ground rules for the loop:
 
 ## G1 — Replace the 113-tool ComfyUI MCP with a 3-tool Drive16 server
 
-Status: todo
+Status: done — 2026-07-16. tools/list: 3 tools / 1,183 schema bytes (was 113 /
+118,849). Live `generate_sprite` via the new server: validated 32×32 PNG +
+SGDK resource line in 12.8 s (warm ComfyUI). `validate-opencode-config.py`
+passes. Fixed overhead: 57,558 → **31,233** input tokens; the <30k line is
+missed by 4% and the remainder is G2's foreign-skill payload — re-verify
+after G2.
 
 Why: ~30k tokens of the 57.5k fixed prompt is `comfyui-mcp`'s schema dump
 (audit §3). The agent needs generate/status/fetch, nothing else.
