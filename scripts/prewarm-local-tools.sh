@@ -16,4 +16,7 @@ echo "Prewarming ctrmml (MML music compiler)..."
 "$ROOT/scripts/build-ctrmml.sh" >/dev/null
 echo "ctrmml ready."
 
+echo "Prewarming ComfyUI checkpoint (skipped when ComfyUI is down)..."
+python3 "$ROOT/scripts/prewarm-comfyui-checkpoint.py" || echo "ComfyUI checkpoint prewarm did not finish; first sprite may be slower." >&2
+
 echo "Local tools are warm."
