@@ -1,0 +1,118 @@
+#title Action Tension Template
+#platform megadrive
+
+@80 fm ; drive16_round_bass
+   3   1
+  31   7   0   8   3  28   0   1   0   0
+  31  12   0   8   5  42   0   1   0   0
+  31   7   0   8   3  18   0   2   0   0
+  31  16   0   9   1   0   0   1   0   0
+   0
+
+@81 fm ; drive16_clear_lead
+   4   4
+  25   5   0   4   2  22   0   2   3   0
+  31  10   0   6   3   0   0   2   0   0
+  25   5   0   4   2  30   0   3   3   0
+  31  10   0   6   2   0   0   1   0   0
+
+@82 fm ; drive16_soft_pad
+   5   2
+  20   4   5   8   6  36   0   2   0   0
+  24  10   4  10   5   6   0   1   0   0
+  18   4   5   8   6  42   0   2   0   0
+  24  12   4  10   5  10   0   1   0   0
+
+@83 fm ; drive16_chip_pluck
+   5   3
+  31  18   0   6   2  34   0   3   0   0
+  31  20   0   7   1   0   0   1   0   0
+  26  10   0   5   2  48   0   4   0   0
+  31  18   0   7   1   8   0   1   0   0
+
+@84 fm ; drive16_bright_bell
+   7   3
+  31  12   0   5   3  28   0   5   3   0
+  31  14   0   7   2   0   0   1   0   0
+  24   8   0   4   4  44   0   7   7   0
+  31  16   0   8   2   6   0   1   0   0
+
+@85 fm ; drive16_brass_stab
+   4   6
+  24   8   0   5   2  18   0   1   0   0
+  31  12   0   8   3   0   0   1   0   0
+  24   8   0   5   2  22   0   2   0   0
+  31  12   0   8   2   0   0   1   0   0
+
+
+; A: Bass — two distinct phrases
+A t140 @80 v13 o3 l8 c r c g | g r c e | f r f c | g r a g
+A @80 v13 o3 l8 d r d a | a r d f | e r e g | a r f d
+A @80 v13 o3 l8 c r c g | g r c e | f r f c | g r a g
+A @80 v13 o3 l8 d r d a | a r d f | e r e g | a r f d
+A @80 v13 o3 l8 c r c g | g r c e | f r f c | g r a g
+A @80 v13 o3 l8 d r d a | a r d f | e r e g | a r f d
+A @80 v13 o3 l8 <c r <c <g | <g r <c <e | <f r <f <c | <g r <a <g
+A @80 v13 o3 l8 <d r <d <a | <a r <d <f | <e r <e <g | <a r <f <d
+
+; B: Lead — A/B phrase with distinct shapes
+B     @81 v11 o4 l8 e g c e | g e c | e g a g | e c g e | b- a g f+ | b a g e
+B @81 v11 o4 l8 d f d f | a f d | d e g f | e d c d
+B @81 v11 o4 l8 e g c e | g e c | e g a g | e c g e
+B @81 v11 o4 l8 d f d f | a f d | d e g f | e d c d
+B @81 v11 o4 <l8 e g c e | g e c | e g a g | e c g
+B @81 v11 o4 <l8 d f d f | a f d | d e g f | e d <c <d
+B @81 v11 o4 l8 <c <g <e <c | <g <e <c | <e <g <a <g | <e <c <g <e
+B @81 v11 o4 l8 <d <f <d <a | <f <d <a | <d <e <g <f | <e <d <c <d
+
+; C: Pad — warm chords
+C     @82 v8  o4 l4 c e g <c | <g e c <c
+C @82 v8  o4 l4 d f a d | a f d d
+C @82 v8  o4 l4 c e g <c | <g e c <c
+C @82 v8  o4 l4 d f a d | a f d d
+C @82 v8  o4 l4 c e g <c | <g e c <c
+C @82 v8  o4 l4 d f a d | a f d d
+C @82 v8  o4 l4 <c <e <g <c | <g <e <c <c
+C @82 v8  o4 l4 <d <f <a <d | <a <f <d <d
+
+; D: Chip pluck arpeggio
+D     @83 v10 o4 l16 r g c g | e c g e | d f a f | c f a c
+D @83 v10 o4 l16 r g c g | e c g e | d f a f | c f a c
+D @83 v10 o4 l16 r g c g | e c g e | d f a f | c f a c
+D @83 v10 o4 l16 r g c g | e c g e | d f a f | c f a c
+D @83 v10 o4 l16 r e g e | c g e c | d a f a | f a d d
+D @83 v10 o4 l16 r e g e | c g e c | d a f a | f a d d
+D @83 v10 o4 l16 r e g e | c g e c | d a f a | f a d d
+D @83 v10 o4 l16 r e g e | c g e c | d a f a | f a d d
+
+; E: Bell counterline
+E     @84 v9  o5 l8 <c g <e <c | g <e <c
+E @84 v9  o5 l8 <a <f <d <a | f <d <a
+E @84 v9  o5 l8 <c g <e <c | g <e c
+E @84 v9  o5 l8 <a <f <d a | f d a
+E @84 v9  o5 l8 <c g <e <c | g <e <c
+E @84 v9  o5 l8 <a <f <d <a | f <d <a
+E @84 v9  o5 l8 <c g <e <c | g <e c
+E @84 v9  o5 l8 <a <f <d a | f d a
+E @84 v9  o5 l8 g e c g | e c <e
+E @84 v9  o5 l8 a f <d a | f <d f
+E @84 v9  o5 l8 g e c g | e c c
+E @84 v9  o5 l8 a f <d <a | f <d <d
+E r <c r <e | r <g r <c
+E r <e r <g | r <a r <f
+
+; F: Percussion — noisy PSG rhythm
+F     @85 v11 o4 l4 g r g r | a r a r | g r g r | a r a r
+F @85 v11 o4 l4 g r g r | a r a r | g r g r | a r a r
+F @85 v11 o4 l4 g r g r | a r a r | g r g r | a r a r
+F @85 v11 o4 l4 g r g r | a r a r | g r g r | a r a r
+F @85 v11 o4 l4 g r g r | a r a r | g r g r | a r a r
+F @85 v11 o4 l4 g r g r | a r a r | g r g r | a r a r
+F @85 v11 o4 l4 a r g r | c r c r | a r a r | g r g r
+F @85 v11 o4 l4 g r g r | a r a r | g r g r | a r a r
+
+; J: PSG noise percussion
+J v12 o4 l8 c r c r | c c c r | c r c r | c c c c
+J v12 o4 l8 c r c r | c c c r | c r c r | c c c c
+J v12 o4 l8 c r c r | c c c r | c r c r | c c c c
+J v12 o4 l8 c r c r | c c c r | c r c r | c c c c
