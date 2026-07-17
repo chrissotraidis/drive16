@@ -78,9 +78,9 @@ TOOLS: list[dict[str, Any]] = [
         "name": "enqueue_sprite",
         "title": "Enqueue Sprite Job",
         "description": (
-            "Start a sprite generation job in the background and return immediately "
-            "with a job id. Poll job_status, then fetch_result. Safe even while the "
-            "checkpoint is still loading (a cold load never blocks this call)."
+            "Background sprite job for cold starts or parallel work: returns a job id "
+            "immediately; poll job_status, then fetch_result. Inside a bounded agent "
+            "pass prefer the synchronous generate_sprite - polling costs steps."
         ),
         "inputSchema": {
             "type": "object",
