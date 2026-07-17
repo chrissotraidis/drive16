@@ -104,6 +104,22 @@
         "drive16-comfyui_*": "deny",
         "drive16-mml-music_*": "deny"
       }
+    },
+    "drive16-iterate": {
+      "description": "Fast bounded iteration on the current game: one focused change, build, scoped verify",
+      "mode": "primary",
+      "steps": 12,
+      "max_tokens": 3500,
+      "maxOutputTokens": 3500,
+      "temperature": 0,
+      "permission": {
+        "task": "deny",
+        "todowrite": "deny",
+        "webfetch": "deny",
+        "drive16-comfyui_*": "deny",
+        "drive16-mml-music_*": "deny",
+        "drive16-rag_*": "deny"
+      }
     }
   },
   "provider": {

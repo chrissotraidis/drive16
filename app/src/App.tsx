@@ -2070,6 +2070,7 @@ function App() {
           musicGeneration: enhancements.musicGeneration,
           seededPrototypeBuilt,
           repairMode: agentName === "drive16-repair",
+          iterationMode: agentName === "drive16-iterate",
           comfyUiEndpoint,
           comfyUiCheckpoint,
           comfyUiLora,
