@@ -45,6 +45,65 @@
         "task": "deny",
         "todowrite": "deny"
       }
+    },
+    "drive16-implement": {
+      "description": "Phased pass 1: requested gameplay to a verified first build",
+      "mode": "primary",
+      "steps": 20,
+      "max_tokens": 3500,
+      "maxOutputTokens": 3500,
+      "temperature": 0,
+      "permission": {
+        "task": "deny",
+        "todowrite": "deny",
+        "webfetch": "deny",
+        "drive16-comfyui_*": "deny",
+        "drive16-mml-music_*": "deny"
+      }
+    },
+    "drive16-art": {
+      "description": "Phased pass 2: generate, wire, and verify sprites for the primary roles",
+      "mode": "primary",
+      "steps": 16,
+      "max_tokens": 3500,
+      "maxOutputTokens": 3500,
+      "temperature": 0.4,
+      "permission": {
+        "task": "deny",
+        "todowrite": "deny",
+        "webfetch": "deny",
+        "drive16-mml-music_*": "deny",
+        "drive16-rag_*": "deny"
+      }
+    },
+    "drive16-music": {
+      "description": "Phased pass 3: compose, wire, and verify the soundtrack end to end",
+      "mode": "primary",
+      "steps": 16,
+      "max_tokens": 3500,
+      "maxOutputTokens": 3500,
+      "temperature": 0.4,
+      "permission": {
+        "task": "deny",
+        "todowrite": "deny",
+        "webfetch": "deny",
+        "drive16-comfyui_*": "deny"
+      }
+    },
+    "drive16-polish": {
+      "description": "Phased pass 4: fix verification findings and finish project memory",
+      "mode": "primary",
+      "steps": 12,
+      "max_tokens": 3500,
+      "maxOutputTokens": 3500,
+      "temperature": 0,
+      "permission": {
+        "task": "deny",
+        "todowrite": "deny",
+        "webfetch": "deny",
+        "drive16-comfyui_*": "deny",
+        "drive16-mml-music_*": "deny"
+      }
     }
   },
   "provider": {
