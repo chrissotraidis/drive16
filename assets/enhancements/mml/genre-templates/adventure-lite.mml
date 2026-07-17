@@ -1,0 +1,112 @@
+#title Adventure Lite Template
+#platform megadrive
+
+@80 fm ; drive16_round_bass
+   3   1
+  31   7   0   8   3  28   0   1   0   0
+  31  12   0   8   5  42   0   1   0   0
+  31   7   0   8   3  18   0   2   0   0
+  31  16   0   9   1   0   0   1   0   0
+   0
+
+@81 fm ; drive16_clear_lead
+   4   4
+  25   5   0   4   2  22   0   2   3   0
+  31  10   0   6   3   0   0   2   0   0
+  25   5   0   4   2  30   0   3   3   0
+  31  10   0   6   2   0   0   1   0   0
+
+@82 fm ; drive16_soft_pad
+   5   2
+  20   4   5   8   6  36   0   2   0   0
+  24  10   4  10   5   6   0   1   0   0
+  18   4   5   8   6  42   0   2   0   0
+  24  12   4  10   5  10   0   1   0   0
+
+@83 fm ; drive16_chip_pluck
+   5   3
+  31  18   0   6   2  34   0   3   0   0
+  31  20   0   7   1   0   0   1   0   0
+  26  10   0   5   2  48   0   4   0   0
+  31  18   0   7   1   8   0   1   0   0
+
+@84 fm ; drive16_bright_bell
+   7   3
+  31  12   0   5   3  28   0   5   3   0
+  31  14   0   7   2   0   0   1   0   0
+  24   8   0   4   4  44   0   7   7   0
+  31  16   0   8   2   6   0   1   0   0
+
+@85 fm ; drive16_brass_stab
+   4   6
+  24   8   0   5   2  18   0   1   0   0
+  31  12   0   8   3   0   0   1   0   0
+  24   8   0   5   2  22   0   2   0   0
+  31  12   0   8   2   0   0   1   0   0
+
+
+
+; A: Bass — two distinct phrases
+A t118 @80 v12 o3 l8 f r c r | f r c r | g r d r | g r d r
+A @80 v12 o3 l8 f r c r | f r c r | g r d r | g r d r
+A @80 v12 o3 l8 a r e r | a r e r | g r c r | g r c r
+A @80 v12 o3 l8 a r e r | a r e r | g r c r | g r c r
+A @80 v12 o3 l8 f r c r | f r c r | g r d r | g r d r
+A @80 v12 o3 l8 f r c r | f r c r | g r d r | g r d r
+A @80 v12 o3 l8 <f r <c r | <f r <c r | <g r <d r | <g r <d r
+A @80 v12 o3 l8 <a r <e r | <a r <e r | <g r <c r | <g r <c r
+
+B @84 v10 o4 l8 c d f a | g f d c | d e g b | a g e d | b- a g f+ | b a g e
+B @84 v10 o4 l8 c d f a | g f d c | d e g b | a g e d
+B @84 v10 o4 l8 e f+ a c | b- a f+ e | d e g c | b g e c
+B @84 v10 o4 l8 e f a c | b a f e | d e g c | b g e c
+B @84 v10 o4 l8 c d f a | g f d c | d e g b | a g e d
+B @84 v10 o4 l8 c d f a | g f d c | d e g b | a g e d
+B @84 v10 o4 l8 <c <d <f <a | <g <f <d <c | <d <e <g <b | <a <g <e <d
+B @84 v10 o4 l8 <e <f <a <c | <b <a <f <e | <d <e <g <c | <b <g <e <c
+
+C @82 v9 o4 l2 f a | c a
+C @82 v9 o4 l2 g b | d b
+C @82 v9 o4 l2 f a | c a
+C @82 v9 o4 l2 g b | d b
+C @82 v9 o4 l2 f a | c a
+C @82 v9 o4 l2 g b | d b
+C @82 v9 o4 l2 <f <a | <c <a
+C @82 v9 o4 l2 <g <b | <d <b
+
+D @83 v9 o4 l16 f r a r | c r a r | g r b r | d r b r
+D @83 v9 o4 l16 f r a r | c r a r | g r b r | d r b r
+D @83 v9 o4 l16 a r c r | e r c r | g r c r | e r c r
+D @83 v9 o4 l16 a r c r | e r c r | g r c r | e r c r
+D @83 v9 o4 l16 f r a r | c r a r | g r b r | d r b r
+D @83 v9 o4 l16 f r a r | c r a r | g r b r | d r b r
+D @83 v9 o4 l16 <a r <c r | <e r <c r | <g r <c r | <e r <c r
+D @83 v9 o4 l16 <f r <a r | <c r <a r | <g r <b r | <d r <b r
+
+E @81 v9 o5 l4 a r f r | g r d r
+E @81 v9 o5 l4 a r f r | g r d r
+E @81 v9 o5 l4 c r a r | b r g r
+E @81 v9 o5 l4 c r a r | b r g r
+E @81 v9 o5 l4 a r f r | g r d r
+E @81 v9 o5 l4 a r f r | g r d r
+E @81 v9 o5 l4 <c r <a r | <b r <g r
+E @81 v9 o5 l4 <a r <f r | <g r <d r
+
+F @85 v10 o4 l4 f r r r | g r r r | f r r r | g r r r
+F @85 v10 o4 l4 f r r r | g r r r | f r r r | g r r r
+F @85 v10 o4 l4 f r r r | g r r r | f r r r | g r r r
+F @85 v10 o4 l4 f r r r | g r r r | f r r r | g r r r
+F @85 v10 o4 l4 f r r r | g r r r | f r r r | g r r r
+F @85 v10 o4 l4 f r r r | g r r r | f r r r | g r r r
+F @85 v10 o4 l4 f r r r | g r r r | f r r r | g r r r
+F @85 v10 o4 l4 f r g r | f r g r | f r r r | g r r r
+
+; J: PSG noise percussion
+J v10 o4 l4 c r r r | c r c r
+J v10 o4 l4 c r r r | c r c r
+J v10 o4 l4 c r r r | c r c r
+J v10 o4 l4 c r r r | c r c r
+J v10 o4 l4 c r r r | c r c r
+J v10 o4 l4 c r r r | c r c r
+J v10 o4 l4 c r r r | c r c r
+J v10 o4 l4 c r r r | c r c r

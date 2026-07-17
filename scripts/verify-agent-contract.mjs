@@ -164,12 +164,12 @@ const nostalgistPatchSource = await readFile(
 );
 
 assert(
-  openCodeConfig.agent["drive16-build"].max_tokens === 8000,
-  "Drive16 implementation calls must remain capped at 8,000 completion tokens.",
+  openCodeConfig.agent["drive16-build"].max_tokens === 3500,
+  "Drive16 implementation steps must stay under ~3,500 completion tokens: a longer single response cannot finish inside OpenCode's request ceiling at local-model speeds and stalls the session silently.",
 );
 assert(
-  openCodeConfig.agent["drive16-repair"].max_tokens === 4000,
-  "Drive16 repair calls must remain capped at 4,000 completion tokens.",
+  openCodeConfig.agent["drive16-repair"].max_tokens === 3500,
+  "Drive16 repair steps must stay under ~3,500 completion tokens for the same request-ceiling reason.",
 );
 assert(
   openCodeConfig.agent["drive16-repair"].steps === 16,

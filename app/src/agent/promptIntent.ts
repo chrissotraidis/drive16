@@ -6,7 +6,7 @@
 
 export type AgentIntent = {
   preserveProject: boolean;
-  agentName: "drive16-build" | "drive16-repair";
+  agentName: "drive16-build" | "drive16-repair" | "drive16-iterate";
 };
 
 export type AgentIntentContext = {
@@ -121,7 +121,13 @@ export function classifyAgentIntent(text: string, context: AgentIntentContext): 
     preserveProject = context.projectHasGame;
   }
 
-  const agentName: AgentIntent["agentName"] =
-    preserveProject && looksLikeRepairPrompt(normalized) ? "drive16-repair" : "drive16-build";
+  // Follow-ups on a working game get the fast bounded iterate agent with
+  // change-scoped verification; broken-game prompts get the repair agent;
+  // new games get the full build agent.
+  const agentName: AgentIntent["agentName"] = !preserveProject
+    ? "drive16-build"
+    : looksLikeRepairPrompt(normalized)
+      ? "drive16-repair"
+      : "drive16-iterate";
   return { preserveProject, agentName };
 }

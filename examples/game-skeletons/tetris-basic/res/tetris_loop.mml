@@ -1,0 +1,108 @@
+#title Puzzle Groove Template
+#platform megadrive
+
+@80 fm ; drive16_round_bass
+   3   1
+  31   7   0   8   3  28   0   1   0   0
+  31  12   0   8   5  42   0   1   0   0
+  31   7   0   8   3  18   0   2   0   0
+  31  16   0   9   1   0   0   1   0   0
+   0
+
+@81 fm ; drive16_clear_lead
+   4   4
+  25   5   0   4   2  22   0   2   3   0
+  31  10   0   6   3   0   0   2   0   0
+  25   5   0   4   2  30   0   3   3   0
+  31  10   0   6   2   0   0   1   0   0
+
+@82 fm ; drive16_soft_pad
+   5   2
+  20   4   5   8   6  36   0   2   0   0
+  24  10   4  10   5   6   0   1   0   0
+  18   4   5   8   6  42   0   2   0   0
+  24  12   4  10   5  10   0   1   0   0
+
+@83 fm ; drive16_chip_pluck
+   5   3
+  31  18   0   6   2  34   0   3   0   0
+  31  20   0   7   1   0   0   1   0   0
+  26  10   0   5   2  48   0   4   0   0
+  31  18   0   7   1   8   0   1   0   0
+
+@84 fm ; drive16_bright_bell
+   7   3
+  31  12   0   5   3  28   0   5   3   0
+  31  14   0   7   2   0   0   1   0   0
+  24   8   0   4   4  44   0   7   7   0
+  31  16   0   8   2   6   0   1   0   0
+
+@85 fm ; drive16_brass_stab
+   4   6
+  24   8   0   5   2  18   0   1   0   0
+  31  12   0   8   3   0   0   1   0   0
+  24   8   0   5   2  22   0   2   0   0
+  31  12   0   8   2   0   0   1   0   0
+
+
+
+; A: Bass — two distinct phrases
+A t128 @80 v13 o3 l8 a r a e | a r a e | f r f c | g r g d
+A @80 v13 o3 l8 a r a e | a r a e | f r f c | g r g d
+A @80 v13 o3 l8 d r d a | d r d a | e r e b | e r e b
+A @80 v13 o3 l8 d r d a | d r d a | e r e b | e r e b
+A @80 v13 o3 l8 a r a e | a r a e | f r f c | g r g d
+A @80 v13 o3 l8 a r a e | a r a e | f r f c | g r g d
+A @80 v13 o3 l8 <a r <a <e | <a r <a <e | <f r <f <c | <g r <g <d
+A @80 v13 o3 l8 <d r <d <a | <d r <d <a | <e r <e <b | <e r <e <b
+
+B @81 v11 o4 l8 e a b c | b a e r | f a c a | b a g r | b- a g f+ | b a g e
+B @81 v11 o4 l8 e a b c | b a e r | f a c a | b a g r
+B @81 v11 o4 l8 d f a f | e c g+ r | e g b- g | e b g+ r
+B @81 v11 o4 l8 d f a f | e c a r | e g b g | e b g r
+B @81 v11 o4 l8 e a b c | b a e r | f a c a | b a g r
+B @81 v11 o4 l8 e a b c | b a e r | f a c a | b a g r
+B @81 v11 o4 l8 <e <a <b <c | <b <a <e r | <f <a <c <a | <b <a <g r
+B @81 v11 o4 l8 <d <f <a <f | <e <c <a r | <e <g <b <g | <e <b <g r
+
+C @82 v8 o4 l4 a c e c | f a c a
+C @82 v8 o4 l4 d f a f | e g b g
+C @82 v8 o4 l4 a c e c | f a c a
+C @82 v8 o4 l4 d f a f | e g b g
+C @82 v8 o4 l4 a c e c | f a c a
+C @82 v8 o4 l4 d f a f | e g b g
+C @82 v8 o4 l4 <a <c <e <c | <f <a <c <a
+C @82 v8 o4 l4 <d <f <a <f | <e <g <b <g
+
+D @83 v10 o4 l16 r a c a | e c a e | d f d f | a f d a
+D @83 v10 o4 l16 r a c a | e c a e | d f d f | a f d a
+D @83 v10 o4 l16 r e a e | c a e c | e g e g | b g e b
+D @83 v10 o4 l16 r e a e | c a e c | e g e g | b g e b
+D @83 v10 o4 l16 r a c a | e c a e | d f d f | a f d a
+D @83 v10 o4 l16 r a c a | e c a e | d f d f | a f d a
+D @83 v10 o4 l16 <r a <c a | <e c <a e | <d f <d f | <a f <d a
+D @83 v10 o4 l16 <r e <a e | <c a <e c | <e g <e g | <b g <e b
+
+E @84 v9 o5 l8 a r e r | c r e r | f r c r | d r b r
+E @84 v9 o5 l8 a r e r | c r e r | f r c r | d r b r
+E @84 v9 o5 l8 d r a r | f r a r | e r b r | g r e r
+E @84 v9 o5 l8 d r a r | f r a r | e r b r | g r e r
+E @84 v9 o5 l8 a r e r | c r e r | f r c r | d r b r
+E @84 v9 o5 l8 a r e r | c r e r | f r c r | d r b r
+E @84 v9 o5 l8 <d r <a r | <f r <a r | <e r <b r | <g r <e r
+E @84 v9 o5 l8 <a r <e r | <c r <e r | <f r <c r | <d r <b r
+
+F @85 v11 o4 l4 a r a r | e r e r | a r a r | e r e r
+F @85 v11 o4 l4 a r a r | e r e r | a r a r | e r e r
+F @85 v11 o4 l4 a r a r | e r e r | a r a r | e r e r
+F @85 v11 o4 l4 a r a r | e r e r | a r a r | e r e r
+F @85 v11 o4 l4 a r a r | e r e r | a r a r | e r e r
+F @85 v11 o4 l4 a r a r | e r e r | a r a r | e r e r
+F @85 v11 o4 l4 a r a r | e r e r | a r a r | e r e r
+F @85 v11 o4 l4 a r e r | a r e r | a r a r | e r e r
+
+; J: PSG noise percussion
+J v12 o4 l8 c r r c | c r c r | c r r c | c r c c
+J v12 o4 l8 c r r c | c r c r | c r r c | c r c c
+J v12 o4 l8 c r r c | c r c r | c r r c | c r c c
+J v12 o4 l8 c r r c | c r c r | c r r c | c r c c

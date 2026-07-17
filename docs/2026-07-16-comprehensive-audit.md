@@ -349,3 +349,29 @@ Also validated incidentally: an in-app browser build on the Ollama provider
 ran end-to-end to a clean finish (32 tool calls), and the G3 classifier now
 treats "make a simple pong game" over an existing Pong as an iteration
 instead of a project reset.
+
+## 9. P1 quality loop results (2026-07-17)
+
+Branch `quality/2026-07-17-p1` (plan: `docs/2026-07-17-p1-plan.md`). The
+benchmark was the user's bar: a Missile Command that looks and sounds like a
+real Genesis release, built fully locally.
+
+- **Before (single bounded pass)**: 29.5 min, 741k tokens, and no game —
+  sprites and a quality-passing soundtrack were generated but the run died at
+  its step cap with zero build_rom calls.
+- **After (phased pipeline)**: implement → art → music → polish with
+  deterministic gates: **25.2 min, all gates green** — three role-correct
+  generated sprites wired and visible in play, a template-derived soundtrack
+  wired and verified non-silent, and the full presentation contract passing
+  at every visual gate.
+- **Iteration**: follow-ups on a working game now route to a bounded iterate
+  agent with change-scoped verification — measured **1 m 49 s** in-app for a
+  correct two-define change on local qwen.
+- Supporting: timeout-proof sprite/background job tools (cold-start safe),
+  a verified-good genre MML template library (skeleton stub blips replaced
+  with real tracks), and a stack of session-reliability fixes (3,500-token
+  step cap, sleep-proofed runs, stale-server documentation).
+
+Carried to P2: gameplay depth beyond the seeded skeletons (self-play
+scoring, reference calibration), sprite crops/candidate ranking, and app-UI
+integration of the phased runner.

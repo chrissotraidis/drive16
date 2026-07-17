@@ -18,14 +18,14 @@ const blankProject = { projectHasGame: false, currentGameHint: "Untitled Project
 
 const cases = [
   // Follow-ups on a real project must preserve it (the audit's wipe bug).
-  { text: "add a second ball", context: pongProject, preserve: true, agent: "drive16-build" },
-  { text: "add sound", context: pongProject, preserve: true, agent: "drive16-build" },
-  { text: "give the ship a sprite", context: pongProject, preserve: true, agent: "drive16-build" },
-  { text: "make it faster", context: pongProject, preserve: true, agent: "drive16-build" },
-  { text: "make the paddles twice as tall", context: pongProject, preserve: true, agent: "drive16-build" },
-  { text: "add a tetris-style bonus round", context: pongProject, preserve: true, agent: "drive16-build" },
+  { text: "add a second ball", context: pongProject, preserve: true, agent: "drive16-iterate" },
+  { text: "add sound", context: pongProject, preserve: true, agent: "drive16-iterate" },
+  { text: "give the ship a sprite", context: pongProject, preserve: true, agent: "drive16-iterate" },
+  { text: "make it faster", context: pongProject, preserve: true, agent: "drive16-iterate" },
+  { text: "make the paddles twice as tall", context: pongProject, preserve: true, agent: "drive16-iterate" },
+  { text: "add a tetris-style bonus round", context: pongProject, preserve: true, agent: "drive16-iterate" },
   // Ambiguous prompts default to preserving a real project.
-  { text: "cooler explosions please", context: pongProject, preserve: true, agent: "drive16-build" },
+  { text: "cooler explosions please", context: pongProject, preserve: true, agent: "drive16-iterate" },
   // Broken-game prompts get the bounded repair agent.
   { text: "fix the crash when the ball hits the wall", context: pongProject, preserve: true, agent: "drive16-repair" },
   { text: "the controls are broken, repair them", context: pongProject, preserve: true, agent: "drive16-repair" },

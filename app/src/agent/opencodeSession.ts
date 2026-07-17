@@ -258,7 +258,7 @@ export async function sendAgentPrompt({
   text: string;
   providerId: string;
   modelId: string;
-  agentName: "drive16-build" | "drive16-repair";
+  agentName: "drive16-build" | "drive16-repair" | "drive16-iterate";
   noReply?: boolean;
   background?: boolean;
   comfyUiEndpoint?: string;
@@ -363,6 +363,7 @@ export type AgentPromptContext = {
   musicGeneration: boolean;
   seededPrototypeBuilt: boolean;
   repairMode: boolean;
+  iterationMode?: boolean;
   comfyUiEndpoint: string;
   comfyUiCheckpoint: string;
   comfyUiLora: string;
@@ -428,6 +429,30 @@ export function agentPromptWithProject(
         "- Require compile_music quality.pass, rebuild with the new VGM/XGM resource, and verify non-silent audio.",
       ].join("\n")
     : "Original music is disabled. Reuse a verified seeded VGM when available instead of composing replacement music.";
+
+  // Fast iteration on a working game: one focused change with verification
+  // scoped to that change. The full rule wall exists for building games, not
+  // for making the paddles bigger; a lean prompt keeps local follow-ups fast.
+  if (context?.iterationMode) {
+    const audioTouched = /\b(music|sound|audio|sfx|song|volume|mute)\b/i.test(userText);
+    return [
+      `Active Drive16 project: ${projectPath}`,
+      [
+        "FAST ITERATION on the current game. Make exactly the requested change; do not redesign, add systems, or polish docs.",
+        "- Read src/main.c (and GAME.md only if the request is unclear), make the minimal edit(s), then call the drive16-sgdk-build tool build_rom on the project path.",
+        "- Verify only what the change affects with the drive16-emulator tools: run_rom (>=180 frames) and capture_frame always;" +
+          (audioTouched
+            ? " verify_audio because the request touches sound;"
+            : " skip audio checks (the change does not touch sound);") +
+          " send_input only when the change affects controls.",
+        "- Drive16 stamps mechanical evidence from the trace afterward; write nothing in GAME.md/ASSETS.md/PLAYTEST.md unless the change makes them wrong.",
+        "- Keep responses short. Finish by stating the change and what you verified. Never write Playability gate: PASS.",
+      ].join("\n"),
+      `User request: ${userText}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
 
   const simpleGameBuild =
     /\b(simple|basic)\b/i.test(userText) &&
