@@ -196,7 +196,7 @@ python3 scripts/profile-reference-rom.py path/to/reference.bin --label my-refere
 
 ## Roadmap
 
-The current plan is [docs/2026-07-17-p2-plan.md](docs/2026-07-17-p2-plan.md): close the gap between generated games and real Genesis feel.
+The ordered next steps, starting with closing out the UI pass, are in [docs/2026-10-06-handoff.md](docs/2026-10-06-handoff.md). The larger quality plan is [docs/2026-07-17-p2-plan.md](docs/2026-07-17-p2-plan.md): close the gap between generated games and real Genesis feel.
 
 1. **Game-feel library** in the starter project (per-pixel physics, SFX timing, animation), with genre skeletons rebuilt on it so the model composes rather than invents.
 2. **Feel gates and self-play scoring** against the measured [Genesis feel bar](docs/genesis-feel-bar.md).
@@ -241,7 +241,7 @@ scripts/              build, launch, profiling, and verification tooling
 docs/                 living docs and per-phase evidence
 ```
 
-Key documents: [docs/2026-07-17-handoff.md](docs/2026-07-17-handoff.md) (where things stand), [docs/DESIGN.md](docs/DESIGN.md) (UI design thesis), [PROGRESS.md](PROGRESS.md), [WORKLOG.md](WORKLOG.md), and [DECISIONS.md](DECISIONS.md).
+Key documents: [docs/2026-10-06-handoff.md](docs/2026-10-06-handoff.md) (where things stand and the next plan), [docs/DESIGN.md](docs/DESIGN.md) (UI design thesis), [PROGRESS.md](PROGRESS.md), [WORKLOG.md](WORKLOG.md), and [DECISIONS.md](DECISIONS.md).
 </details>
 
 ## Licensing and asset hygiene

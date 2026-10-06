@@ -1,6 +1,26 @@
 # Drive16 Progress
 
-Current phase: Direct-download packaging baseline complete; packaged
+Current phase (2026-10-06): UI and README refreshed; next is closing out the UI
+pass, then the P2-G1a game-feel library. The ordered plan lives in
+[docs/2026-10-06-handoff.md](docs/2026-10-06-handoff.md). Packaged interactive
+Play remains a release blocker.
+
+## README and UI refresh (2026-10-06)
+
+- README rewritten in the shared port format; design thesis in
+  `docs/DESIGN.md`.
+- Fixed: cropped player canvas on resize, live game dimmed by the preview
+  filter, undefined `--amber` token, header mixing playback with project stage,
+  stale ROM presented as a new game (now offers Rebuild ROM), stale
+  screen-check notice, Escape for dialogs, focus rings, multi-line IME-safe
+  composer, repo-relative build-log paths, real build error text.
+- Open: Rebuild ROM success path untested (Docker was off); browser smoke test
+  times out at Test OpenRouter on `main` too; project name can drift from the
+  game because it lives in `localStorage`.
+
+## Earlier phase summary
+
+Phase as of 2026-07-10: Direct-download packaging baseline complete; packaged
 interactive Play remains a release blocker.
 
 The builder reliability, four-prompt functional audit, first-run UX, stricter

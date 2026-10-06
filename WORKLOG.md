@@ -1,5 +1,25 @@
 # Drive16 Worklog
 
+## 2026-10-06 - README refresh, UI design pass, next plan
+
+Did:
+
+- Rewrote the README in the shared port format and added `docs/DESIGN.md`.
+- Moved the UI to graphite surfaces with one orange accent and fixed ten UI
+  bugs and edge cases (PR #5, merged as `0e06d22`).
+- Wrote `docs/2026-10-06-handoff.md` with the ordered next plan (N1 to N4).
+
+Evidence:
+
+- `pnpm --dir app build` and the agent-contract, prompt-intent, watchdog, and
+  project-memory checks pass. UI checked at 900, 1280, and 1440 px, including
+  first-run and stale-ROM states from a scratch copy.
+
+Next:
+
+- N1 in `docs/2026-10-06-handoff.md`: prove Rebuild ROM with Docker, fix the
+  smoke test's Test OpenRouter step, read the project name from `GAME.md`.
+
 ## 2026-07-10 - ITERATION 123 - browser-first Play recovery and native truth
 
 Did:
