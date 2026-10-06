@@ -6,7 +6,13 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { healthIcon, shortPath, type HealthState } from "./ui";
+import {
+  healthIcon,
+  isStaleRomDetail,
+  shortPath,
+  useEscapeToClose,
+  type HealthState,
+} from "./ui";
 
 type ProjectSummaryInfo = {
   name: string;
@@ -14,6 +20,7 @@ type ProjectSummaryInfo = {
   romPath: string;
   exportDirectory: string;
   romStatus: string;
+  romDetail?: string;
   assetRoles: ProjectAssetRoleInfo[];
 };
 
@@ -84,12 +91,15 @@ export function ProjectMenu({
   onOpenProject: () => void;
   onVerify: () => void;
 }) {
+  useEscapeToClose(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <aside
         className="project-menu"
         aria-label="Project menu"
+        aria-modal="true"
         data-testid="project-menu"
+        role="dialog"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="project-menu-header">
@@ -198,7 +208,14 @@ export function ProjectMenu({
               </strong>
               <span>ROM</span>
               <strong title={projectSummary.romPath}>
-                {projectSummary.romStatus === "ready" ? "Built and ready" : "Not built yet"}
+                {projectSummary.romStatus === "ready"
+                  ? "Built and ready"
+                  : projectSummary.romStatus === "warning" &&
+                      isStaleRomDetail(projectSummary.romDetail)
+                    ? "Out of date, rebuild needed"
+                    : projectSummary.romStatus === "warning"
+                      ? "Needs attention"
+                      : "Not built yet"}
               </strong>
               <span>Saved</span>
               <strong title={saveResult?.snapshotPath ?? "Not saved yet"}>

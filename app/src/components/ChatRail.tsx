@@ -8,7 +8,7 @@ import {
   Minimize2,
   Send,
 } from "lucide-react";
-import type { FormEvent, MutableRefObject } from "react";
+import type { FormEvent, KeyboardEvent, MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 
 type ChatMessage = {
@@ -60,7 +60,7 @@ export function ChatRail({
   draft: string;
   messages: ChatMessage[];
   messagesRef: MutableRefObject<HTMLDivElement | null>;
-  composerInputRef: MutableRefObject<HTMLInputElement | null>;
+  composerInputRef: MutableRefObject<HTMLTextAreaElement | null>;
   providerSetupHint: string;
   sendDisabled: boolean;
   onDraftChange: (value: string) => void;
@@ -84,6 +84,24 @@ export function ChatRail({
     if (!element) return;
     element.scrollTop = element.scrollHeight;
   }, [latestVisibleBuildEventId]);
+
+  // Grow the composer with its content, up to a few lines, then scroll.
+  useEffect(() => {
+    const element = composerInputRef.current;
+    if (!element) return;
+    element.style.height = "auto";
+    const height = Math.min(element.scrollHeight + 2, 160);
+    element.style.height = `${height}px`;
+    element.style.overflowY = element.scrollHeight + 2 > 160 ? "auto" : "hidden";
+  }, [composerInputRef, draft, collapsed]);
+
+  function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    // Leave Enter alone while an IME (for example Japanese input) is composing.
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    if (!sendDisabled) event.currentTarget.form?.requestSubmit();
+  }
 
   if (collapsed) {
     return (
@@ -179,10 +197,12 @@ export function ChatRail({
               <p key={event.id}>
                 <time>{event.time}</time>
                 <b>{friendlyEventType(event.type)}</b>
-                <small>{event.detail}</small>
+                <small title={event.detail}>{displayEventDetail(event.detail)}</small>
               </p>
             ))}
           </div>
+        ) : buildLogOpen ? (
+          <p className="chat-build-log-empty">Build steps appear here while Drive16 works.</p>
         ) : null}
         {buildLogOpen ? <details className="chat-raw-log" data-testid="chat-raw-log">
           <summary>
@@ -195,7 +215,7 @@ export function ChatRail({
                 <p key={event.id}>
                   <time>{event.time}</time>
                   <b>{event.type}</b>
-                  <small>{event.detail}</small>
+                  <small title={event.detail}>{displayEventDetail(event.detail)}</small>
                 </p>
               ))}
             </div>
@@ -217,11 +237,13 @@ export function ChatRail({
           </button>
         ) : null}
         <form className="composer" onSubmit={onSubmit}>
-          <input
+          <textarea
             ref={composerInputRef}
             aria-label="Message Drive16"
             placeholder="Describe what to build…"
+            rows={1}
             value={draft}
+            onKeyDown={onComposerKeyDown}
             onChange={(event) => onDraftChange(event.target.value)}
           />
           <button aria-label="Send message" type="submit" disabled={sendDisabled}>
@@ -235,6 +257,11 @@ export function ChatRail({
 
 function messageMetaLabel(message: ChatMessage) {
   return message.role === "user" ? "You" : "Drive16";
+}
+
+/** Show project paths relative to the repository; the full path stays in the tooltip. */
+function displayEventDetail(detail: string) {
+  return detail.replace(/(?:\/[^\s/]+)+?\/(artifacts|examples|assets|scripts)\//g, "$1/");
 }
 
 function isLowSignalOpenCodeEvent(event: BuildLogEvent) {
@@ -309,6 +336,9 @@ function friendlyEventType(type: string) {
     "agent.refresh.failed": "Error",
     "project.active.rom": "Project",
     "project.active.stale": "Project",
+    "project.rebuild.started": "Rebuild",
+    "project.rebuild.finished": "Rebuilt",
+    "project.rebuild.failed": "Rebuild",
     "project.memory.ready": "Memory",
     "project.memory.warning": "Memory",
     "project.memory.missing": "Memory",
@@ -340,7 +370,8 @@ function friendlyEventType(type: string) {
     "preview.audio.captured": "Audio",
     "preview.audio.silent": "Audio",
   };
-  return labels[type] ?? type.split(".").pop() ?? type;
+  const fallback = type.split(".").pop() || type;
+  return labels[type] ?? `${fallback[0]?.toUpperCase() ?? ""}${fallback.slice(1)}`;
 }
 
 function isHeartbeatEvent(event: BuildLogEvent) {

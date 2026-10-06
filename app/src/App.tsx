@@ -86,6 +86,7 @@ import {
   defaultComfyUiCheckpoint,
   defaultComfyUiLora,
   formatBytes,
+  isStaleRomDetail,
   shortModelLabel,
   shortOllamaLabel,
   shortPath,
@@ -978,6 +979,10 @@ function App() {
   const [playerVolume, setPlayerVolume] = useState(defaultPlayerVolume);
   const [playerScreenEvidence, setPlayerScreenEvidence] =
     useState<PlayerScreenEvidence>("none");
+  const [rebuildBusy, setRebuildBusy] = useState(false);
+  // Delayed screen samplers read this instead of a stale render closure.
+  const playerScreenEvidenceRef = useRef<PlayerScreenEvidence>("none");
+  playerScreenEvidenceRef.current = playerScreenEvidence;
   const [playerInputEvidence, setPlayerInputEvidence] =
     useState<PlayerInputEvidence>("none");
   const [playerAudioEvidence, setPlayerAudioEvidence] =
@@ -1044,7 +1049,7 @@ function App() {
         },
   );
   const messagesRef = useRef<HTMLDivElement | null>(null);
-  const composerInputRef = useRef<HTMLInputElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const romViewportRef = useRef<HTMLDivElement | null>(null);
   const playerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playerRuntimeRef = useRef<NostalgistPlayerRuntime | undefined>();
@@ -1229,6 +1234,18 @@ function App() {
     element.scrollTop = element.scrollHeight;
   }, [messages]);
 
+  // A late emulator proof supersedes an earlier "could not check the screen" notice.
+  useEffect(() => {
+    if (playerScreenEvidence !== "visible" && playerScreenEvidence !== "captured") return;
+    setProjectActionNotice((current) =>
+      current.label === "Live screen check unavailable" || current.label === "Screen not verified"
+        ? playerScreenEvidence === "visible"
+          ? { state: "ready", label: "Screen visible", detail: "The game screen is visible and updating." }
+          : { state: "ready", label: "Screen frame captured", detail: "An emulator frame proved the screen renders." }
+        : current,
+    );
+  }, [playerScreenEvidence]);
+
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -1352,6 +1369,8 @@ function App() {
         ? "missing"
         : "warning";
   const topBarStatus = useMemo(() => {
+    // The header reports the project's stage only. Playback state (playing,
+    // paused, starting) is shown under the player, so the two never disagree.
     if (buildState === "building") {
       return {
         state: "building",
@@ -1362,10 +1381,6 @@ function App() {
     if (projectSummary.trustStage === "failed") {
       return { state: "error", label: "Failed Review" };
     }
-    if (playerState === "loading") return { state: "warning", label: "Starting" };
-    if (playerState === "playing" || playerState === "paused") {
-      return { state: "running", label: playerState === "paused" ? "Paused" : "Running" };
-    }
     if (projectSummary.trustStage === "reviewed") {
       return { state: "running", label: "Reviewed" };
     }
@@ -1373,17 +1388,19 @@ function App() {
       return { state: "running", label: "Playable" };
     }
     if (projectSummary.romStatus === "warning") {
-      return { state: "error", label: "Build incomplete" };
+      return isStaleRomDetail(projectSummary.romDetail)
+        ? { state: "warning", label: "Needs rebuild" }
+        : { state: "error", label: "Build incomplete" };
     }
-    if (activeRomPlayable) return { state: "warning", label: "Built" };
+    if (projectSummary.trustStage === "built") return { state: "warning", label: "Built" };
+    if (projectSummary.romStatus === "missing") return { state: "idle", label: "No ROM yet" };
     return { state: "warning", label: "Prototype" };
   }, [
-    activeRomPlayable,
     agentPhase,
     buildState,
+    projectSummary.romDetail,
     projectSummary.romStatus,
     projectSummary.trustStage,
-    playerState,
   ]);
 
   const actionFeedback = useMemo<ProjectActionNotice>(() => {
@@ -1415,6 +1432,14 @@ function App() {
         detail: actionDetail,
       };
     }
+    if (rebuildBusy) {
+      return {
+        state: "warning",
+        label: "Rebuilding ROM",
+        detail: "Compiling the current project source without changing it.",
+      };
+    }
+    if (projectActionNotice.label === "Rebuild failed") return projectActionNotice;
     if (playerState === "loading") {
       if (projectActionNotice.label === "Restarting game") {
         return projectActionNotice;
@@ -1451,8 +1476,8 @@ function App() {
     }
     if (projectSummary.romStatus === "warning") {
       return {
-        state: "missing",
-        label: "Build incomplete",
+        state: isStaleRomDetail(projectSummary.romDetail) ? "warning" : "missing",
+        label: isStaleRomDetail(projectSummary.romDetail) ? "Needs rebuild" : "Build incomplete",
         detail: projectSummary.romDetail,
       };
     }
@@ -1460,7 +1485,7 @@ function App() {
       return {
         state: "warning",
         label:
-          projectSummary.trustStage === "playable" ? "Playable; review pending" : "Built; not playable",
+          projectSummary.trustStage === "playable" ? "Review pending" : "Not playable yet",
         detail: projectSummary.reviewDetail,
       };
     }
@@ -1491,6 +1516,7 @@ function App() {
     projectSummary.romStatus,
     projectSummary.reviewDetail,
     projectSummary.trustStage,
+    rebuildBusy,
     saveBusy,
     starterBusy,
   ]);
@@ -4532,6 +4558,43 @@ function App() {
     );
   }
 
+  /** Compile the current source as-is (no agent, no edits) when the ROM is out of date. */
+  async function rebuildStaleProject() {
+    if (rebuildBusy) return;
+    setRebuildBusy(true);
+    setProjectActionNotice({
+      state: "warning",
+      label: "Rebuilding ROM",
+      detail: "Compiling the current project source without changing it.",
+    });
+    appendOpenCodeEvent("project.rebuild.started", projectSummary.projectPath);
+    try {
+      const built = await buildActiveProject();
+      if (!built.romExists) throw new Error(built.detail || "The build did not produce a ROM.");
+      setWorkspacePath(built.projectPath);
+      setProjectSummary(projectSummaryFromActiveProject(built, projectSummary.name));
+      resetActiveRomSession();
+      setAgentRom({ path: built.romPath, stamp: Date.now() });
+      setPlayerScreenEvidence("checking");
+      setPlayerInputEvidence("none");
+      setProjectActionNotice({
+        state: "warning",
+        label: "ROM rebuilt",
+        detail: "The ROM matches the current source again. Playable and Reviewed still need evidence.",
+      });
+      appendOpenCodeEvent("project.rebuild.finished", built.romPath);
+      noteAction("Rebuilt the ROM from the current project source.");
+      void loadProjectSummary();
+    } catch (error) {
+      const detail = errorDetail(error, "Drive16 could not rebuild the project");
+      setProjectActionNotice({ state: "missing", label: "Rebuild failed", detail });
+      appendOpenCodeEvent("project.rebuild.failed", detail);
+      noteAction(detail);
+    } finally {
+      setRebuildBusy(false);
+    }
+  }
+
   async function playActiveRom() {
     if (!interactiveCoreReadiness.canPlay) {
       setPlayerState("stopped");
@@ -4661,6 +4724,9 @@ function App() {
         reported = true;
         const unknownCount = samples.filter((sample) => sample === "unknown").length;
         const mostlyUnknown = unknownCount >= Math.ceil(samples.length / 2);
+        const alreadyProven =
+          playerScreenEvidenceRef.current === "visible" ||
+          playerScreenEvidenceRef.current === "captured";
         setPlayerScreenEvidence((current) =>
           current === "visible" || current === "captured"
             ? current
@@ -4681,11 +4747,14 @@ function App() {
         const detail = mostlyUnknown
           ? "The live canvas sampler was unavailable. Drive16 retained any completed emulator screen proof while the ROM kept running."
           : "Drive16 could not confirm visible game output. The ROM may be blank or stalled.";
-        setProjectActionNotice({
-          state: "warning",
-          label: mostlyUnknown ? "Live screen check unavailable" : "Screen not verified",
-          detail,
-        });
+        // Earlier emulator proof still stands, so only warn when nothing proved the screen.
+        if (!alreadyProven) {
+          setProjectActionNotice({
+            state: "warning",
+            label: mostlyUnknown ? "Live screen check unavailable" : "Screen not verified",
+            detail,
+          });
+        }
         noteAction(detail);
         appendOpenCodeEvent(
           mostlyUnknown ? "player.screen.inconclusive" : "player.screen.unverified",
@@ -5474,7 +5543,7 @@ function App() {
           messagesRef={messagesRef}
           composerInputRef={composerInputRef}
           providerSetupHint={providerSetupHint}
-          sendDisabled={openCodeBusy}
+          sendDisabled={openCodeBusy || !draft.trim()}
           onDraftChange={setDraft}
           onOpenSettings={() => setSettingsOpen(true)}
           onSubmit={submitMessage}
@@ -5515,6 +5584,13 @@ function App() {
           viewportRef={romViewportRef}
           buildInProgress={openCodeBusy || buildState === "building"}
           firstRunNote={firstRunNote}
+          rebuildBusy={rebuildBusy}
+          romStale={
+            projectSummary.romStatus === "warning" && isStaleRomDetail(projectSummary.romDetail)
+          }
+          onRebuild={() => {
+            void rebuildStaleProject();
+          }}
           onCloseControls={closeControlsPanel}
           onOpenProject={() => setProjectMenuOpen(true)}
           onPlay={() => {

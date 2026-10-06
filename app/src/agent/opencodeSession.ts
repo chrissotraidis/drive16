@@ -9,7 +9,12 @@ function isTauriRuntime() {
 
 async function requireJson<T>(response: Response, label: string): Promise<T> {
   if (!response.ok) {
-    throw new Error(`${label} failed with HTTP ${response.status}`);
+    // The dev server sends the build's own error text; surface its last line.
+    const body = (await response.text().catch(() => "")).trim();
+    const reason = body.split("\n").map((line) => line.trim()).filter(Boolean).pop();
+    throw new Error(
+      reason ? `${label} failed: ${reason.slice(0, 240)}` : `${label} failed with HTTP ${response.status}`,
+    );
   }
   return response.json() as Promise<T>;
 }
@@ -115,7 +120,7 @@ export async function buildActiveProject(): Promise<ActiveProject> {
   if (!isTauriRuntime()) {
     return requireJson<ActiveProject>(
       await fetch("/__drive16_project/build", { method: "POST" }),
-      "Build seeded project",
+      "Project build",
     );
   }
   return invoke<ActiveProject>("build_active_project");

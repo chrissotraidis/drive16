@@ -94,6 +94,9 @@ export function PlayerPane({
   viewportRef,
   buildInProgress,
   firstRunNote,
+  rebuildBusy,
+  romStale,
+  onRebuild,
   onCloseControls,
   onOpenProject,
   onPlay,
@@ -147,6 +150,9 @@ export function PlayerPane({
   viewportRef: MutableRefObject<HTMLDivElement | null>;
   buildInProgress: boolean;
   firstRunNote: string;
+  rebuildBusy: boolean;
+  romStale: boolean;
+  onRebuild: () => void;
   onCloseControls: () => void;
   onOpenProject: () => void;
   onPlay: () => void;
@@ -186,7 +192,9 @@ export function PlayerPane({
 
   return (
     <section className="player-pane" aria-label="Game player">
-      {romUnavailable && !starterBusy && !buildInProgress ? (
+      {romUnavailable && romStale && !buildInProgress ? (
+        <StaleProjectNotice busy={rebuildBusy} onRebuild={onRebuild} />
+      ) : romUnavailable && !starterBusy && !buildInProgress ? (
         <FirstRunWorkspace
           note={firstRunNote}
           onOpenProject={onOpenProject}
@@ -314,7 +322,7 @@ export function PlayerPane({
           className={`player-volume-control ${playerAudio} ${
             playerVolume === 0 ? "zero" : "raised"
           } ${sessionActive ? "active" : "inactive"} ${
-            romAudioAvailable === false ? "no-audio" : ""
+            romAudioAvailable === false && !romUnavailable ? "no-audio" : ""
           }`}
           data-testid="player-volume-control"
         >
@@ -481,6 +489,32 @@ const starterPrompts = [
     prompt: "Build a simple working Genesis-style Asteroids game with thrust, rotation, shooting, scoring, restart, and looping music.",
   },
 ];
+
+/** A project with source but an out-of-date ROM is not a new game; offer a plain rebuild. */
+function StaleProjectNotice({ busy, onRebuild }: { busy: boolean; onRebuild: () => void }) {
+  return (
+    <div className="first-run-stage" data-testid="stale-project-notice">
+      <div className="first-run-card">
+        <span className="first-run-eyebrow">Project changed</span>
+        <h2>This game changed since its last build.</h2>
+        <p>
+          The source is newer than the ROM, so Drive16 will not play the old build. Rebuild compiles
+          the current files as they are. Nothing is regenerated or rewritten.
+        </p>
+        <div className="first-run-actions">
+          <button className="primary-action" type="button" onClick={onRebuild} disabled={busy}>
+            <RefreshCcw size={16} className={busy ? "spin" : undefined} />
+            {busy ? "Rebuilding" : "Rebuild ROM"}
+          </button>
+        </div>
+        <small className="first-run-note">
+          <Wrench size={14} aria-hidden="true" />
+          Rebuilding needs Docker Desktop running for the SGDK compiler.
+        </small>
+      </div>
+    </div>
+  );
+}
 
 function FirstRunWorkspace({
   note,
