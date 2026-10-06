@@ -2,295 +2,257 @@
   <img src="docs/assets/drive16-readme-banner.png" alt="Drive16 banner: build Sega Genesis / Mega Drive games by talking" width="100%">
 </p>
 
-# Drive16
+<h1 align="center">Drive16</h1>
 
-**Build Sega Genesis / Mega Drive games by talking.**
+<p align="center">
+  <strong>Build Sega Genesis / Mega Drive games by talking.</strong><br>
+  Describe a game in plain language. An agent writes SGDK C, makes sprites and FM music, compiles a real ROM, and checks it in an emulator before the game appears beside the chat.
+</p>
 
-Drive16 is an open-source desktop app: a conversation on the left, your game
-running on the right. You describe what you want in plain language; an agent
-writes SGDK C code, can generate sprites and music, compiles the ROM, and
-checks the result in an emulator. A bounded repair pass may fix one specific
-failure; if it still fails, the app reports the blocker instead of presenting
-the ROM as finished.
+<p align="center">
+  <img alt="macOS desktop app" src="https://img.shields.io/badge/desktop-macOS-0A84FF?logo=apple">
+  <img alt="Tauri 2 and React" src="https://img.shields.io/badge/app-Tauri%202%20%2B%20React-24C8DB?logo=tauri&amp;logoColor=white">
+  <img alt="Writes SGDK C for the Motorola 68000" src="https://img.shields.io/badge/output-SGDK%20C%20%E2%86%92%20ROM-FF9F0A">
+  <img alt="OpenRouter or local Ollama models" src="https://img.shields.io/badge/models-OpenRouter%20%7C%20Ollama-5E5CE6">
+  <img alt="Developer preview" src="https://img.shields.io/badge/status-developer%20preview-FFD60A">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-30D158"></a>
+  <img alt="No commercial ROMs included" src="https://img.shields.io/badge/commercial%20ROMs-not%20included-FF453A">
+  <a href="https://discord.gg/xwHfUD2bxW"><img alt="Discord" src="https://img.shields.io/badge/Discord-ask%20for%20help-5865F2?logo=discord&amp;logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#current-status">Current status</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="#community-and-support">Get help</a>
+</p>
+
+> [!IMPORTANT]
+> **Drive16 is a developer preview you run from source.** There is no published
+> download yet. The macOS `.app`/`.dmg` build passes install and Verify checks,
+> but interactive Play renders a black canvas in the packaged app, so treat it
+> as a test build. Play works in the browser development surface.
+>
+> Drive16 never treats "a ROM exists" as "the game is good". Every build carries
+> a stage (**Prototype → Built → Playable → Reviewed**) backed by screen, input,
+> restart, and audio evidence. Today's generated games build and run, but they
+> are measurably far below the feel of real Genesis games; closing that gap is
+> the current work (see [Roadmap](#roadmap)).
+
+![Drive16 running a generated Missile Command style game called Skyline Intercept: chat and build log on the left, the playable Genesis screen on the right, with stage, screen, input, audio, and asset checks underneath](docs/images/drive16-app.jpg)
+
+*A game Drive16 built from a chat prompt, running in the app's player. The chips under the screen show what has actually been proven about it.*
+
+## What it does
 
 ```text
 You:      make a sprite I can move around, with upbeat music
-Drive16:  (writes C, composes an FM song, builds, verifies)  →  the game
+Drive16:  writes C, composes an FM song, builds, verifies  →  the game
           appears on the right, playable
 ```
 
-## Current status (2026-07-10)
+- **Chat on the left, game on the right.** Follow-up prompts edit the same project; they never wipe it.
+- **Real hardware rules.** Output is ordinary SGDK C and resources that compile to a standard Genesis ROM.
+- **Original assets.** Optional local AI sprites (ComfyUI) and MML-composed FM music; every asset role is disclosed in `ASSETS.md`.
+- **Honest verification.** A deterministic emulator run checks the screen, input, restart, and audio before Drive16 calls anything playable. If a bounded repair pass cannot fix a failure, the app reports the blocker.
+- **Your game is just a folder.** Open it in any editor, rebuild it by hand, or export the ROM.
 
-The desktop shell and local tool loop are real, but the builder is still in a
-reliability/playability hardening phase. A ROM existing is not treated as proof
-that the generated game is good or playable.
+## Current status
 
-| Capability | Status |
+Last updated from `PROGRESS.md` and `docs/2026-07-17-handoff.md`.
+
+| Area | Status |
 |---|---|
-| Desktop chat → OpenCode agent → active SGDK project | Working, still being hardened |
-| First-run workspace | Working: one describe-game action, four proven examples, and an open-project route replace the empty ROM canvas |
-| Agent startup | Drive16 always launches its own OpenCode process inside the writable app runtime; if port 4096 belongs to another process, it chooses another local port instead of attaching to it |
-| Project lifecycle: New / Save / Open / Import ROM / Export ROM / Verify | Working, with no-ROM/stale-ROM guards plus deterministic screen, input, and audio proof |
-| Interactive play: keyboard + gamepad, pause/reset/stop, fullscreen | Working in the browser with the real recovered ROM. The packaged macOS WKWebView starts the core and receives input but currently renders a black canvas; this is a release blocker. |
-| Audio in the player | Working with safe default volume: ROM playback starts muted/0% |
-| Original music through MML | Tooling works; chat-built games must still prove it was wired and captured |
-| AI sprites through ComfyUI | Working locally; when AI sprites are enabled, the desktop app starts ComfyUI automatically and the agent must disclose fallback art if setup is unavailable |
-| Asset and sound disclosure | Working: `ASSETS.md` is the enforced role ledger and the project menu previews its rows |
-| Playability verification | Working for the primitive/fallback audit: screen, input, restart, audio, genre, freshness, and project-memory evidence are required |
-| Live game-quality audit | Functional four-prompt audit complete; its sparse historical frames are now rejected by presentation contract v2 |
-| Presentation baseline | Snake, Pong, Tetris, and Asteroids now build with custom tile art, composed panels, stronger palettes, and verified non-silent audio |
-| Model bakeoff | Three models × four prompts complete and rescored under presentation v2: all 12 historical outputs need visual repair, so DeepSeek is only the operational default |
-| Ollama | Local questions, summaries, and diagnostics only; ROM-changing work is routed through bounded DeepSeek V3.1 calls on OpenRouter |
-| Distributable .app/.dmg | The ad-hoc-signed `.app` and `.dmg` pass signature, disk-image, isolated install, writable-runtime, and native Verify checks. Treat them as a test build until packaged interactive Play no longer renders black. |
-| LICENSE file | MIT |
-
-Recent history: the app was overhauled on 2026-07-05 — the agent loop was
-wired for real (previously only one hardcoded prompt built anything), the UI
-was rebuilt into a clean two-pane shell, player audio was added, and the
-desktop app now has exactly one chat path: the build agent, with honest
-errors. Details: `docs/overhaul-plan.md` (the audit and plan) and
-`WORKLOG.md` (what happened, iteration by iteration).
-
-## How it works
-
-Four swappable layers (full detail in `drive16-architecture.md`):
-
-```text
-App shell (Tauri 2 + React)          — two-pane UI, player, project actions
-  └── Agent spine (OpenCode, local)  — the agent loop, spawned on a local Drive16-owned port
-        └── Model                    — OpenRouter for ROM changes; Ollama for local questions/diagnostics
-        └── MCP tool servers         — the agent's hands:
-              drive16-sgdk-build     — compile C + assets → rom.bin (Docker)
-              drive16-emulator       — run ROM, screenshot, input, audio dump
-              drive16-rag            — Genesis/SGDK reference retrieval
-              drive16-mml-music      — MML → VGM compiler (ctrmml)
-              drive16-comfyui        — local Stable Diffusion sprite pipeline
-```
-
-The agent's instructions live in `agent/skills/drive16-app-builder.md`
-(registered via `opencode.json`). It knows the project layout, the Genesis
-hardware rules, both asset-generation recipes, and that it must never claim
-success without building.
-
-Two emulators, two jobs: **Genteel** (MIT, patched for frame streaming) does
-deterministic headless verification; **Nostalgist/RetroArch** (WASM) powers
-interactive play in the app.
-
-## Your game is just a folder
-
-Everything the agent builds lives in one ordinary SGDK project —
-`artifacts/phase3/active-project/`:
-
-```text
-src/main.c        # game code
-res/              # ALL assets as plain files
-  resources.res   #   one line per asset (SPRITE / XGM declarations)
-  *.png  *.vgm    #   sprites and music, generated or bundled
-out/rom.bin       # the built ROM — nothing more than a compile of this folder
-```
-
-Generated sprites and songs are staged in scratch space, validated, then
-copied into `res/` and registered in `resources.res`. You can open the folder
-in any editor, build it by hand (`scripts/build-sgdk.sh <path>`), or export
-the ROM to share. `ASSETS.md` records which roles used primitive drawing,
-bundled files, ComfyUI PNGs, MML music, or SFX; the project menu previews that
-ledger and shows thumbnails for repo-local PNG rows so asset use is visible
-without opening markdown. Save/Open snapshots live in
-`artifacts/phase3/projects/`.
-Full contract: **`docs/project-structure.md`**.
+| Chat → agent → SGDK project → ROM | Working. Phased pipeline (implement → art → music → polish) with deterministic gates |
+| Follow-up edits | Working. Intent classifier keeps follow-ups on the active project; in-app iteration measured at under two minutes |
+| Build speed and safety | Prompt overhead cut from 57.5k to 18.8k tokens; activity-based watchdog; toolchains pre-warm |
+| Interactive Play | Working in the browser surface (keyboard and gamepad, pause, restart, fullscreen). **Black canvas in the packaged macOS app** |
+| Audio | Working. Playback starts muted; ROM audio signal is checked separately from browser playback |
+| AI sprites (ComfyUI) | Working locally and optional; the app starts ComfyUI when enabled and discloses any fallback art |
+| Original music (MML) | Working. Genre template library; compiler is fetched and built locally on first use |
+| Local models (Ollama) | First-class build provider; each run verifies the model can drive the build tools |
+| Game feel | **Below the bar.** Measured against Sonic 1, Streets of Rage, and Shining Force, generated games show far less motion and animation ([details](docs/genesis-feel-bar.md)) |
+| Distribution | Ad-hoc-signed `.app`/`.dmg` builds locally; not published, not notarized |
 
 ## Quickstart
 
-Requirements (macOS today; the toolchain itself is cross-platform):
-
-- Docker Desktop (runs the SGDK compiler image — no local cross-compiler)
-- Node 22+ and pnpm, Rust + Cargo
-- [OpenCode CLI](https://opencode.ai) (`opencode` on PATH — the agent spine)
-- An OpenRouter API key (BYOK; default `deepseek/deepseek-chat-v3.1`) for ROM-changing work
-- Optional Ollama for fully local builds, questions, and diagnostics
-  (see "Local models" below)
+**You need:** macOS, [Docker Desktop](https://www.docker.com/products/docker-desktop/) (runs the SGDK compiler), Node 22+, pnpm 10, Rust and Cargo, the [OpenCode CLI](https://opencode.ai) on your `PATH`, and either an OpenRouter API key or a local Ollama model.
 
 ```sh
+git clone https://github.com/chrissotraidis/drive16.git
+cd drive16
 pnpm --dir app install
 
-# Browser-first development surface
-pnpm --dir app dev            # → http://127.0.0.1:1420/
+# Browser development surface (Play works here today)
+pnpm --dir app dev                 # → http://127.0.0.1:1420/
 
-# The real app (macOS debug bundle, rebuilds then opens)
+# Native macOS debug app (rebuilds, then opens)
 scripts/launch-drive16-native.sh
 ```
 
-First run, in the app:
+Then, in the app:
 
 1. Start Docker Desktop.
-2. Settings → choose OpenRouter and test your key. Ollama remains available for
-   local questions and diagnostics, but it does not change ROMs.
-3. Type what you want to build. Watch the right pane.
+2. Open **Settings**, pick **OpenRouter** (default model DeepSeek V3.1) or a tested **Ollama** model, and test the connection.
+3. Describe a game, or start from one of the four examples (Snake, Pong, Tetris, Asteroids).
 
-If something is missing (Docker down, no key), the agent tells you in one
-plain sentence, and Settings → Setup shows a live checklist.
+If something is missing, the chat tells you in one plain sentence and Settings shows a live setup checklist.
 
-## Optional: AI sprite generation (local diffusion)
+## How it works
 
-Sprites are generated by a local ComfyUI with a tuned Genesis workflow
-(SDXL + Pixel Art XL LoRA + 16-color quantizer, downscaled to 32x32 and
-validated against hardware rules). One-time setup:
-
-```sh
-# install the two model files after reviewing their licenses
-scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
-
-# start the local ComfyUI API (or use Settings → AI sprites → Launch)
-scripts/launch-phase4-comfyui-api.sh
-```
-
-Then enable **AI sprites** in Settings and just ask the agent ("give the
-player a spaceship sprite"). Generation can also be driven directly:
-
-```sh
-python3 scripts/run-comfyui-sprite-workflow.py --prompt "a small green alien spaceship" --symbol my_ship
-```
-
-Music generation needs no setup: the ctrmml compiler is fetched and built
-automatically on first use, entirely locally.
-
-## Verifying the build (for developers)
-
-```sh
-pnpm --dir app build                          # typecheck + bundle
-pnpm --dir app check:live-game-audit-readiness # writes primitive/fallback vs generated-sprite audit readiness
-pnpm --dir app prepare:live-game-audit        # refreshes readiness, then writes report.json
-pnpm --dir app prepare:live-game-audit:prompt # prepares one Snake/Pong/Tetris/Asteroids run packet
-pnpm --dir app run:live-game-audit:prompt -- --prompt snake-basic --model openrouter/<model>
-pnpm --dir app promote:live-game-audit -- --run snake-basic=<run-id> --run pong-basic=<run-id> --run tetris-basic=<run-id> --run asteroids-basic=<run-id>
-pnpm --dir app verify:opencode-audio-trace    # self-test audio trace guard for generated-game audits
-pnpm --dir app verify:live-game-audit         # self-test the next live game-quality audit gate
-pnpm --dir app verify:live-game-audit:report  # fails until all live prompt runs have evidence files
-pnpm --dir app prepare:model-bakeoff          # requires the completed live audit report first
-pnpm --dir app verify:model-bakeoff:report    # fails until all model/prompt evidence files exist
-pnpm --dir app verify:presentation-baseline  # build/capture/audio-check all four richer genre skeletons
-pnpm --dir app release:macos                  # ad-hoc-signed local .app/.dmg + isolated install smoke
-pnpm --dir app verify:release:macos           # verify existing release artifacts without rebuilding
-cargo test --manifest-path app/src-tauri/Cargo.toml   # native tests
-node scripts/verify-phase6-browser-smoke.mjs  # Playwright UI smoke (dev server must run)
-scripts/verify-phase6-loop.sh --browser       # full loop harness
-```
-
-The deterministic proof path (build → run in Genteel → verify sprite
-movement and non-silent audio) is available in-app via the project menu's
-**Verify**, or from the CLI with `scripts/validate-phase4-live-generated-assets.sh`.
-
-## Repository map
+Four swappable layers. Full detail lives in [drive16-architecture.md](drive16-architecture.md).
 
 ```text
-app/                  Tauri 2 + React desktop app
-  src/App.tsx           state owner + routing
-  src/components/       TopBar, ChatRail, PlayerPane, SettingsPanel, ProjectMenu
-  src/agent/            OpenCode session client, OpenRouter fallback (browser)
-  src/player/           Nostalgist adapter, input profiles, core readiness
-  src-tauri/src/        Rust: opencode bridge, project/ROM/asset commands,
-                        Genteel runner, preflight, ComfyUI/Ollama checks
-agent/skills/         the builder agent's instructions
-mcp-servers/          sgdk-build, emulator, mml-music (Python, stdio MCP)
-corpus/               Genesis/SGDK reference corpus for RAG
-assets/core/          bundled sprite + music loop (proven CC-clean pack)
-assets/enhancements/  ComfyUI workflow contract, MML FM presets
-examples/             app-starter-blank (the project template)
-scripts/              build/launch/validation tooling
-docs/                 living docs + per-phase evidence archive
-patches/              Genteel frame-streaming patch
+App shell (Tauri 2 + React)        chat, player, project actions
+  └── Agent spine (OpenCode)       the agent loop, on a Drive16-owned local port
+        ├── Model                  OpenRouter (BYOK) or local Ollama
+        └── MCP tool servers       the agent's hands
+              drive16-sgdk-build   compile C + assets → rom.bin (Docker)
+              drive16-emulator     run ROM, screenshot, input, audio dump
+              drive16-rag          Genesis/SGDK reference retrieval
+              drive16-mml-music    MML → VGM compiler (ctrmml)
+              drive16-comfyui      local pixel-art sprite pipeline
 ```
 
-Key documents:
+Two emulators, two jobs: **Genteel** (MIT, patched for frame streaming) does deterministic headless verification, and **Nostalgist / RetroArch** (WebAssembly) powers interactive play. The agent's instructions live in [agent/skills/drive16-app-builder.md](agent/skills/drive16-app-builder.md).
 
-- `docs/overhaul-plan.md` — the 2026-07-05 audit and the five-track plan
-- `docs/presentation-quality.md` — the v2 visual baseline and proof metrics
-- `docs/project-structure.md` — how a game lives on disk
-- `PROGRESS.md` — current ledger; `WORKLOG.md` — iteration journal
-- `DECISIONS.md` — recorded decisions (MIT, distribution, emulator choices)
-- `drive16-architecture.md` — full architecture reference
-- `docs/phase*-*.md` — historical evidence packets from phases 0–8
+### Your game is just a folder
 
-## Local models (Ollama)
+Everything lives in one ordinary SGDK project at `artifacts/phase3/active-project/`:
 
-A tested local Ollama model can run the whole build loop on your machine.
-Three operational rules make it fast instead of painful:
+```text
+src/main.c        game code
+res/              all assets as plain files (resources.res, *.png, *.vgm)
+GAME.md           what the game is and how it plays
+ASSETS.md         which roles use generated, bundled, or primitive art and sound
+PLAYTEST.md       the evidence behind the project's stage
+out/rom.bin       the built ROM
+```
 
-- **Bound the context window.** Agent build steps run at 20k+ tokens of
-  context; a model whose default context is huge (e.g. 262k) allocates tens
-  of GB of KV cache and slows attention for nothing. Drive16 talks to Ollama
-  through the OpenAI-compatible API, which ignores per-request `num_ctx`, so
-  set the bound at the Ollama layer before starting the server:
+Build it by hand with `scripts/build-sgdk.sh <path>`. Save/Open snapshots live in `artifacts/phase3/projects/`. Full contract: [docs/project-structure.md](docs/project-structure.md).
 
-  ```sh
-  OLLAMA_CONTEXT_LENGTH=49152 ollama serve
-  ```
+## FAQ
 
-- **One model instance, one job.** Ollama serves one request at a time per
-  loaded model, and any interleaved request (freeform chat, another tool)
-  evicts the build's prompt cache — one stray request can add minutes of
-  re-prefill to the next agent step. Don't share the build model mid-build.
+<details>
+<summary><strong>Can I download Drive16 and just run it?</strong></summary>
 
-- **Pick a tool-calling model.** The build agent needs reliable tool use;
-  Drive16 verifies this on each run and reports models that can't drive the
-  build tools instead of silently producing nothing.
+Not yet. Run it from source with the Quickstart above. A local `.dmg` can be built with `pnpm --dir app release:macos`, but interactive Play is black in the packaged app, so it is not published. It is ad-hoc signed, so a downloaded copy may need **Open Anyway** in macOS Privacy & Security.
+</details>
 
-- **Browser-dev only: restart `opencode serve` after config changes.** The
-  dev surface proxies to a long-lived `opencode serve` on port 4096 that
-  reads `opencode.json` once at startup. A stale server keeps the old tool
-  schemas in memory — enough extra prefill that a local model can miss the
-  first-token window and the request dies with an opaque 500. (The packaged
-  app spawns a fresh server per launch and is unaffected.)
+<details>
+<summary><strong>Do the games run on real hardware?</strong></summary>
 
-## Model stance
+The output is a standard Genesis ROM compiled by SGDK, so it can be loaded by flash carts and emulators. Drive16's own checks run in emulators (Genteel and RetroArch's Genesis Plus GX); real-hardware testing is not part of the verified path yet.
+</details>
 
-ROM-changing work runs on the provider you select in Settings: a tested local
-Ollama model builds entirely on your machine, or bring your own OpenRouter key
-(default `deepseek/deepseek-chat-v3.1`) for hosted builds. Every run verifies
-the model can actually drive the build tools before results are trusted. No
-Drive16 flow asks you to log into a consumer AI subscription.
+<details>
+<summary><strong>Which model should I use?</strong></summary>
 
-## Local reference runs
+OpenRouter with DeepSeek V3.1 is the operational default. A tested local Ollama model can build entirely on your machine. Either way, Drive16 checks that the model can actually call the build tools before trusting its results. No flow asks you to log into a consumer AI subscription.
+</details>
 
-Drive16 can capture behavioral evidence from a user-supplied or permissively
-licensed Genesis ROM without treating it as training data or extracting its
-assets. Import the ROM into the repository workspace, then run:
+<details>
+<summary><strong>Tips for running local models with Ollama</strong></summary>
+
+- **Bound the context window** at the server, since the OpenAI-compatible API ignores per-request `num_ctx`: `OLLAMA_CONTEXT_LENGTH=49152 ollama serve`.
+- **One model instance, one job.** Interleaved requests evict the build's prompt cache and can add minutes to the next step.
+- **Pick a tool-calling model.** Drive16 reports models that cannot drive the build tools instead of producing nothing.
+- **Browser dev only:** restart `opencode serve` (port 4096) after changing `opencode.json`. The packaged app starts a fresh server each launch.
+</details>
+
+<details>
+<summary><strong>How do I turn on AI sprites?</strong></summary>
+
+Sprites come from a local ComfyUI workflow (SDXL + Pixel Art XL LoRA + a 16-color quantizer, validated against Genesis rules). One-time setup, after reviewing the model licenses:
 
 ```sh
-python3 scripts/capture-reference-run.py path/to/reference.bin \
-  --out /tmp/drive16-reference --action-button a
-node scripts/verify-reference-run.mjs /tmp/drive16-reference/reference-run.json
+scripts/install-phase4-comfyui-models.sh --accept-model-licenses --check
 ```
 
-The report records local title/start, matched action/no-action frames, a
-15-second idle run, restart behavior, and an audio signal summary. Human review
-is still required for control semantics, pacing, composition, and music taste.
+Then enable **AI sprites** in Settings. The desktop app starts ComfyUI for you; the browser surface can use an already running one.
+</details>
 
-## Asset and license hygiene
+<details>
+<summary><strong>What does "Prototype / Built / Playable / Reviewed" mean?</strong></summary>
 
-No commercial ROMs, no disassemblies, no API keys, no model weights, and no
-build artifacts in git. Copyleft components (ComfyUI, ctrmml, BlastEm if
-used) run as separate processes and are never linked into the app binary.
-Genteel (MIT) is the verification emulator. Drive16's app code is released
-under the repository's MIT `LICENSE` (`DECISIONS.md`).
+- **Prototype:** source exists, but nothing about the ROM has been awarded yet.
+- **Built:** a current ROM compiled from the current source.
+- **Playable:** the semantic playability gate passed (screen, intended input, restart, audio, genre rules).
+- **Reviewed:** a visible quality review also passed.
 
-The streamed browser player core is not bundled with Drive16. Genesis Plus GX
-has a non-commercial core license, so this test-build path is for free,
-non-commercial use and must be revisited before monetization.
+If the source is newer than the ROM, Drive16 shows **Needs rebuild** and offers a plain rebuild that compiles the files as they are.
+</details>
 
-The macOS DMG is ad-hoc signed, not Apple notarized. A copy downloaded from the
-internet may therefore require **Open Anyway** in macOS Privacy & Security on
-first launch. Developer ID signing/notarization can remove that Gatekeeper
-friction later without changing the project's no-App-Store distribution plan.
+<details>
+<summary><strong>Can I use commercial ROMs as references?</strong></summary>
+
+Drive16 can profile how a user-supplied or permissively licensed ROM behaves (motion, animation, audio) to set quality targets. It never extracts assets or uses ROMs as training data, and no ROMs are included in the repository.
+
+```sh
+python3 scripts/profile-reference-rom.py path/to/reference.bin --label my-reference
+```
+</details>
 
 ## Roadmap
 
-1. **Packaging** — keep the verified direct-download `.dmg` reproducible;
-   Apple notarization is optional future install polish, not an App Store goal.
-2. **Multi-project workspaces** — named projects you can switch between,
-   beyond the single active workspace + snapshots.
-3. **Local-model quality** — extend the passing Qwen proof across the remaining
-   audit prompts and keep improving completion discipline.
-4. **Packaged Play** — replace or repair the current RetroArch/WebAssembly path
-   so the macOS WKWebView renders the same visible frames as the browser.
-5. **Release hardening** — continue clean-machine and broader prompt testing.
+The current plan is [docs/2026-07-17-p2-plan.md](docs/2026-07-17-p2-plan.md): close the gap between generated games and real Genesis feel.
+
+1. **Game-feel library** in the starter project (per-pixel physics, SFX timing, animation), with genre skeletons rebuilt on it so the model composes rather than invents.
+2. **Feel gates and self-play scoring** against the measured [Genesis feel bar](docs/genesis-feel-bar.md).
+3. **Art polish** to the bar, with sprite candidate ranking.
+4. **Phased builds in the app UI.**
+5. **Packaged Play** that renders in the macOS app the same way it does in the browser.
+
+## For developers
+
+<details>
+<summary><strong>Checks to run after changing the app</strong></summary>
+
+```sh
+pnpm --dir app build                     # typecheck + bundle
+pnpm --dir app verify:agent-contract     # agent prompt and event contract
+pnpm --dir app verify:prompt-intent      # follow-up vs new-game classifier
+pnpm --dir app verify:agent-watchdog     # activity-based watchdog
+pnpm --dir app verify:project-memory     # playability, audio, and asset gates
+cargo test --manifest-path app/src-tauri/Cargo.toml
+node scripts/verify-phase6-browser-smoke.mjs   # Playwright UI smoke (dev server running)
+```
+
+Deeper audits (live game audit, model bakeoff, presentation baseline, macOS release verification) are listed in [app/package.json](app/package.json).
+</details>
+
+<details>
+<summary><strong>Repository map</strong></summary>
+
+```text
+app/                  Tauri 2 + React desktop app
+  src/App.tsx           state owner and routing
+  src/components/       TopBar, ChatRail, PlayerPane, SettingsPanel, ProjectMenu
+  src/agent/            OpenCode session client, watchdog, prompt intent
+  src/player/           Nostalgist adapter, input profiles, core readiness
+  src-tauri/src/        Rust: OpenCode bridge, project/ROM commands, Genteel runner
+agent/skills/         the builder agent's instructions
+mcp-servers/          sgdk-build, emulator, mml-music, comfyui (Python, stdio MCP)
+corpus/               Genesis/SGDK reference corpus for retrieval
+assets/               bundled CC-clean sprite and music pack, ComfyUI and MML presets
+examples/             app-starter-blank, the project template
+scripts/              build, launch, profiling, and verification tooling
+docs/                 living docs and per-phase evidence
+```
+
+Key documents: [docs/2026-07-17-handoff.md](docs/2026-07-17-handoff.md) (where things stand), [docs/DESIGN.md](docs/DESIGN.md) (UI design thesis), [PROGRESS.md](PROGRESS.md), [WORKLOG.md](WORKLOG.md), and [DECISIONS.md](DECISIONS.md).
+</details>
+
+## Licensing and asset hygiene
+
+Drive16's code is released under the [MIT license](LICENSE). The repository contains no commercial ROMs, disassemblies, API keys, model weights, or build artifacts. Copyleft tools (ComfyUI, ctrmml) run as separate processes and are never linked into the app.
+
+The streamed interactive core, Genesis Plus GX, is not bundled and carries a non-commercial license, so this Play path is for free, non-commercial use. Sega, Genesis, and Mega Drive are trademarks of Sega; Drive16 is not affiliated with or endorsed by Sega.
+
+## Community and support
+
+Questions, bug reports, and games you made are welcome in the shared [Discord](https://discord.gg/xwHfUD2bxW), the same community as KartPad and the other ports. For reproducible bugs, open a [GitHub issue](https://github.com/chrissotraidis/drive16/issues) with the prompt you used and the build log.
+
+- Discord: https://discord.gg/xwHfUD2bxW
+- Issues: https://github.com/chrissotraidis/drive16/issues

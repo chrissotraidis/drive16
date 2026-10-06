@@ -16,6 +16,7 @@ import {
   defaultComfyUiLora,
   healthIcon,
   SectionTitle,
+  useEscapeToClose,
   type ConnectionState,
   type HealthState,
 } from "./ui";
@@ -156,6 +157,7 @@ export function SettingsPanel({
   onTestConnection: () => void;
 }) {
   const testing = connection.state === "testing";
+  useEscapeToClose(onClose);
   const busyComfyUi =
     comfyUiConnection.state === "testing" || comfyUiConnection.state === "starting";
   const spriteReadiness = spriteEnhancementReadiness(
@@ -219,7 +221,7 @@ export function SettingsPanel({
                 data-testid="openrouter-settings"
               >
                 <label className="field-row">
-                  <span>Assistant model</span>
+                  <span>Build model</span>
                   <div className="field-with-action">
                     <select
                       aria-label="OpenRouter model"

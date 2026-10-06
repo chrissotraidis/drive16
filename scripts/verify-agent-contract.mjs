@@ -1144,7 +1144,7 @@ for (const expected of [
   "preview.audio.captured",
   "preview.audio.silent",
   '"agent.rom.built"',
-  '"Built; not playable"',
+  '"Not playable yet"',
   'label: "Visible review failed"',
   'label: "Player ready — muted"',
   "Sound starts muted as a safety precaution.",

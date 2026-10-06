@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { Activity, AlertCircle, CheckCircle2, Circle } from "lucide-react";
 
 export type HealthState = "ready" | "warning" | "missing";
@@ -6,6 +7,17 @@ export type ConnectionState = HealthState | "idle" | "testing" | "starting";
 
 export const defaultComfyUiCheckpoint = "sd_xl_base_1.0.safetensors";
 export const defaultComfyUiLora = "pixel-art-xl.safetensors";
+
+/** Close a dialog with Escape, matching the backdrop-click behavior. */
+export function useEscapeToClose(onClose: () => void) {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented) onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+}
 
 export function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
@@ -42,6 +54,11 @@ export function shortPath(path: string) {
   const parts = path.split("/").filter(Boolean);
   if (parts.length <= 3) return path;
   return `${parts[0]}/${parts[1]}/.../${parts[parts.length - 1]}`;
+}
+
+/** A "warning" ROM status covers both stale ROMs and unavailable summaries. */
+export function isStaleRomDetail(detail: string | undefined) {
+  return /newer than the ROM|changed after the last ROM build/i.test(detail ?? "");
 }
 
 export function formatBytes(bytes: number) {
